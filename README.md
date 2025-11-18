@@ -134,4 +134,4 @@ This project is made possible by the generous support of:
 
 ## Credits
 
-Python port of [Temporalio.Graphs (.NET)](https://github.com/original/repo) with architectural adaptations for Python SDK constraints.
+Python port of [Temporalio.Graphs (.NET)](https://github.com/oleg-shilo/Temporalio.Graphs) with architectural adaptations for Python SDK constraints.
