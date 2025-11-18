@@ -1,6 +1,6 @@
 # Story 2.3: Implement Activity Call Detection
 
-Status: review
+Status: done
 
 ## Story
 
@@ -570,6 +570,47 @@ These are acceptable gaps since they represent edge cases in malformed workflows
 
 1. src/temporalio_graphs/analyzer.py - Added activity detection capability (5 new methods)
 2. tests/test_analyzer.py - Added 12 comprehensive unit tests
+
+### Post-Review Improvements
+
+Following the code review approval, two LOW priority improvements were implemented to enhance code quality and developer experience:
+
+#### L1: Activity Name Extraction Caching (Implemented)
+- **Location**: `_extract_activity_name` method (lines 365-411 in analyzer.py)
+- **Enhancement**: Added `_activity_name_cache: dict[int, str]` to cache extracted activity names by AST node ID
+- **Rationale**: Optimizes performance when the same activity reference is encountered multiple times (though unlikely in single-pass AST traversal)
+- **Implementation Details**:
+  - Cache initialized in `__init__()` and reset in `analyze()`
+  - Uses `id(arg)` as cache key since AST nodes are not hashable
+  - Cache lookup before extraction, store result after extraction
+  - Applied to all code paths: ast.Name, ast.Constant, and placeholder generation
+- **Impact**: Minimal performance benefit (single traversal means no duplicate lookups), but demonstrates best practices for future extensions
+- **Quality Checks**:
+  - mypy --strict: Pass ✅
+  - ruff check: Pass ✅
+  - 42/42 tests passing ✅
+
+#### L2: Debug Logging for Non-Activity Calls (Implemented)
+- **Location**: `visit_Call` method (lines 301-306 in analyzer.py)
+- **Enhancement**: Added `logger.debug()` call when skipping non-activity calls during AST traversal
+- **Rationale**: Improves developer debugging experience by providing visibility into what method calls are being filtered out
+- **Implementation Details**:
+  - Logs line number and unparsed call expression (when available)
+  - Uses `ast.unparse()` if available (Python 3.9+), falls back to generic `<call>` placeholder
+  - Debug level (not info/warning) to avoid log noise in production
+- **Impact**: Developer experience improvement for debugging - helps developers understand analyzer behavior when troubleshooting
+- **Quality Checks**:
+  - mypy --strict: Pass ✅
+  - ruff check: Pass ✅
+  - 42/42 tests passing ✅
+
+**Updated Quality Metrics After Improvements:**
+- Test Count: 42 tests (all still passing)
+- Test Pass Rate: 100% (42/42)
+- Code Coverage: 89% for analyzer.py (slight decrease due to new debug logging branch)
+- Type Safety: mypy --strict - Success (zero errors)
+- Linting: ruff - Success (zero violations)
+- Lines Added: +11 (cache init, cache usage, debug logging)
 
 ## Definition of Done
 

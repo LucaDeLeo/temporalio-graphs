@@ -44,6 +44,8 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         _workflow_run_method: Name of the detected run method (None if not found).
         _source_file: Path to the workflow source file being analyzed.
         _line_numbers: Dictionary mapping element names to source line numbers.
+        _activities: List of tuples (activity_name, line_number) for detected activities.
+        _activity_name_cache: Cache mapping AST node IDs to extracted activity names.
 
     Example:
         >>> analyzer = WorkflowAnalyzer()
@@ -61,6 +63,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._line_numbers: dict[str, int] = {}
         self._inside_workflow_class: bool = False
         self._activities: list[tuple[str, int]] = []
+        self._activity_name_cache: dict[int, str] = {}
 
     def analyze(self, workflow_file: Path | str) -> WorkflowMetadata:
         """Analyze a workflow source file and extract workflow metadata.
@@ -101,6 +104,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._line_numbers = {}
         self._inside_workflow_class = False
         self._activities = []
+        self._activity_name_cache = {}
 
         # Convert to absolute path
         path = Path(workflow_file).resolve()
@@ -296,6 +300,12 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                 logger.debug(
                     f"Found activity call: {activity_name} at line {node.lineno}"
                 )
+        else:
+            # Log debug information for non-activity calls to aid debugging
+            logger.debug(
+                f"Skipping non-activity call at line {node.lineno}: "
+                f"{ast.unparse(node) if hasattr(ast, 'unparse') else '<call>'}"
+            )
 
         # Continue traversal to find nested calls
         self.generic_visit(node)
@@ -361,6 +371,9 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         of an execute_activity() call. It handles both function references
         (ast.Name nodes) and string literals (ast.Constant nodes).
 
+        Results are cached by argument object ID to optimize performance when
+        the same activity reference is encountered multiple times.
+
         Args:
             arg: AST expression node representing the activity argument.
 
@@ -372,19 +385,29 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             - my_activity (function reference) -> "my_activity"
             - "my_activity" (string literal) -> "my_activity"
         """
+        # Check cache first to avoid redundant extraction
+        arg_id = id(arg)
+        if arg_id in self._activity_name_cache:
+            return self._activity_name_cache[arg_id]
+
         # Handle function reference: execute_activity(my_activity, ...)
         if isinstance(arg, ast.Name):
-            return arg.id
+            result = arg.id
+            self._activity_name_cache[arg_id] = result
+            return result
 
         # Handle string literal: execute_activity("my_activity", ...)
         if isinstance(arg, ast.Constant):
             if isinstance(arg.value, str):
-                return arg.value
+                result = arg.value
+                self._activity_name_cache[arg_id] = result
+                return result
 
         # If we can't extract the activity name, log a warning and return placeholder
-        placeholder = f"<unknown_activity_{id(arg)}>"
+        placeholder = f"<unknown_activity_{arg_id}>"
         logger.warning(
             f"Could not extract activity name from argument at "
             f"line {getattr(arg, 'lineno', '?')}. Using placeholder: {placeholder}"
         )
+        self._activity_name_cache[arg_id] = placeholder
         return placeholder
