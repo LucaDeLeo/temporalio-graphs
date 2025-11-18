@@ -1,0 +1,234 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>1</storyId>
+    <title>Implement Core Data Models with Type Safety</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>strongly-typed data models for graph building</iWant>
+    <soThat>the code is maintainable and provides excellent IDE support</soThat>
+    <tasks>
+      <task id="1" status="pending">Create internal package structure (AC: 10)</task>
+      <task id="2" status="pending">Implement GraphBuildingContext configuration dataclass (AC: 1, 7, 8)</task>
+      <task id="3" status="pending">Implement NodeType enum (AC: 2, 7, 8)</task>
+      <task id="4" status="pending">Implement GraphNode dataclass with Mermaid rendering (AC: 3, 7, 8)</task>
+      <task id="5" status="pending">Implement GraphEdge dataclass with deduplication support (AC: 4, 7, 8)</task>
+      <task id="6" status="pending">Implement GraphPath class for execution path tracking (AC: 5, 7, 8)</task>
+      <task id="7" status="pending">Implement WorkflowMetadata dataclass (AC: 6, 7, 8)</task>
+      <task id="8" status="pending">Create comprehensive unit tests (AC: 9)</task>
+      <task id="9" status="pending">Run all quality checks (AC: 7, 8)</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1">GraphBuildingContext dataclass exists in src/temporalio_graphs/context.py with frozen=True immutability, 13 configuration fields with defaults, complete type hints (mypy strict compliant), and Google-style docstring</criterion>
+    <criterion id="AC-2">NodeType enum exists with 5 workflow node types (START, END, ACTIVITY, DECISION, SIGNAL) in src/temporalio_graphs/_internal/graph_models.py</criterion>
+    <criterion id="AC-3">GraphNode dataclass exists with to_mermaid() method that returns correct Mermaid syntax for each node type (double parentheses for START/END, square brackets for ACTIVITY, curly braces for DECISION, double curly braces for SIGNAL)</criterion>
+    <criterion id="AC-4">GraphEdge dataclass exists with to_mermaid() method, __hash__() and __eq__() methods for set-based deduplication</criterion>
+    <criterion id="AC-5">GraphPath class exists with add_activity(), add_decision() (Epic 3 stub), add_signal() (Epic 4 stub) methods, using field(default_factory) for mutable defaults</criterion>
+    <criterion id="AC-6">WorkflowMetadata dataclass exists with calculate_total_paths() static method using 2^(decisions+signals) formula</criterion>
+    <criterion id="AC-7">All classes pass mypy --strict with zero errors, no Any types in public interfaces, Optional types explicitly annotated</criterion>
+    <criterion id="AC-8">All public classes have Google-style docstrings with Args, Returns, Raises sections and usage examples per ADR-009</criterion>
+    <criterion id="AC-9">Unit tests achieve 100% coverage with 21 test cases across test_context.py (5 tests), test_path.py (6 tests), test_graph_models.py (10 tests)</criterion>
+    <criterion id="AC-10">Internal package structure created: src/temporalio_graphs/_internal/ directory with __init__.py, not exported from public API</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Data Models and Contracts (lines 428-619)</section>
+        <snippet>Complete type specifications for all 6 data models: GraphBuildingContext with 13 config fields (frozen=True), NodeType enum (5 values), GraphNode with to_mermaid(), GraphEdge with hash/eq, GraphPath with add methods, WorkflowMetadata with calculate_total_paths(). Includes Mermaid syntax examples, ID generation strategy, and contract invariants.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Module Responsibilities (lines 202-214)</section>
+        <snippet>Module organization: context.py (configuration dataclass, complete), path.py (single execution path tracking, complete - linear path support), _internal/graph_models.py (GraphNode, GraphEdge dataclasses, complete - all node types defined). Strict layering prevents circular dependencies.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-006 (mypy Strict Mode)</section>
+        <snippet>All data models must pass mypy --strict with zero errors. No use of Any type in public interfaces. Optional types explicitly annotated: Optional[Path], Optional[int], Optional[str]. Generic types properly specified: list[str], dict[str, bool].</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-009 (Google-Style Docstrings)</section>
+        <snippet>All public classes have comprehensive docstrings. Include class purpose, field descriptions, usage examples. Method docstrings have Args, Returns, Raises, Example sections.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-010 (>80% Test Coverage)</section>
+        <snippet>Target: 100% coverage for data model modules. Core infrastructure must have complete test coverage. Tests verify immutability, type correctness, method behavior.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</path>
+        <title>Story 2.1</title>
+        <section>Mermaid Syntax Reference (lines 249-264)</section>
+        <snippet>Node shapes: Circular (Start/End) s((Start)) - double parentheses, Rectangle (Activity) 1[Validate Input] - square brackets, Diamond (Decision) 0{HighValue} - curly braces, Hexagon (Signal) 2{{WaitForApproval}} - double curly braces. Edge syntax: Simple s --> 1 (no label), Labeled 0 -- yes --> 1 (with label). Must match .NET output.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</path>
+        <title>Story 2.1</title>
+        <section>Data Model Design Patterns (lines 231-248)</section>
+        <snippet>Immutability (GraphBuildingContext): Uses @dataclass(frozen=True) to prevent accidental mutation. Mutable Collections (GraphPath): Uses field(default_factory=list) and field(default_factory=dict) to avoid mutable default argument pitfall. Hash and Equality (GraphEdge): Custom __hash__() and __eq__() enable set-based deduplication using hash((self.from_node, self.to_node, self.label)).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</path>
+        <title>Story 2.1</title>
+        <section>Type Safety Guarantees (lines 266-281)</section>
+        <snippet>Python 3.10+ Union Syntax: Use Path | str instead of Union[Path, str], Optional[T] explicitly for nullable types. Generic Type Annotations: list[str] not List[str] (Python 3.10+ native generics), dict[str, bool] not Dict[str, bool]. No runtime typing imports needed. Dataclass Type Consistency: All field types match method signatures, return types specified for all methods, no implicit Any types.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>module</kind>
+        <symbol>__init__</symbol>
+        <lines>1-14</lines>
+        <reason>Public API entry point where GraphBuildingContext and GraphPath will be exported. Currently exports only __version__. Story 2.1 will add new exports.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/py.typed</path>
+        <kind>marker</kind>
+        <symbol>N/A</symbol>
+        <lines>N/A</lines>
+        <reason>PEP 561 marker file enabling type distribution. Already exists from Story 1.1. Ensures mypy can check types in consumer projects.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/conftest.py</path>
+        <kind>test fixture</kind>
+        <symbol>pytest fixtures</symbol>
+        <lines>1-14</lines>
+        <reason>Pytest configuration and shared fixtures. Can be extended with fixtures for common test data (e.g., sample GraphBuildingContext instances).</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_package_infrastructure.py</path>
+        <kind>test</kind>
+        <symbol>test_package_imports</symbol>
+        <lines>1-15</lines>
+        <reason>Infrastructure smoke tests from Story 1.1. Provides pattern for new unit tests: simple, focused, comprehensive. Use similar structure for test_context.py, test_path.py, test_graph_models.py.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" />
+        <package name="pytest" version=">=8.0.0" dev="true" />
+        <package name="pytest-asyncio" version=">=0.23.0" dev="true" />
+        <package name="mypy" version=">=1.8.0" dev="true" />
+        <package name="ruff" version=">=0.2.0" dev="true" />
+        <package name="pytest-cov" version=">=4.1.0" dev="true" />
+      </python>
+      <stdlib>
+        <module>dataclasses</module>
+        <module>pathlib</module>
+        <module>typing</module>
+        <module>enum</module>
+      </stdlib>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="CONST-1">All data models MUST pass mypy --strict with zero errors (ADR-006). No type: ignore comments allowed. Fix types properly instead.</constraint>
+    <constraint id="CONST-2">GraphBuildingContext MUST use @dataclass(frozen=True) for immutability. Configuration is read-only after creation.</constraint>
+    <constraint id="CONST-3">GraphPath mutable fields (steps, decisions) MUST use field(default_factory) to avoid shared state bugs between instances.</constraint>
+    <constraint id="CONST-4">GraphEdge MUST implement __hash__() and __eq__() for set-based deduplication in MermaidRenderer (Story 2.5).</constraint>
+    <constraint id="CONST-5">Mermaid syntax MUST match .NET Temporalio.Graphs output for regression test compatibility (AC-13 in Epic 2). Node shapes: s((Start)), 1[Activity], 0{Decision}, 2{{Signal}}, e((End)).</constraint>
+    <constraint id="CONST-6">Internal package (_internal/) MUST NOT be exported from public __init__.py. These are internal implementation details.</constraint>
+    <constraint id="CONST-7">All public classes MUST have Google-style docstrings with Args, Returns, Raises, Example sections (ADR-009).</constraint>
+    <constraint id="CONST-8">Use Python 3.10+ native generic types: list[str], dict[str, bool], Path | str (not List, Dict, Union).</constraint>
+    <constraint id="CONST-9">Epic 2 scope: Decision/signal methods are STUBS only. add_decision() and add_signal() raise NotImplementedError or return placeholder values. Full implementation in Epic 3/4.</constraint>
+    <constraint id="CONST-10">All commands MUST use uv run prefix per user global requirement (uv run mypy, uv run pytest, uv run ruff).</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GraphBuildingContext</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) class GraphBuildingContext with 13 fields: is_building_graph: bool = True, exit_after_building_graph: bool = False, graph_output_file: Optional[Path] = None, split_names_by_words: bool = True, suppress_validation: bool = False, start_node_label: str = "Start", end_node_label: str = "End", max_decision_points: int = 10, max_paths: int = 1024, decision_true_label: str = "yes", decision_false_label: str = "no", signal_success_label: str = "Signaled", signal_timeout_label: str = "Timeout"</signature>
+      <path>src/temporalio_graphs/context.py</path>
+    </interface>
+    <interface>
+      <name>GraphPath.add_activity</name>
+      <kind>method</kind>
+      <signature>def add_activity(self, name: str) -> str: Returns auto-generated node ID (sequential: "1", "2", "3"). Appends activity name to steps list.</signature>
+      <path>src/temporalio_graphs/path.py</path>
+    </interface>
+    <interface>
+      <name>GraphPath.add_decision</name>
+      <kind>method</kind>
+      <signature>def add_decision(self, id: str, value: bool, name: str) -> str: STUB for Epic 3. May raise NotImplementedError or return placeholder ID.</signature>
+      <path>src/temporalio_graphs/path.py</path>
+    </interface>
+    <interface>
+      <name>GraphPath.add_signal</name>
+      <kind>method</kind>
+      <signature>def add_signal(self, name: str, outcome: str) -> str: STUB for Epic 4. May raise NotImplementedError or return placeholder ID.</signature>
+      <path>src/temporalio_graphs/path.py</path>
+    </interface>
+    <interface>
+      <name>GraphNode.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self) -> str: Returns Mermaid syntax for node. START/END: "s((Start))", ACTIVITY: "1[ActivityName]", DECISION: "0{DecisionName}", SIGNAL: "2{{SignalName}}"</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+    </interface>
+    <interface>
+      <name>GraphEdge.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self) -> str: Returns edge syntax. Without label: "node1 --> node2", With label: "node1 -- label --> node2"</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+    </interface>
+    <interface>
+      <name>WorkflowMetadata.calculate_total_paths</name>
+      <kind>static method</kind>
+      <signature>@staticmethod def calculate_total_paths(num_decisions: int, num_signals: int) -> int: Returns 2 ** (num_decisions + num_signals)</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest as test framework (already configured in pyproject.toml). Follow Story 1.1 testing pattern: simple, focused, comprehensive tests. Each test should be independent with no shared state. Use descriptive test names: test_&lt;functionality&gt;_&lt;scenario&gt;(). Fixtures in conftest.py for common test data. Achieve 100% coverage for data model modules (required for core infrastructure per ADR-010). Run tests with: uv run pytest --cov=src/temporalio_graphs --cov-report=term-missing. Type checking with: uv run mypy --strict src/temporalio_graphs/. Linting with: uv run ruff check src/temporalio_graphs/.
+    </standards>
+    <locations>
+      <location>tests/test_context.py</location>
+      <location>tests/test_path.py</location>
+      <location>tests/test_graph_models.py</location>
+    </locations>
+    <ideas>
+      <idea ac="AC-1">test_default_configuration(): Verify GraphBuildingContext() creates instance with all 13 default values. Check is_building_graph=True, split_names_by_words=True, max_decision_points=10, etc.</idea>
+      <idea ac="AC-1">test_custom_configuration(): Create context with custom values, verify fields match. Test Path/str conversion for graph_output_file.</idea>
+      <idea ac="AC-1">test_immutability_frozen(): Attempt to modify field after creation, expect dataclasses.FrozenInstanceError or AttributeError.</idea>
+      <idea ac="AC-1">test_all_fields_have_defaults(): Instantiate with no arguments, verify no TypeError.</idea>
+      <idea ac="AC-1">test_type_hints_present(): Use typing.get_type_hints() to verify all fields have type annotations.</idea>
+      <idea ac="AC-5">test_add_activity(): Create GraphPath, call add_activity("MyActivity"), verify "1" returned, verify steps contains "MyActivity".</idea>
+      <idea ac="AC-5">test_activity_node_id_generation(): Add 3 activities, verify IDs are "1", "2", "3" sequentially.</idea>
+      <idea ac="AC-5">test_add_decision_placeholder(): Call add_decision(), verify it's a stub (NotImplementedError or placeholder return).</idea>
+      <idea ac="AC-5">test_add_signal_placeholder(): Call add_signal(), verify it's a stub (NotImplementedError or placeholder return).</idea>
+      <idea ac="AC-5">test_empty_path_initialization(): Create GraphPath, verify steps=[], decisions={}.</idea>
+      <idea ac="AC-5">test_path_steps_tracking(): Add multiple activities, verify steps list preserves order.</idea>
+      <idea ac="AC-2">test_node_type_enum_values(): Verify NodeType.START, .END, .ACTIVITY, .DECISION, .SIGNAL all exist with correct string values.</idea>
+      <idea ac="AC-3">test_graph_node_to_mermaid_start(): GraphNode("s", NodeType.START, "Start").to_mermaid() == "s((Start))"</idea>
+      <idea ac="AC-3">test_graph_node_to_mermaid_end(): GraphNode("e", NodeType.END, "End").to_mermaid() == "e((End))"</idea>
+      <idea ac="AC-3">test_graph_node_to_mermaid_activity(): GraphNode("1", NodeType.ACTIVITY, "ValidateInput").to_mermaid() == "1[ValidateInput]"</idea>
+      <idea ac="AC-3">test_graph_node_to_mermaid_decision(): GraphNode("0", NodeType.DECISION, "HighValue").to_mermaid() == "0{HighValue}"</idea>
+      <idea ac="AC-3">test_graph_node_to_mermaid_signal(): GraphNode("2", NodeType.SIGNAL, "WaitApproval").to_mermaid() == "2{{WaitApproval}}"</idea>
+      <idea ac="AC-4">test_graph_edge_to_mermaid_no_label(): GraphEdge("s", "1", None).to_mermaid() == "s --> 1"</idea>
+      <idea ac="AC-4">test_graph_edge_to_mermaid_with_label(): GraphEdge("0", "1", "yes").to_mermaid() == "0 -- yes --> 1"</idea>
+      <idea ac="AC-4">test_graph_edge_hash_for_deduplication(): Create two identical edges, verify hash(edge1) == hash(edge2), edge1 == edge2. Add to set, verify deduplication works.</idea>
+      <idea ac="AC-6">test_workflow_metadata_calculate_paths(): calculate_total_paths(0, 0) == 1, calculate_total_paths(2, 0) == 4, calculate_total_paths(2, 1) == 8 (2^3).</idea>
+      <idea ac="AC-7">Run mypy --strict on all modules, verify zero errors in CI. No manual test, but quality gate.</idea>
+      <idea ac="AC-8">Manual review of docstrings during code review. Verify Google style with examples.</idea>
+    </ideas>
+  </tests>
+</story-context>
