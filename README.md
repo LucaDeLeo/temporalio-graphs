@@ -4,7 +4,14 @@ Generate complete workflow visualizations as Mermaid diagrams for Temporal workf
 
 ## Status
 
-🚧 **Under Development** - Phase 0.5 (Architecture Spike) Complete
+🚧 **Under Development** - Epic 2 (Basic Graph Generation) In Progress
+- Story 2-1: Core Data Models ✅
+- Story 2-2: AST Workflow Analyzer ✅
+- Story 2-3: Activity Detection 🔄 (Review)
+- Story 2-4: Path Generator ✅
+- Story 2-5: Mermaid Renderer ✅
+- Story 2-6: Public API Entry Point ✅ (This Release)
+- Story 2-7: Configuration Options (Next)
 
 ## Overview
 
@@ -44,19 +51,54 @@ uv sync
 
 ## Quick Start
 
+### Basic Usage (3 lines)
+
+Analyze a workflow and get a Mermaid diagram:
+
 ```python
-# Coming soon - Example usage will be added as implementation progresses
+from temporalio_graphs import analyze_workflow
+
+result = analyze_workflow("my_workflow.py")
+print(result)  # Prints Mermaid diagram
 ```
 
-## Features (Planned)
+### Advanced Usage with Custom Configuration
+
+Customize node labels and output location:
+
+```python
+from temporalio_graphs import analyze_workflow, GraphBuildingContext
+
+context = GraphBuildingContext(
+    split_names_by_words=False,
+    start_node_label="BEGIN",
+    end_node_label="FINISH",
+    graph_output_file="workflow_diagram.md"
+)
+result = analyze_workflow("my_workflow.py", context)
+```
+
+See `/examples/simple_linear/` for complete working examples.
+
+## Features
+
+### Completed (Epic 2: Basic Graph Generation)
 
 - ✅ Static code analysis using Python AST
+- ✅ Linear workflow detection (0 decision points)
+- ✅ Activity tracking and sequencing
+- ✅ Mermaid flowchart LR syntax output
+- ✅ Public API with analyze_workflow() function
+- ✅ Type-safe configuration via GraphBuildingContext
+- ✅ Complete test coverage (>95%)
+
+### Planned (Epic 3+)
+
 - 🚧 Decision point detection (if/else, conditions)
-- 🚧 Path permutation generation (2^n paths)
-- 🚧 Mermaid flowchart output
-- 🚧 Activity and signal node tracking
+- 🚧 Path permutation generation (2^n paths for n decisions)
+- 🚧 Signal and wait condition support
 - 🚧 CLI interface
-- 🚧 Multiple output formats (Mermaid, DOT, JSON)
+- 🚧 Multiple output formats (JSON, path lists)
 
 ## Project Structure
 

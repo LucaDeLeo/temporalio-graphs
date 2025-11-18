@@ -1,0 +1,1024 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <story-reference>
+    <story-key>2-6</story-key>
+    <story-file>docs/sprint-artifacts/stories/2-6-implement-public-api-entry-point.md</story-file>
+    <story-title>Implement Public API Entry Point</story-title>
+    <epic-key>epic-2</epic-key>
+    <epic-title>Basic Graph Generation (Linear Workflows)</epic-title>
+  </story-reference>
+
+  <epic-context>
+    <epic-file>docs/sprint-artifacts/tech-spec-epic-2.md</epic-file>
+    <primary-sections>
+      <section name="Primary Entry Point" lines="637-709">
+        Defines analyze_workflow() function signature, parameters, return type, and usage patterns.
+        Specifies facade pattern for orchestrating WorkflowAnalyzer, PathPermutationGenerator, and MermaidRenderer.
+      </section>
+      <section name="Input Validation" lines="829-851">
+        Specifies file path validation, existence checks, permission checks, and error handling patterns.
+        Details security constraints preventing path traversal and ensuring safe file I/O.
+      </section>
+      <section name="Public API Surface" lines="633-732">
+        Complete API documentation including analyze_workflow() and GraphBuildingContext exports.
+        Defines __all__ list, module docstrings, and backward compatibility strategy.
+      </section>
+    </primary-sections>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+      <type>technical-specification</type>
+      <relevance>
+        Complete technical specification for Epic 2 including architecture patterns,
+        component interfaces, error handling strategy, and API design principles.
+        Lines 1-1912 provide comprehensive context for all Epic 2 stories.
+      </relevance>
+      <key-sections>
+        - Lines 100-232: Architecture alignment with ADRs (ADR-006 mypy strict, ADR-009 docstrings)
+        - Lines 233-426: Module responsibilities and interface contracts
+        - Lines 633-732: Public API design with example usage patterns
+        - Lines 1399-1543: Acceptance criteria and traceability mapping
+        - Lines 1559-1683: Risks, assumptions, and open questions
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/2-6-implement-public-api-entry-point.md</path>
+      <type>story-file</type>
+      <relevance>
+        Complete story specification with 15 acceptance criteria, algorithm summary,
+        implementation notes, and learnings from Story 2.5 (MermaidRenderer).
+      </relevance>
+      <key-sections>
+        - Lines 1-101: 15 detailed acceptance criteria covering API signature, validation, orchestration
+        - Lines 155-183: Learnings from Story 2.5 (type safety, docstrings, error handling)
+        - Lines 184-279: Algorithm summary with code example showing pipeline orchestration
+        - Lines 299-309: Dependencies on WorkflowAnalyzer, PathPermutationGenerator, MermaidRenderer
+        - Lines 364-476: 16 tasks with subtasks for implementation guidance
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>project-instructions</type>
+      <relevance>
+        Project overview, architecture decisions, common commands, and code conventions.
+        Critical for understanding project structure and development workflow.
+      </relevance>
+      <key-sections>
+        - Project uses uv for package management (user requirement)
+        - Python 3.10+ required (modern type hints: Path | str)
+        - Architecture: AST-based static analysis approach
+        - Code conventions: snake_case functions, PascalCase classes, full type hints
+        - Testing: pytest with >80% coverage target
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <component>GraphBuildingContext</component>
+      <file>src/temporalio_graphs/context.py</file>
+      <signature>
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    is_building_graph: bool = True
+    exit_after_building_graph: bool = False
+    graph_output_file: Path | None = None
+    split_names_by_words: bool = True
+    suppress_validation: bool = False
+    start_node_label: str = "Start"
+    end_node_label: str = "End"
+    max_decision_points: int = 10
+    max_paths: int = 1024
+    decision_true_label: str = "yes"
+    decision_false_label: str = "no"
+    signal_success_label: str = "Signaled"
+    signal_timeout_label: str = "Timeout"
+      </signature>
+      <usage>
+        Immutable configuration object passed through entire pipeline.
+        Default constructor creates sensible defaults for all fields.
+        Story 2-6 must use default GraphBuildingContext() when context parameter is None.
+      </usage>
+    </interface>
+
+    <interface>
+      <component>WorkflowAnalyzer</component>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <signature>
+class WorkflowAnalyzer(ast.NodeVisitor):
+    def analyze(self, workflow_file: Path | str) -> WorkflowMetadata:
+        """Analyze workflow source file and extract workflow metadata.
+
+        Raises:
+            FileNotFoundError: If workflow_file does not exist.
+            PermissionError: If workflow_file cannot be read.
+            WorkflowParseError: If no @workflow.defn class found or syntax errors.
+        """
+      </signature>
+      <usage>
+        First stage of pipeline. Instantiate with WorkflowAnalyzer(), call analyze(workflow_path).
+        Returns WorkflowMetadata with workflow_class, workflow_run_method, activities list.
+        Handles file validation internally - Story 2-6 should NOT duplicate file checks.
+      </usage>
+      <error-handling>
+        Raises FileNotFoundError with message: "Workflow file not found: {path}\nPlease check the file path and try again."
+        Raises PermissionError with message: "Cannot read workflow file: {path}\nPermission denied: {e}"
+        Raises WorkflowParseError with message including line number and suggestion.
+      </error-handling>
+    </interface>
+
+    <interface>
+      <component>PathPermutationGenerator</component>
+      <file>src/temporalio_graphs/generator.py</file>
+      <signature>
+class PathPermutationGenerator:
+    def generate_paths(
+        self, metadata: WorkflowMetadata, context: GraphBuildingContext
+    ) -> list[GraphPath]:
+        """Generate execution paths from workflow metadata.
+
+        Args:
+            metadata: WorkflowMetadata from analyzer (required, not None)
+            context: GraphBuildingContext configuration (required, not None)
+
+        Returns:
+            List with single GraphPath for linear workflows (Epic 2)
+
+        Raises:
+            ValueError: If metadata is None or context is None
+            NotImplementedError: If workflow contains decision points
+        """
+      </signature>
+      <usage>
+        Second stage of pipeline. Instantiate with PathPermutationGenerator(), call generate_paths(metadata, context).
+        Returns list[GraphPath] with single element for Epic 2 linear workflows.
+        Handles None context internally by creating default - Story 2-6 should pass context unchanged.
+      </usage>
+    </interface>
+
+    <interface>
+      <component>MermaidRenderer</component>
+      <file>src/temporalio_graphs/renderer.py</file>
+      <signature>
+class MermaidRenderer:
+    def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str:
+        """Convert workflow execution paths to Mermaid flowchart syntax.
+
+        Args:
+            paths: List of GraphPath objects (may be empty)
+            context: GraphBuildingContext for node labels and formatting
+
+        Returns:
+            Complete Mermaid markdown string with fenced code blocks
+
+        Raises:
+            ValueError: If any activity name is None or empty string
+        """
+      </signature>
+      <usage>
+        Final stage of pipeline. Instantiate with MermaidRenderer(), call to_mermaid(paths, context).
+        Returns complete Mermaid markdown with ```mermaid fences, flowchart LR directive, nodes, and edges.
+        Performance: &lt;1ms for typical workflows (tested in Story 2.5).
+      </usage>
+    </interface>
+
+    <interface>
+      <component>WorkflowMetadata</component>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <signature>
+@dataclass
+class WorkflowMetadata:
+    workflow_class: str
+    workflow_run_method: str
+    activities: list[str]
+    decision_points: list[str]
+    signal_points: list[str]
+    source_file: Path
+    total_paths: int
+      </signature>
+      <usage>
+        Data contract between WorkflowAnalyzer and PathPermutationGenerator.
+        Read-only in Story 2-6 - passed unchanged from analyzer to generator.
+      </usage>
+    </interface>
+
+    <interface>
+      <component>GraphPath</component>
+      <file>src/temporalio_graphs/path.py</file>
+      <signature>
+@dataclass
+class GraphPath:
+    path_id: str
+    steps: list[str] = field(default_factory=list)
+    decisions: dict[str, bool] = field(default_factory=dict)
+
+    def add_activity(self, name: str) -> str:
+        """Returns sequential node ID: "1", "2", "3", etc."""
+      </signature>
+      <usage>
+        Data structure for execution paths. Created by PathPermutationGenerator.
+        Read-only in Story 2-6 - passed unchanged from generator to renderer.
+      </usage>
+    </interface>
+
+    <interface>
+      <component>Exception Hierarchy</component>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <signature>
+class TemporalioGraphsError(Exception):
+    """Base exception for all temporalio_graphs errors."""
+
+class WorkflowParseError(TemporalioGraphsError):
+    """Raised when workflow parsing fails."""
+      </signature>
+      <usage>
+        All library exceptions inherit from TemporalioGraphsError.
+        Story 2-6 should let WorkflowParseError from analyzer propagate unchanged.
+        FileNotFoundError and PermissionError are stdlib - do NOT wrap in custom exceptions.
+      </usage>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint category="type-safety">
+      <description>mypy strict mode compliance required (ADR-006)</description>
+      <implementation>
+        - All public functions must have complete type hints on parameters and return
+        - Use Path | str union syntax (Python 3.10+)
+        - Use Optional[T] for optional parameters
+        - Use Literal["mermaid", "json", "paths"] for output_format
+        - No Any type usage in public API
+        - Return type must be explicit: str (not Optional[str])
+      </implementation>
+      <validation>
+        Run: uv run mypy src/temporalio_graphs/__init__.py --strict
+        Must pass with zero errors before story completion
+      </validation>
+    </constraint>
+
+    <constraint category="documentation">
+      <description>Google-style docstrings required (ADR-009)</description>
+      <implementation>
+        - Docstring sections: Description, Args, Returns, Raises, Example
+        - Args section: Document each parameter with type and description
+        - Returns section: "Complete Mermaid markdown string with fenced code blocks"
+        - Raises section: FileNotFoundError, PermissionError, ValueError, WorkflowParseError
+        - Example section: Basic 3-line usage + advanced 7-line usage with custom context
+        - Notes section: Mention Epic 2 limitations (linear workflows only)
+      </implementation>
+      <validation>
+        Manual review of docstring completeness and clarity
+        Docstring should be visible in IDE tooltips
+      </validation>
+    </constraint>
+
+    <constraint category="code-quality">
+      <description>Ruff linting and formatting compliance (ADR-007)</description>
+      <implementation>
+        - 100-character line length limit
+        - Python 3.10+ target version
+        - Rule sets: E, F, I, N, W, UP enabled
+        - No linting violations allowed
+      </implementation>
+      <validation>
+        Run: uv run ruff check src/temporalio_graphs/__init__.py
+        Run: uv run ruff format src/temporalio_graphs/__init__.py
+        Must pass with zero violations
+      </validation>
+    </constraint>
+
+    <constraint category="performance">
+      <description>Total pipeline must complete &lt;1s for typical workflows (NFR-PERF-1)</description>
+      <implementation>
+        - analyze_workflow() orchestrates 3 components with minimal overhead
+        - No redundant file I/O or AST parsing
+        - No caching or state management (stateless design)
+        - File writing (if configured) should not block return
+      </implementation>
+      <validation>
+        Integration test measures end-to-end time from analyze_workflow() call to return
+        Must complete in &lt;1s for simple linear workflow with 3-5 activities
+      </validation>
+    </constraint>
+
+    <constraint category="security">
+      <description>No code execution, safe file I/O (NFR-SEC-1, NFR-SEC-4)</description>
+      <implementation>
+        - NEVER use eval(), exec(), compile(mode='exec')
+        - Use Path.resolve() for path normalization (prevents directory traversal)
+        - Let WorkflowAnalyzer handle file validation - do NOT duplicate checks
+        - File output: Create parent directories with mkdir(parents=True, exist_ok=True)
+        - UTF-8 encoding explicitly specified for all file operations
+      </implementation>
+      <validation>
+        Code review checklist: No exec/eval calls, proper path handling
+        Security test attempts path traversal (in Epic 5)
+      </validation>
+    </constraint>
+
+    <constraint category="error-handling">
+      <description>Clear, actionable error messages (NFR-USE-2)</description>
+      <implementation>
+        - Error message pattern: "ERROR_TYPE: {detail} - suggestion"
+        - FileNotFoundError: "Workflow file not found: {path} - check file exists"
+        - PermissionError: "Cannot read workflow file: {path} - check permissions"
+        - ValueError for None workflow_file: "workflow_file parameter required, cannot be None"
+        - ValueError for invalid output_format: "output_format 'json' not supported in Epic 2 (only 'mermaid')"
+        - Let WorkflowParseError from analyzer propagate unchanged (already has line number and suggestion)
+      </implementation>
+      <validation>
+        Unit tests verify error messages match specification
+        Error messages guide users toward solution
+      </validation>
+    </constraint>
+
+    <constraint category="api-stability">
+      <description>No modifications to existing components (Story 2-6 AC10)</description>
+      <implementation>
+        - WorkflowAnalyzer interface from Story 2.2: DO NOT MODIFY
+        - PathPermutationGenerator interface from Story 2.4: DO NOT MODIFY
+        - MermaidRenderer interface from Story 2.5: DO NOT MODIFY
+        - GraphBuildingContext from Story 2.1: DO NOT MODIFY
+        - Only modify src/temporalio_graphs/__init__.py for this story
+      </implementation>
+      <validation>
+        Git diff shows only __init__.py changed (plus tests and README)
+        All existing tests for other components still pass
+      </validation>
+    </constraint>
+
+    <constraint category="public-api-surface">
+      <description>Minimal export surface (__all__ list)</description>
+      <implementation>
+        - __all__ = ["GraphBuildingContext", "analyze_workflow"]
+        - DO NOT export: WorkflowAnalyzer, PathPermutationGenerator, MermaidRenderer
+        - DO NOT export: GraphPath, WorkflowMetadata, GraphNode, GraphEdge
+        - Users import as: from temporalio_graphs import analyze_workflow, GraphBuildingContext
+        - Internal modules remain private implementation details
+      </implementation>
+      <validation>
+        Check __all__ list contains exactly 2 items
+        IDE autocomplete shows only public API
+      </validation>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <runtime-dependency>
+      <name>temporalio</name>
+      <version>>=1.7.1</version>
+      <usage>
+        Provides @workflow.defn and @workflow.run decorator types for validation.
+        NOT used for workflow execution in this library.
+      </usage>
+    </runtime-dependency>
+
+    <stdlib-dependency>
+      <name>pathlib.Path</name>
+      <usage>
+        Path object handling for workflow_file and graph_output_file parameters.
+        Use Path.resolve() for normalization, Path.exists() for validation.
+      </usage>
+    </stdlib-dependency>
+
+    <stdlib-dependency>
+      <name>typing</name>
+      <usage>
+        Optional, Literal for type hints.
+        Optional[GraphBuildingContext] for context parameter.
+        Literal["mermaid", "json", "paths"] for output_format parameter.
+      </usage>
+    </stdlib-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.analyzer</module>
+      <class>WorkflowAnalyzer</class>
+      <usage>First stage of pipeline - AST parsing and workflow detection</usage>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.generator</module>
+      <class>PathPermutationGenerator</class>
+      <usage>Second stage of pipeline - path generation from metadata</usage>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.renderer</module>
+      <class>MermaidRenderer</class>
+      <usage>Third stage of pipeline - Mermaid syntax generation</usage>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.context</module>
+      <class>GraphBuildingContext</class>
+      <usage>Configuration object - exported in public API</usage>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.exceptions</module>
+      <class>WorkflowParseError</class>
+      <usage>Exception propagated from analyzer - do not catch or wrap</usage>
+    </internal-dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-framework>
+      <name>pytest</name>
+      <version>>=8.0.0</version>
+      <configuration>
+        Test files: tests/test_*.py
+        Coverage target: >80% overall, 100% for public API
+        Run command: uv run pytest --cov=src/temporalio_graphs --cov-fail-under=80
+      </configuration>
+    </test-framework>
+
+    <test-patterns>
+      <pattern name="fixture-based-setup">
+        <description>Use pytest fixtures for reusable test setup</description>
+        <example>
+@pytest.fixture
+def renderer() -> MermaidRenderer:
+    """Create a MermaidRenderer instance for testing."""
+    return MermaidRenderer()
+        </example>
+        <usage>
+          Story 2-6 should create fixtures for:
+          - default_context: GraphBuildingContext()
+          - custom_context: GraphBuildingContext with custom labels
+          - sample_workflow_file: Path to test workflow
+        </usage>
+      </pattern>
+
+      <pattern name="acceptance-criteria-mapping">
+        <description>Map tests to acceptance criteria</description>
+        <example>
+# Test AC1: analyze_workflow() function exists with correct signature
+def test_analyze_workflow_signature() -> None:
+    """Verify analyze_workflow() has correct type signature."""
+        </example>
+        <usage>
+          Each acceptance criterion should have at least one corresponding test.
+          Test docstrings reference AC numbers for traceability.
+        </usage>
+      </pattern>
+
+      <pattern name="error-testing">
+        <description>Test error conditions with pytest.raises</description>
+        <example>
+def test_analyze_workflow_file_not_found() -> None:
+    with pytest.raises(FileNotFoundError) as exc_info:
+        analyze_workflow("nonexistent.py")
+    assert "Workflow file not found" in str(exc_info.value)
+        </example>
+        <usage>
+          Test all error paths: FileNotFoundError, PermissionError, ValueError.
+          Verify error messages match specification.
+        </usage>
+      </pattern>
+
+      <pattern name="type-validation">
+        <description>Verify return types and parameter types</description>
+        <example>
+def test_analyze_workflow_returns_string() -> None:
+    result = analyze_workflow("workflow.py")
+    assert isinstance(result, str)
+    assert len(result) > 0
+        </example>
+        <usage>
+          Verify analyze_workflow() returns str type.
+          Verify result is complete Mermaid markdown.
+        </usage>
+      </pattern>
+    </test-patterns>
+
+    <test-requirements>
+      <requirement id="AC6" priority="critical">
+        Basic usage test: 3-line example from docstring must work
+        Test: test_analyze_workflow_minimal_usage()
+      </requirement>
+
+      <requirement id="AC6" priority="critical">
+        Custom context test: Verify context parameter is respected
+        Test: test_analyze_workflow_with_custom_context()
+      </requirement>
+
+      <requirement id="AC5" priority="high">
+        File output test: Verify graph_output_file writes to disk
+        Test: test_analyze_workflow_with_file_output()
+      </requirement>
+
+      <requirement id="AC2" priority="high">
+        Error handling test: FileNotFoundError for missing file
+        Test: test_analyze_workflow_error_file_not_found()
+      </requirement>
+
+      <requirement id="AC11" priority="medium">
+        Invalid format test: ValueError for unsupported output_format
+        Test: test_analyze_workflow_error_invalid_format()
+      </requirement>
+
+      <requirement id="AC3" priority="medium">
+        Default context test: None context becomes GraphBuildingContext()
+        Test: test_analyze_workflow_default_context()
+      </requirement>
+
+      <requirement id="AC4" priority="critical">
+        Integration test: End-to-end pipeline with real workflow file
+        Test: test_analyze_workflow_integration()
+      </requirement>
+    </test-requirements>
+
+    <sample-test-workflow>
+      <description>
+        Tests should use a simple linear workflow file for integration testing.
+        Can reuse existing test workflow from Story 2.2, 2.3, 2.4, 2.5 tests.
+      </description>
+      <example-content>
+from temporalio import workflow
+
+@workflow.defn
+class SimpleWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        await workflow.execute_activity("ValidateInput")
+        await workflow.execute_activity("ProcessOrder")
+        await workflow.execute_activity("SendConfirmation")
+        return "complete"
+      </example-content>
+      <expected-output>
+```mermaid
+flowchart LR
+s((Start))
+1[Validate Input]
+2[Process Order]
+3[Send Confirmation]
+e((End))
+s --> 1
+1 --> 2
+2 --> 3
+3 --> e
+```
+      </expected-output>
+    </sample-test-workflow>
+  </testing-context>
+
+  <implementation-guidance>
+    <algorithm-summary>
+      <description>
+        analyze_workflow() implements a 5-step pipeline with validation and error handling:
+      </description>
+      <steps>
+        <step number="1" name="Input Validation">
+          - Validate workflow_file is not None (raise ValueError)
+          - Convert Path | str to Path object: workflow_path = Path(workflow_file)
+          - NOTE: Do NOT check file existence - WorkflowAnalyzer handles this
+          - Validate output_format is "mermaid" (only supported in Epic 2)
+        </step>
+
+        <step number="2" name="Context Preparation">
+          - If context is None, create default: context = GraphBuildingContext()
+          - Preserve user-provided context unchanged (read-only)
+        </step>
+
+        <step number="3" name="Workflow Analysis">
+          - Instantiate analyzer: analyzer = WorkflowAnalyzer()
+          - Call analyze: metadata = analyzer.analyze(workflow_path)
+          - Let exceptions propagate (FileNotFoundError, PermissionError, WorkflowParseError)
+        </step>
+
+        <step number="4" name="Path Generation">
+          - Instantiate generator: generator = PathPermutationGenerator()
+          - Call generate_paths: paths = generator.generate_paths(metadata, context)
+          - Returns list[GraphPath] with single element for linear workflows
+        </step>
+
+        <step number="5" name="Mermaid Rendering">
+          - Instantiate renderer: renderer = MermaidRenderer()
+          - Call to_mermaid: result = renderer.to_mermaid(paths, context)
+          - Returns complete Mermaid markdown string
+        </step>
+
+        <step number="6" name="File Output (Optional)">
+          - If context.graph_output_file is set:
+            - Convert to Path: output_path = Path(context.graph_output_file)
+            - Create parent dirs: output_path.parent.mkdir(parents=True, exist_ok=True)
+            - Write result: output_path.write_text(result, encoding="utf-8")
+            - Handle OSError/IOError with clear message
+          - Always return result string (even if written to file)
+        </step>
+      </steps>
+
+      <pseudo-code>
+def analyze_workflow(
+    workflow_file: Path | str,
+    context: Optional[GraphBuildingContext] = None,
+    output_format: Literal["mermaid", "json", "paths"] = "mermaid"
+) -> str:
+    # 1. Validate inputs
+    if workflow_file is None:
+        raise ValueError("workflow_file parameter required, cannot be None")
+
+    workflow_path = Path(workflow_file)
+
+    if output_format != "mermaid":
+        raise ValueError(
+            f"output_format '{output_format}' not supported in Epic 2 (only 'mermaid')"
+        )
+
+    # 2. Prepare context
+    if context is None:
+        context = GraphBuildingContext()
+
+    # 3. Analyze workflow (file validation happens here)
+    analyzer = WorkflowAnalyzer()
+    metadata = analyzer.analyze(workflow_path)
+
+    # 4. Generate paths
+    generator = PathPermutationGenerator()
+    paths = generator.generate_paths(metadata, context)
+
+    # 5. Render to Mermaid
+    renderer = MermaidRenderer()
+    result = renderer.to_mermaid(paths, context)
+
+    # 6. Write to file if configured
+    if context.graph_output_file:
+        output_path = Path(context.graph_output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(result, encoding="utf-8")
+
+    return result
+      </pseudo-code>
+    </algorithm-summary>
+
+    <module-structure>
+      <description>
+        __init__.py should have clear organization following PEP 8:
+      </description>
+      <sections>
+        <section order="1" name="Module Docstring">
+          Triple-quoted docstring explaining package purpose and quick start.
+          Mention that this is the temporalio-graphs library for workflow visualization.
+        </section>
+
+        <section order="2" name="Imports">
+          Import Path from pathlib
+          Import Optional, Literal from typing
+          Import GraphBuildingContext from .context
+          Import WorkflowAnalyzer from .analyzer
+          Import PathPermutationGenerator from .generator
+          Import MermaidRenderer from .renderer
+        </section>
+
+        <section order="3" name="Public API Definition">
+          __all__ = ["GraphBuildingContext", "analyze_workflow"]
+        </section>
+
+        <section order="4" name="Function Definition">
+          def analyze_workflow(...) with complete implementation
+        </section>
+      </sections>
+    </module-structure>
+
+    <error-handling-strategy>
+      <principle>
+        Fail fast with clear messages. Let upstream exceptions propagate unchanged.
+      </principle>
+
+      <error-cases>
+        <case condition="workflow_file is None">
+          Raise: ValueError("workflow_file parameter required, cannot be None")
+          When: Input validation stage
+        </case>
+
+        <case condition="output_format != 'mermaid'">
+          Raise: ValueError(f"output_format '{output_format}' not supported in Epic 2 (only 'mermaid')")
+          When: Input validation stage
+        </case>
+
+        <case condition="File does not exist">
+          Propagate: FileNotFoundError from WorkflowAnalyzer
+          Do NOT catch or wrap - analyzer provides clear message
+        </case>
+
+        <case condition="File not readable">
+          Propagate: PermissionError from WorkflowAnalyzer
+          Do NOT catch or wrap - analyzer provides clear message
+        </case>
+
+        <case condition="No @workflow.defn found">
+          Propagate: WorkflowParseError from WorkflowAnalyzer
+          Do NOT catch or wrap - analyzer provides line number and suggestion
+        </case>
+
+        <case condition="File output fails">
+          Catch: OSError, IOError during write_text()
+          Raise: OSError with message including output path and reason
+        </case>
+      </error-cases>
+    </error-handling-strategy>
+
+    <integration-points>
+      <point component="WorkflowAnalyzer">
+        Do NOT duplicate file validation logic.
+        Analyzer already handles: exists(), readability, .py extension warning.
+        Simply call analyzer.analyze(workflow_path) and let it handle validation.
+      </point>
+
+      <point component="PathPermutationGenerator">
+        Pass context unchanged - do not modify or wrap.
+        Generator handles None context internally, but Story 2-6 always provides context.
+      </point>
+
+      <point component="MermaidRenderer">
+        Pass paths and context unchanged - do not modify.
+        Renderer handles empty paths, name splitting, deduplication internally.
+      </point>
+    </integration-points>
+
+    <code-example>
+      <description>Complete implementation example</description>
+      <code>
+"""Temporalio-graphs: Generate workflow visualization diagrams from Temporal workflows.
+
+This library provides static code analysis of Temporal Python workflows to generate
+complete Mermaid flowchart diagrams showing all possible execution paths.
+
+Quick start:
+    >>> from temporalio_graphs import analyze_workflow
+    >>> result = analyze_workflow("my_workflow.py")
+    >>> print(result)  # Prints Mermaid diagram
+"""
+
+from pathlib import Path
+from typing import Literal, Optional
+
+from temporalio_graphs.analyzer import WorkflowAnalyzer
+from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.generator import PathPermutationGenerator
+from temporalio_graphs.renderer import MermaidRenderer
+
+__all__ = ["GraphBuildingContext", "analyze_workflow"]
+
+
+def analyze_workflow(
+    workflow_file: Path | str,
+    context: Optional[GraphBuildingContext] = None,
+    output_format: Literal["mermaid", "json", "paths"] = "mermaid",
+) -> str:
+    """Analyze workflow source file and return graph representation.
+
+    Performs static code analysis on the workflow file to detect workflow
+    structure and generate a complete visualization diagram. The workflow
+    code is NEVER executed during analysis.
+
+    Args:
+        workflow_file: Path to Python workflow source file (.py).
+            Can be absolute or relative path, as string or Path object.
+        context: Optional configuration for graph generation. If None,
+            uses GraphBuildingContext() defaults. Customize to change
+            node labels, enable/disable word splitting, etc.
+        output_format: Output format - only "mermaid" supported in Epic 2.
+            Future epics will add "json" and "paths" formats.
+
+    Returns:
+        Graph representation as string in requested format.
+        For Mermaid: Complete markdown with fenced code blocks ready
+        to include in documentation or pass to Mermaid viewers.
+
+    Raises:
+        ValueError: If workflow_file is None or output_format is invalid.
+        FileNotFoundError: If workflow_file does not exist.
+        PermissionError: If workflow_file is not readable.
+        WorkflowParseError: If workflow file cannot be parsed, no
+            @workflow.defn decorator found, or workflow structure invalid.
+
+    Example:
+        Basic usage (3 lines):
+
+        >>> from temporalio_graphs import analyze_workflow
+        >>> result = analyze_workflow("my_workflow.py")
+        >>> print(result)
+        ```mermaid
+        flowchart LR
+        s((Start)) --> 1[Activity Name]
+        1 --> e((End))
+        ```
+
+    Example:
+        With custom configuration:
+
+        >>> from temporalio_graphs import analyze_workflow, GraphBuildingContext
+        >>> context = GraphBuildingContext(
+        ...     split_names_by_words=False,
+        ...     start_node_label="BEGIN"
+        ... )
+        >>> result = analyze_workflow("workflow.py", context)
+
+    Note:
+        This function performs STATIC ANALYSIS only. It does not execute
+        the workflow code or invoke any activities.
+
+        Epic 2 scope: Linear workflows only (no decision points or signals).
+        Decision support will be added in Epic 3.
+    """
+    # Validate inputs
+    if workflow_file is None:
+        raise ValueError(
+            "workflow_file parameter required, cannot be None"
+        )
+
+    workflow_path = Path(workflow_file)
+
+    if output_format != "mermaid":
+        raise ValueError(
+            f"output_format '{output_format}' not supported in Epic 2 (only 'mermaid')"
+        )
+
+    # Prepare context
+    if context is None:
+        context = GraphBuildingContext()
+
+    # Analyze workflow (file validation happens in analyzer)
+    analyzer = WorkflowAnalyzer()
+    metadata = analyzer.analyze(workflow_path)
+
+    # Generate execution paths
+    generator = PathPermutationGenerator()
+    paths = generator.generate_paths(metadata, context)
+
+    # Render to Mermaid
+    renderer = MermaidRenderer()
+    result = renderer.to_mermaid(paths, context)
+
+    # Write to file if configured
+    if context.graph_output_file is not None:
+        output_path = Path(context.graph_output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(result, encoding="utf-8")
+
+    return result
+      </code>
+    </code-example>
+  </implementation-guidance>
+
+  <validation-checklist>
+    <validation-step id="1" category="type-safety">
+      <description>Run mypy strict validation</description>
+      <command>uv run mypy src/temporalio_graphs/__init__.py --strict</command>
+      <pass-criteria>Zero type errors, all parameters and return type fully hinted</pass-criteria>
+    </validation-step>
+
+    <validation-step id="2" category="code-quality">
+      <description>Run ruff linting</description>
+      <command>uv run ruff check src/temporalio_graphs/__init__.py</command>
+      <pass-criteria>Zero linting violations</pass-criteria>
+    </validation-step>
+
+    <validation-step id="3" category="code-quality">
+      <description>Run ruff formatting</description>
+      <command>uv run ruff format src/temporalio_graphs/__init__.py</command>
+      <pass-criteria>Code formatted consistently</pass-criteria>
+    </validation-step>
+
+    <validation-step id="4" category="testing">
+      <description>Run all tests with coverage</description>
+      <command>uv run pytest tests/ --cov=src/temporalio_graphs --cov-fail-under=80</command>
+      <pass-criteria>All tests pass, >80% coverage, 100% for __init__.py</pass-criteria>
+    </validation-step>
+
+    <validation-step id="5" category="integration">
+      <description>Verify end-to-end pipeline</description>
+      <command>python -c "from temporalio_graphs import analyze_workflow; print(analyze_workflow('tests/fixtures/simple_workflow.py'))"</command>
+      <pass-criteria>Outputs valid Mermaid diagram, completes in &lt;1s</pass-criteria>
+    </validation-step>
+
+    <validation-step id="6" category="api-surface">
+      <description>Verify minimal export surface</description>
+      <command>python -c "from temporalio_graphs import *; print(dir())"</command>
+      <pass-criteria>Only GraphBuildingContext and analyze_workflow exported</pass-criteria>
+    </validation-step>
+
+    <validation-step id="7" category="documentation">
+      <description>Verify docstring completeness</description>
+      <command>python -c "from temporalio_graphs import analyze_workflow; help(analyze_workflow)"</command>
+      <pass-criteria>Docstring shows Args, Returns, Raises, Example sections</pass-criteria>
+    </validation-step>
+
+    <validation-step id="8" category="component-stability">
+      <description>Verify no modifications to existing components</description>
+      <command>git diff src/temporalio_graphs/analyzer.py src/temporalio_graphs/generator.py src/temporalio_graphs/renderer.py src/temporalio_graphs/context.py</command>
+      <pass-criteria>No changes to existing component files</pass-criteria>
+    </validation-step>
+  </validation-checklist>
+
+  <learnings-from-previous-stories>
+    <learning story="2-1" category="type-safety">
+      GraphBuildingContext established frozen dataclass pattern with full type hints.
+      Story 2-6 follows same pattern for analyze_workflow() signature.
+    </learning>
+
+    <learning story="2-2" category="error-handling">
+      WorkflowAnalyzer established file validation pattern with clear error messages.
+      Story 2-6 should NOT duplicate file checks - let analyzer handle validation.
+    </learning>
+
+    <learning story="2-3" category="performance">
+      Activity detection optimized with AST caching in WorkflowAnalyzer.
+      Story 2-6 benefits from this - no performance optimization needed.
+    </learning>
+
+    <learning story="2-4" category="interface-stability">
+      PathPermutationGenerator provides stable interface accepting metadata and context.
+      Story 2-6 simply calls generate_paths(metadata, context) - no special handling.
+    </learning>
+
+    <learning story="2-5" category="comprehensive-testing">
+      MermaidRenderer demonstrated comprehensive test coverage with 34 tests.
+      Story 2-6 should aim for similar rigor with integration tests validating end-to-end pipeline.
+    </learning>
+
+    <learning story="2-5" category="documentation">
+      MermaidRenderer showed complete Google-style docstrings with Args/Returns/Raises/Example.
+      Story 2-6 follows identical pattern for analyze_workflow() documentation.
+    </learning>
+
+    <learning story="2-5" category="read-only-integration">
+      MermaidRenderer accepted GraphPath and GraphBuildingContext as read-only inputs.
+      Story 2-6 extends this: passes all objects unchanged through pipeline.
+    </learning>
+
+    <learning story="2-5" category="performance-baseline">
+      MermaidRenderer achieved &lt;1ms rendering for 50 nodes.
+      Story 2-6 total pipeline must complete &lt;1s (analysis + generation + rendering).
+    </learning>
+  </learnings-from-previous-stories>
+
+  <warnings-and-gaps>
+    <warning category="incomplete-documentation">
+      No PRD.md, architecture.md, or epics.md files found in docs/sprint-artifacts/.
+      Only tech-spec-epic-2.md available. This is acceptable as tech spec provides
+      sufficient detail for Epic 2 stories.
+    </warning>
+
+    <warning category="output-format-parameter">
+      output_format parameter defined as Literal["mermaid", "json", "paths"] but only
+      "mermaid" is functional in Epic 2. Must raise ValueError for "json" or "paths".
+      This is future-proofing for Epic 5 features.
+    </warning>
+
+    <warning category="file-output-behavior">
+      Story does not specify whether graph_output_file should overwrite or error if
+      file exists. Implementation assumes overwrite (pathlib write_text() default).
+      This matches typical developer expectation and .NET behavior.
+    </warning>
+
+    <gap category="README-documentation">
+      Story AC15 requires README update with Quick Start section.
+      No existing README.md content reviewed in this context.
+      Implementation should add Quick Start section with 3-line and 7-line examples.
+    </gap>
+
+    <gap category="integration-test-location">
+      Story AC13 specifies tests/integration/test_public_api.py location.
+      No tests/integration/ directory exists yet.
+      Implementation should create this directory structure.
+    </gap>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step order="1">
+      Create analyze_workflow() function in src/temporalio_graphs/__init__.py
+      with complete type hints, docstring, and implementation following algorithm summary.
+    </step>
+
+    <step order="2">
+      Define __all__ = ["GraphBuildingContext", "analyze_workflow"] export list.
+    </step>
+
+    <step order="3">
+      Create tests/integration/test_public_api.py with 7 integration tests
+      covering AC1-AC15 validation.
+    </step>
+
+    <step order="4">
+      Update README.md with Quick Start section showing basic and advanced usage.
+    </step>
+
+    <step order="5">
+      Run validation checklist: mypy --strict, ruff check, ruff format, pytest.
+    </step>
+
+    <step order="6">
+      Verify end-to-end pipeline completes &lt;1s for simple workflow.
+    </step>
+
+    <step order="7">
+      Update sprint-status.yaml: 2-6-implement-public-api-entry-point drafted → ready-for-dev
+    </step>
+  </next-steps>
+</story-context>
