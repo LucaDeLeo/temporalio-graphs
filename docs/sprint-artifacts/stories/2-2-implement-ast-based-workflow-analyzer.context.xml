@@ -1,0 +1,454 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>2-2</storyId>
+    <title>Implement AST-Based Workflow Analyzer</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/2-2-implement-ast-based-workflow-analyzer.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>to parse Python workflow files and extract workflow structure</iWant>
+    <soThat>I can identify activities and workflow methods for graph generation</soThat>
+    <tasks>
+## Tasks / Subtasks
+
+- [ ] **Task 1: Create analyzer.py module** (AC: 1, 9)
+  - [ ] 1.1: Create src/temporalio_graphs/analyzer.py
+  - [ ] 1.2: Import required modules: ast, logging, pathlib, Optional, Path
+  - [ ] 1.3: Import WorkflowMetadata from _internal.graph_models
+  - [ ] 1.4: Import WorkflowParseError from exceptions
+  - [ ] 1.5: Create logger: `logger = logging.getLogger(__name__)`
+
+- [ ] **Task 2: Implement WorkflowAnalyzer class structure** (AC: 1, 9, 11)
+  - [ ] 2.1: Define class: `class WorkflowAnalyzer(ast.NodeVisitor):`
+  - [ ] 2.2: Add __init__(self) method
+  - [ ] 2.3: Initialize instance variables: _workflow_class: Optional[str] = None
+  - [ ] 2.4: Initialize: _workflow_run_method: Optional[str] = None
+  - [ ] 2.5: Initialize: _source_file: Optional[Path] = None
+  - [ ] 2.6: Initialize: _line_numbers: dict[str, int] = {}
+  - [ ] 2.7: Write comprehensive Google-style class docstring
+
+- [ ] **Task 3: Implement analyze() entry point method** (AC: 1, 8, 9)
+  - [ ] 3.1: Define: `def analyze(self, workflow_file: Path | str) -> WorkflowMetadata:`
+  - [ ] 3.2: Convert to Path: `path = Path(workflow_file).resolve()`
+  - [ ] 3.3: Validate file exists: raise FileNotFoundError if not
+  - [ ] 3.4: Validate file is readable: try read_text() and catch PermissionError
+  - [ ] 3.5: Warn if file extension is not .py (use logger.warning())
+  - [ ] 3.6: Read source code: `source = path.read_text(encoding='utf-8')`
+  - [ ] 3.7: Parse AST: `try: tree = ast.parse(source) except SyntaxError as e:` (AC: 5)
+  - [ ] 3.8: Call visit(tree) to traverse AST
+  - [ ] 3.9: Check if workflow found: if not _workflow_class, raise WorkflowParseError (AC: 5)
+  - [ ] 3.10: Build and return WorkflowMetadata with extracted values
+  - [ ] 3.11: Add Google-style docstring with Args, Returns, Raises sections
+
+- [ ] **Task 4: Implement visit_ClassDef visitor method** (AC: 2, 10)
+  - [ ] 4.1: Define: `def visit_ClassDef(self, node: ast.ClassDef) -> None:`
+  - [ ] 4.2: Check if class has @workflow.defn decorator
+  - [ ] 4.3: Call _is_workflow_decorator for each decorator in node.decorator_list
+  - [ ] 4.4: If found, store class name: `self._workflow_class = node.name`
+  - [ ] 4.5: Store line number: `self._line_numbers['workflow_class'] = node.lineno`
+  - [ ] 4.6: Log detection: `logger.debug(f"Found workflow class: {node.name}")`
+  - [ ] 4.7: Continue traversal: `self.generic_visit(node)` to find run method inside
+
+- [ ] **Task 5: Implement visit_FunctionDef visitor method** (AC: 3, 10)
+  - [ ] 5.1: Define: `def visit_FunctionDef(self, node: ast.FunctionDef) -> None:`
+  - [ ] 5.2: Only process if inside a workflow class (check self._workflow_class is set)
+  - [ ] 5.3: Check if method has @workflow.run decorator
+  - [ ] 5.4: Call _is_workflow_decorator for each decorator in node.decorator_list
+  - [ ] 5.5: If found, store method name: `self._workflow_run_method = node.name`
+  - [ ] 5.6: Store line number: `self._line_numbers['workflow_run_method'] = node.lineno`
+  - [ ] 5.7: Log detection: `logger.debug(f"Found run method: {node.name}")`
+
+- [ ] **Task 6: Implement helper method _is_workflow_decorator()** (AC: 2, 9)
+  - [ ] 6.1: Define: `def _is_workflow_decorator(self, decorator: ast.expr) -> bool:`
+  - [ ] 6.2: Handle attribute access: `if isinstance(decorator, ast.Attribute):`
+  - [ ] 6.3: Check: `decorator.attr == "defn"` or `decorator.attr == "run"`
+  - [ ] 6.4: Check: `isinstance(decorator.value, ast.Name) and decorator.value.id == "workflow"`
+  - [ ] 6.5: Return True if pattern matches, False otherwise
+  - [ ] 6.6: Handle ast.Name nodes (direct imports): `if isinstance(decorator, ast.Name):`
+  - [ ] 6.7: Check: `decorator.id in ("defn", "run")` (handles direct imports)
+  - [ ] 6.8: Add type-hinted docstring with example patterns
+
+- [ ] **Task 7: Add error handling with WorkflowParseError** (AC: 5, 9)
+  - [ ] 7.1: In analyze(), after traversal check if workflow found
+  - [ ] 7.2: If not found: `raise WorkflowParseError(f"No @workflow.defn decorated class found in {self._source_file}")`
+  - [ ] 7.3: Error message includes file path for user context
+  - [ ] 7.4: Error message suggests fix: "Ensure the workflow class has @workflow.defn decorator from temporalio"
+  - [ ] 7.5: Catch SyntaxError: `except SyntaxError as e:` with custom message
+  - [ ] 7.6: Include source context in error: file path and line number from e.lineno
+  - [ ] 7.7: Ensure WorkflowParseError is imported from exceptions.py (Story 1.1 should have exceptions module)
+
+- [ ] **Task 8: Implement WorkflowMetadata return construction** (AC: 7, 9)
+  - [ ] 8.1: After successful analysis, construct WorkflowMetadata
+  - [ ] 8.2: Verify all WorkflowMetadata fields are correctly populated
+  - [ ] 8.3: Ensure total_paths=1 for linear workflows (no permutations yet)
+  - [ ] 8.4: activities list is empty (populated by Story 2.3)
+
+- [ ] **Task 9: Create comprehensive unit tests** (AC: 10)
+  - [ ] 9.1: Create tests/test_analyzer.py
+  - [ ] 9.2: Import pytest, WorkflowAnalyzer from analyzer
+  - [ ] 9.3: Create pytest fixtures: workflow_analyzer, sample_workflow_path
+  - [ ] 9.4: Test 1 - Valid workflow detection (happy path)
+  - [ ] 9.5: Test 2 - Extract workflow class name
+  - [ ] 9.6: Test 3 - Detect run method
+  - [ ] 9.7: Test 4 - Multiple methods in class (ignore non-run)
+  - [ ] 9.8: Test 5 - Missing @workflow.defn raises WorkflowParseError
+  - [ ] 9.9: Test 6 - Missing @workflow.run raises WorkflowParseError
+  - [ ] 9.10: Test 7 - Invalid Python syntax raises SyntaxError (caught and wrapped)
+  - [ ] 9.11: Test 8 - File not found raises FileNotFoundError
+  - [ ] 9.12: Test 9 - Source line numbers stored correctly
+  - [ ] 9.13: Test 10 - Empty workflow class (no methods)
+
+- [ ] **Task 10: Create test fixtures** (AC: 10)
+  - [ ] 10.1: Create tests/fixtures/sample_workflows/ directory
+  - [ ] 10.2: Create tests/fixtures/sample_workflows/valid_linear_workflow.py
+  - [ ] 10.3: Create tests/fixtures/sample_workflows/no_workflow_decorator.py (missing @workflow.defn)
+  - [ ] 10.4: Create tests/fixtures/sample_workflows/no_run_method.py (workflow without @workflow.run)
+  - [ ] 10.5: Create tests/fixtures/sample_workflows/invalid_syntax.py (malformed Python)
+  - [ ] 10.6: Create conftest.py with pytest fixtures if not exists
+
+- [ ] **Task 11: Run quality checks** (AC: 1, 9, 11)
+  - [ ] 11.1: Run mypy: `uv run mypy src/temporalio_graphs/analyzer.py`
+  - [ ] 11.2: Verify zero type errors
+  - [ ] 11.3: Run ruff check: `uv run ruff check src/temporalio_graphs/analyzer.py`
+  - [ ] 11.4: Verify zero violations (or fix formatting)
+  - [ ] 11.5: Run pytest: `uv run pytest tests/test_analyzer.py -v`
+  - [ ] 11.6: Verify all 10 tests pass
+  - [ ] 11.7: Check coverage: `uv run pytest tests/test_analyzer.py --cov=src/temporalio_graphs/analyzer`
+  - [ ] 11.8: Verify 100% line and branch coverage
+
+- [ ] **Task 12: Documentation and verification** (AC: 1, 11)
+  - [ ] 12.1: Verify all public methods have Google-style docstrings
+  - [ ] 12.2: Verify docstrings include Args, Returns, Raises sections
+  - [ ] 12.3: Verify docstrings include usage examples
+  - [ ] 12.4: Update module docstring at top of analyzer.py
+  - [ ] 12.5: Run pydoc to verify docstring formatting: `python -m pydoc temporalio_graphs.analyzer`
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **WorkflowAnalyzer class exists in src/temporalio_graphs/analyzer.py**
+   - Extends ast.NodeVisitor per Architecture Visitor Pattern (lines 405-422)
+   - Implements analyze(workflow_file: Path | str) -> WorkflowMetadata method
+   - Single responsibility: parse AST and extract workflow structure
+   - Type hints pass mypy --strict with zero errors per NFR-QUAL-1
+
+2. **Workflow decorator detection (@workflow.defn)**
+   - Visitor method visit_ClassDef(node: ast.ClassDef) -> None
+   - Checks decorator_list for @workflow.defn decorator
+   - Helper method _is_workflow_decorator(decorator: ast.expr) -> bool
+   - Stores workflow class name when found
+   - Raises WorkflowParseError if no @workflow.defn found (FR61, FR64)
+
+3. **Run method detection (@workflow.run)**
+   - Visitor method visit_FunctionDef(node: ast.FunctionDef) -> None (inside detected workflow class)
+   - Checks decorator_list for @workflow.run decorator
+   - Stores run method name when found
+   - Records source line number for error reporting per NFR-USE-2
+   - Handles both async and sync method definitions
+
+4. **Source line number tracking**
+   - All detected workflow elements (class, method) record ast.Node.lineno
+   - Error messages include file path and line number for precise debugging
+   - WorkflowMetadata stores line numbers for workflow_class_line and workflow_run_method_line
+
+5. **Error handling for missing decorators**
+   - Raises WorkflowParseError with message: "No @workflow.defn decorated class found in {filepath}"
+   - Error includes suggestion: "Ensure the workflow class has @workflow.defn decorator from temporalio"
+   - Error message includes file path and any decorators found (for debugging)
+   - Handles SyntaxError from ast.parse() gracefully per FR61
+
+6. **Performance meets NFR-PERF-1**
+   - Analysis completes in &lt;1ms for simple workflows (10-50 line files)
+   - No external dependencies beyond Python stdlib (ast, pathlib, logging)
+   - Time measured: ast.parse() + visitor traversal only
+
+7. **WorkflowMetadata population**
+   - Returns WorkflowMetadata with fields populated:
+     - workflow_class: str (class name)
+     - workflow_run_method: str (method name)
+     - activities: list[str] (empty in this story, populated by Story 2.3)
+     - decision_points: list[str] (empty, populated by Epic 3)
+     - signal_points: list[str] (empty, populated by Epic 4)
+     - source_file: Path
+     - total_paths: int (1 for linear workflows)
+
+8. **File input validation**
+   - Accept workflow_file: Path | str parameter
+   - Resolve to absolute path using Path.resolve()
+   - Check file exists: raise FileNotFoundError with helpful message
+   - Check file readable: raise PermissionError if not
+   - Warn if file doesn't end with .py (but don't fail)
+   - Support both relative and absolute paths
+
+9. **Complete type hints per NFR-QUAL-1**
+   - All method parameters typed: node: ast.ClassDef, decorator: ast.expr
+   - All return types specified: -> None, -> bool, -> WorkflowMetadata
+   - Private methods prefixed with _ (e.g., _is_workflow_decorator)
+   - No use of Any type in public interface
+   - Generic types properly specified: list[str], Optional[Path]
+
+10. **Unit test coverage 100%**
+    - tests/test_analyzer.py with 10 test functions
+    - All tests use pytest fixtures from conftest.py
+    - Fixtures in tests/fixtures/sample_workflows/ with example .py files
+    - Coverage report shows 100% line coverage for analyzer.py
+
+11. **Google-style docstrings per ADR-009**
+    - Class docstring with purpose and usage example
+    - Method docstrings with Args, Returns, Raises sections
+    - Example section showing typical usage pattern
+    - All parameters and return types documented
+
+12. **Integration with existing infrastructure**
+    - Imports from src/temporalio_graphs/_internal/graph_models.py (WorkflowMetadata from Story 2.1)
+    - Uses GraphBuildingContext if passed (prepared for future stories)
+    - Logging configured per Architecture: logger = logging.getLogger(__name__)
+    - Error messages use custom WorkflowParseError from exceptions.py
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>ADR-001: Static Analysis vs Runtime Interceptors</section>
+        <snippet>Use static code analysis (Python AST) instead of runtime interceptors. Spike validation showed static analysis achieves &lt;1ms analysis time with no workflow execution needed.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Visitor Pattern (lines 405-422)</section>
+        <snippet>AST traversal using ast.NodeVisitor for workflow analysis. Clean separation of concerns with visit_ClassDef, visit_FunctionDef, visit_Call methods.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>ADR-006: mypy Strict Mode</section>
+        <snippet>All public APIs require complete type hints. mypy --strict must pass with zero errors. Type hints serve as inline API documentation.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>ADR-009: Google-Style Docstrings</section>
+        <snippet>All public APIs use Google-style docstrings with Args, Returns, Raises, Example sections. Compatible with Sphinx, mkdocs, pydoc.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>ADR-010: pytest >80% Coverage Requirement</section>
+        <snippet>Use pytest with pytest-cov, enforce 80% minimum coverage in CI, target 100% for core graph generation logic.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>analyzer.py - AST Workflow Analyzer</section>
+        <snippet>WorkflowAnalyzer(ast.NodeVisitor) class with analyze(workflow_file: Path) -> WorkflowMetadata method. Detects @workflow.defn classes and @workflow.run methods. Collects execute_activity() calls. Performance &lt;1ms for typical workflows.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Security Architecture</section>
+        <snippet>Path resolution with Path.resolve() prevents directory traversal. Static analysis only - never eval(), exec(), compile(mode='exec'). No code execution. No network access.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR1-FR2: Workflow Parsing</section>
+        <snippet>Library must analyze Python Temporal workflow source files to extract workflow structure and activities without executing the workflow.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR61-FR64: Error Handling</section>
+        <snippet>Clear error messages with file paths and line numbers. Actionable suggestions for fixing issues. Graceful handling of syntax errors and missing decorators.</snippet>
+      </artifact>
+      <artifact>
+        <path>spike/temporal-spike/approach3_static_analysis.py</path>
+        <title>Static Analysis Prototype</title>
+        <section>WorkflowAnalyzer class</section>
+        <snippet>Reference implementation showing visit_If, visit_Await, and AST traversal patterns. Demonstrates detection of execute_activity calls and decision points.</snippet>
+      </artifact>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>206-289</lines>
+        <reason>Data structure that analyze() method must return. Contains workflow_class, workflow_run_method, activities, decision_points, signal_points, source_file, total_paths fields.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>enum</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-32</lines>
+        <reason>Node type classification (START, END, ACTIVITY, DECISION, SIGNAL) used in workflow graph representation.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphNode</symbol>
+        <lines>34-111</lines>
+        <reason>Graph node representation with to_mermaid() method. Shows pattern for rendering Mermaid syntax.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>11-90</lines>
+        <reason>Configuration context with frozen=True immutable pattern. Shows how to structure configuration dataclasses with comprehensive docstrings.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>class</kind>
+        <symbol>GraphPath</symbol>
+        <lines>12-156</lines>
+        <reason>Path tracking class with add_activity(), add_decision(), add_signal() methods. Shows mutable tracking pattern with field(default_factory=list) usage.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/conftest.py</path>
+        <kind>fixture</kind>
+        <symbol>sample_workflow_code</symbol>
+        <lines>6-21</lines>
+        <reason>Example pytest fixture pattern for test data. Shows how to structure sample workflow code strings for testing.</reason>
+      </artifact>
+      <artifact>
+        <path>spike/temporal-spike/approach3_static_analysis.py</path>
+        <kind>class</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>30-102</lines>
+        <reason>Reference prototype implementation showing AST visitor pattern with visit_If and visit_Await methods. Demonstrates decorator detection and activity call extraction.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" />
+        <package name="pytest" version=">=8.0.0" dev="true" />
+        <package name="pytest-asyncio" version=">=0.23.0" dev="true" />
+        <package name="mypy" version=">=1.8.0" dev="true" />
+        <package name="ruff" version=">=0.2.0" dev="true" />
+        <package name="pytest-cov" version=">=4.1.0" dev="true" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+- **Technical:** Python 3.10+ required (modern type hints: Path | str). Static analysis only - cannot detect runtime-only patterns. Epic 2 scope: workflow and run method detection only, no activity detection yet (Story 2.3).
+- **Performance:** Analysis must complete in &lt;1ms for typical workflows per NFR-PERF-1. Python's ast.parse() is C-implemented and already fast.
+- **Quality:** All public APIs must have complete type hints (NFR-QUAL-1). 100% test coverage target for analyzer module. mypy --strict must pass with zero errors. ruff check must pass with zero violations.
+- **Dependency:** Story 2.1 (data models) DONE - WorkflowMetadata available for import. Exceptions module needed (WorkflowParseError) - create if not exists from Story 1.1.
+- **Epic Scope:** Linear workflows only in Epic 2. Decision detection (to_decision) deferred to Epic 3. Signal detection (wait_condition) deferred to Epic 4.
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>WorkflowAnalyzer.analyze()</name>
+      <kind>method</kind>
+      <signature>def analyze(self, workflow_file: Path | str) -> WorkflowMetadata</signature>
+      <path>src/temporalio_graphs/analyzer.py</path>
+      <description>Main entry point for AST-based workflow analysis. Accepts file path (relative or absolute), parses source code, extracts workflow class and run method, returns WorkflowMetadata dataclass.</description>
+    </interface>
+    <interface>
+      <name>WorkflowMetadata</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass class WorkflowMetadata(workflow_class: str, workflow_run_method: str, activities: list[str], decision_points: list[str], signal_points: list[str], source_file: Path, total_paths: int)</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Data structure returned by analyze(). Contains workflow class name, run method name, lists of activities/decisions/signals (empty in Story 2.2), source file path, and total path count.</description>
+    </interface>
+    <interface>
+      <name>ast.NodeVisitor</name>
+      <kind>class</kind>
+      <signature>class ast.NodeVisitor (from Python stdlib)</signature>
+      <path>Python standard library ast module</path>
+      <description>Base class for AST traversal. WorkflowAnalyzer extends this to implement visit_ClassDef, visit_FunctionDef methods. Call generic_visit(node) to continue traversal.</description>
+    </interface>
+    <interface>
+      <name>WorkflowParseError</name>
+      <kind>exception</kind>
+      <signature>class WorkflowParseError(Exception)</signature>
+      <path>src/temporalio_graphs/exceptions.py</path>
+      <description>Custom exception for workflow parsing errors. Raised when @workflow.defn not found, syntax errors, or file validation fails. Must be created if not exists.</description>
+    </interface>
+    <interface>
+      <name>logging.getLogger(__name__)</name>
+      <kind>function</kind>
+      <signature>logger = logging.getLogger(__name__)</signature>
+      <path>Python standard library logging module</path>
+      <description>Logger instance for analyzer module. Use logger.debug() for AST traversal details, logger.warning() for .py extension warnings, logger.error() for failures.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+Epic 2 establishes rigorous testing standards: pytest framework with pytest-cov for coverage tracking, 100% line and branch coverage target for core modules (analyzer, generator, renderer), mypy strict mode compliance for all test code, Google-style docstrings for test module documentation. All tests must be isolated (no shared mutable state), use pytest fixtures from conftest.py for test data, follow naming convention test_module_behavior_scenario(), and include both happy path and error path scenarios. Test organization mirrors source structure (test_analyzer.py tests analyzer.py).
+    </standards>
+
+    <locations>
+tests/test_analyzer.py - Main test file for WorkflowAnalyzer class
+tests/fixtures/sample_workflows/*.py - Sample workflow files for testing (valid_linear_workflow.py, no_workflow_decorator.py, no_run_method.py, invalid_syntax.py)
+tests/conftest.py - Shared pytest fixtures (sample_workflow_code, workflow_analyzer)
+    </locations>
+
+    <ideas>
+Test Ideas Mapped to Acceptance Criteria:
+
+AC1 (WorkflowAnalyzer class exists):
+- test_analyzer_class_extends_ast_node_visitor(): Verify inheritance from ast.NodeVisitor
+- test_analyzer_has_analyze_method(): Check analyze() method exists with correct signature
+
+AC2 (Workflow decorator detection):
+- test_analyzer_detects_workflow_defn_decorator(): Happy path - find @workflow.defn
+- test_analyzer_extracts_workflow_class_name(): Verify class name stored correctly
+- test_analyzer_no_workflow_defn_raises_error(): Missing decorator handling
+
+AC3 (Run method detection):
+- test_analyzer_detects_workflow_run_method(): Happy path - find @workflow.run
+- test_analyzer_detects_async_run_method(): Verify async def support
+- test_analyzer_no_workflow_run_raises_error(): Missing run method handling
+
+AC4 (Source line number tracking):
+- test_analyzer_stores_source_line_numbers(): Verify lineno captured for class and method
+- test_error_includes_line_number(): Check error messages contain line numbers
+
+AC5 (Error handling):
+- test_analyzer_invalid_python_syntax_raises_error(): SyntaxError handling
+- test_error_message_includes_file_path(): Verify file context in errors
+- test_error_message_includes_helpful_suggestion(): Check actionable guidance
+
+AC6 (Performance):
+- test_analyzer_performance_simple_workflow(): Measure time &lt;1ms for 50-line workflow
+
+AC7 (WorkflowMetadata population):
+- test_analyzer_returns_workflow_metadata(): Verify return type
+- test_metadata_fields_populated_correctly(): Check all fields present
+- test_metadata_total_paths_equals_one(): Linear workflow path count
+
+AC8 (File input validation):
+- test_analyzer_file_not_found_raises_error(): Missing file handling
+- test_analyzer_accepts_path_object(): Path parameter support
+- test_analyzer_accepts_string_path(): String parameter support
+- test_analyzer_warns_non_py_extension(): .py extension warning
+
+AC9 (Type hints):
+- test_mypy_strict_passes(): Run mypy --strict on analyzer.py in test
+
+AC10 (Test coverage):
+- test_coverage_100_percent(): Use pytest-cov to verify 100% coverage
+
+AC11 (Docstrings):
+- test_public_methods_have_docstrings(): Verify __doc__ attributes
+- test_docstrings_have_args_section(): Check Google style format
+
+AC12 (Integration):
+- test_analyzer_imports_workflow_metadata(): Verify import works
+- test_analyzer_uses_workflow_parse_error(): Check exception usage
+    </ideas>
+  </tests>
+</story-context>

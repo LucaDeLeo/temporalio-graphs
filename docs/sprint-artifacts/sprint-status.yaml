@@ -44,7 +44,7 @@ development_status:
   # Epic 2: Basic Graph Generation (Linear Workflows)
   epic-2: contexted
   2-1-implement-core-data-models-with-type-safety: done
-  2-2-implement-ast-based-workflow-analyzer: backlog
+  2-2-implement-ast-based-workflow-analyzer: done
   2-3-implement-activity-call-detection: backlog
   2-4-implement-basic-path-generator-for-linear-workflows: backlog
   2-5-implement-mermaid-renderer-with-format-compliance: backlog
