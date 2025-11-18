@@ -1,0 +1,663 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>2-3</story-key>
+    <story-title>Implement Activity Call Detection</story-title>
+    <epic-id>2</epic-id>
+    <epic-title>Basic Graph Generation (Linear Workflows)</epic-title>
+    <status>ready-for-dev</status>
+    <generated-date>2025-11-18</generated-date>
+    <story-file>docs/sprint-artifacts/stories/2-3-implement-activity-call-detection.md</story-file>
+  </metadata>
+
+  <story-definition>
+    <user-story>
+      As a library developer,
+      I want to detect all activity calls in workflow code,
+      So that I can build graph nodes representing each activity.
+    </user-story>
+
+    <scope>
+      This story extends the WorkflowAnalyzer class from Story 2.2 with activity call detection capabilities.
+      It implements the visit_Call visitor method to identify workflow.execute_activity() calls in the AST,
+      extract activity names, track source line numbers, and populate the activities list in WorkflowMetadata.
+    </scope>
+
+    <key-acceptance-criteria>
+      <criterion id="AC1">WorkflowAnalyzer extends to detect activity calls via visit_Call method</criterion>
+      <criterion id="AC2">Activity name extraction from execute_activity() calls (Name and Constant nodes)</criterion>
+      <criterion id="AC3">Activity detection patterns (ast.Call with execute_activity attribute)</criterion>
+      <criterion id="AC4">Source line number tracking per activity (ast.Node.lineno)</criterion>
+      <criterion id="AC5">WorkflowMetadata activities list population with all detected activities</criterion>
+      <criterion id="AC9">Complete type hints per NFR-QUAL-1 (mypy strict compliance)</criterion>
+      <criterion id="AC10">Unit test coverage 100% for activity detection logic</criterion>
+      <criterion id="AC11">Google-style docstrings per ADR-009</criterion>
+      <criterion id="AC12">Integration with existing WorkflowAnalyzer (no breaking changes)</criterion>
+    </key-acceptance-criteria>
+  </story-definition>
+
+  <epic-context>
+    <epic-file>docs/sprint-artifacts/tech-spec-epic-2.md</epic-file>
+    <epic-objective>
+      Deliver foundational capability of temporalio-graphs: generating complete Mermaid flowchart diagrams
+      from linear Python Temporal workflows through static code analysis. Epic 2 implements ~54% of total
+      project requirements (35 of 65 FRs), including complete analysis engine, configuration system,
+      public API, and Mermaid rendering infrastructure.
+    </epic-objective>
+
+    <story-dependencies>
+      <completed-stories>
+        <story id="2-1">Implement Core Data Models with Type Safety - WorkflowMetadata defined</story>
+        <story id="2-2">Implement AST-Based Workflow Analyzer - WorkflowAnalyzer base class, workflow/run detection</story>
+      </completed-stories>
+      <blocked-stories>
+        <story id="2-4">Implement Basic Path Generator for Linear Workflows - needs activity list</story>
+        <story id="2-5">Implement Mermaid Renderer - needs activity data for node generation</story>
+        <story id="2-6">Implement Public API Entry Point - needs complete analysis pipeline</story>
+      </blocked-stories>
+    </story-dependencies>
+
+    <relevant-tech-spec-sections>
+      <section id="visitor-pattern" lines="149-160">
+        AST Visitor Pattern implementation - WorkflowAnalyzer extends ast.NodeVisitor to traverse
+        workflow code. The visit_Call method added in this story identifies execute_activity() calls.
+      </section>
+      <section id="activity-detection" lines="279-299">
+        Activity Detection Algorithm - WorkflowAnalyzer.visit_Call checks for ast.Call nodes with
+        func.attr == "execute_activity" and func.value.id == "workflow". Extracts activity names from
+        first argument (ast.Name or ast.Constant nodes).
+      </section>
+      <section id="workflow-metadata" lines="206-263">
+        WorkflowMetadata Model - activities field populated with list[str] of detected activity names
+        in source code order. Allows duplicates (same activity called multiple times per FR48).
+      </section>
+    </relevant-tech-spec-sections>
+  </epic-context>
+
+  <architecture-decisions>
+    <adr id="ADR-001" relevance="critical">
+      <title>Static Analysis vs Runtime Interceptors</title>
+      <decision>Use Python AST module for static code analysis, no workflow execution</decision>
+      <impact>
+        Activity detection happens via AST traversal in visit_Call method. Parser identifies
+        execute_activity() calls by pattern matching AST node types. No runtime mocking needed.
+        Performance: &lt;1ms for typical workflows.
+      </impact>
+      <implementation-guidance>
+        - Use ast.Call nodes to detect method calls
+        - Check func attribute for "execute_activity"
+        - Verify func.value references "workflow" module
+        - Extract activity name from args[0] (first argument)
+        - Support both function references (ast.Name) and string literals (ast.Constant)
+      </implementation-guidance>
+    </adr>
+
+    <adr id="ADR-006" relevance="critical">
+      <title>mypy Strict Mode Type Safety</title>
+      <decision>All public APIs must have complete type hints, mypy --strict compliance required</decision>
+      <impact>
+        All new methods in this story require full type signatures:
+        - visit_Call(self, node: ast.Call) -> None
+        - _is_execute_activity_call(self, node: ast.Call) -> bool
+        - _extract_activity_name(self, arg: ast.expr) -> str
+        - _is_workflow_reference(self, node: ast.expr) -> bool
+        No Any types allowed in public interface.
+      </impact>
+    </adr>
+
+    <adr id="ADR-009" relevance="high">
+      <title>Google-Style Docstrings</title>
+      <decision>All public methods use Google-style docstrings with Args/Returns/Raises/Example sections</decision>
+      <impact>
+        visit_Call and all helper methods must have comprehensive docstrings:
+        - Purpose description
+        - Args section with parameter types and descriptions
+        - Returns section with return type and description
+        - Example section showing activity detection patterns
+        - Raises section if any exceptions possible
+      </impact>
+    </adr>
+
+    <adr id="ADR-010" relevance="high">
+      <title>Test Coverage &gt;80%</title>
+      <decision>Minimum 80% overall coverage, target 100% for core graph generation logic</decision>
+      <impact>
+        Activity detection logic must have 100% test coverage:
+        - All visit_Call code paths tested
+        - All _extract_activity_name patterns tested (Name, Constant, edge cases)
+        - All _is_execute_activity_call conditions tested
+        - Error handling paths tested
+        Target: 10 new test functions in test_analyzer.py
+      </impact>
+    </adr>
+  </architecture-decisions>
+
+  <requirements-mapping>
+    <functional-requirements>
+      <requirement id="FR3" priority="critical">
+        <description>Detect workflow.execute_activity() calls in Python AST</description>
+        <acceptance>
+          visit_Call method identifies all execute_activity() calls in workflow run method.
+          Pattern matching on ast.Call nodes with func.attr == "execute_activity".
+        </acceptance>
+      </requirement>
+
+      <requirement id="FR4" priority="critical">
+        <description>Extract activity names from execute_activity() calls</description>
+        <acceptance>
+          _extract_activity_name handles both:
+          - Function reference: workflow.execute_activity(my_activity, ...) -> "my_activity"
+          - String literal: workflow.execute_activity("my_activity", ...) -> "my_activity"
+        </acceptance>
+      </requirement>
+
+      <requirement id="FR48" priority="high">
+        <description>Support duplicate activity calls (same activity multiple times)</description>
+        <acceptance>
+          activities list allows duplicates. Same activity called twice appears twice in list.
+          Order preserved from source code.
+        </acceptance>
+      </requirement>
+
+      <requirement id="FR50" priority="high">
+        <description>Support sequential activity calls within linear workflow</description>
+        <acceptance>
+          visit_Call detects activities in sequence, preserving source order.
+          Activities across different code paths (if/else) collected (deduplicated in path generation).
+        </acceptance>
+      </requirement>
+    </functional-requirements>
+
+    <non-functional-requirements>
+      <requirement id="NFR-USE-2" priority="high">
+        <description>Precise error reporting with line numbers</description>
+        <acceptance>
+          Each detected activity stores ast.Node.lineno for source line tracking.
+          Enables debugging and error messages with exact source locations.
+        </acceptance>
+      </requirement>
+
+      <requirement id="NFR-PERF-1" priority="critical">
+        <description>Analysis completes in &lt;1 second for workflows with 5 decision points</description>
+        <acceptance>
+          Activity detection in &lt;0.5ms for 10-activity workflows.
+          Single AST traversal, no second pass required.
+          Incremental detection during existing visit() traversal.
+        </acceptance>
+      </requirement>
+
+      <requirement id="NFR-QUAL-1" priority="critical">
+        <description>Complete type hints for all public APIs</description>
+        <acceptance>
+          All new methods fully typed: visit_Call, _is_execute_activity_call, _extract_activity_name.
+          No Any type usage. Mypy --strict passes with zero errors.
+        </acceptance>
+      </requirement>
+    </non-functional-requirements>
+  </requirements-mapping>
+
+  <existing-code-dependencies>
+    <file path="src/temporalio_graphs/analyzer.py" role="extend">
+      <description>WorkflowAnalyzer base class from Story 2.2</description>
+      <key-elements>
+        <element type="class">WorkflowAnalyzer(ast.NodeVisitor)</element>
+        <element type="method">__init__(self) - Initialize instance variables</element>
+        <element type="method">analyze(workflow_file) - Main entry point, calls self.visit(tree)</element>
+        <element type="method">visit_ClassDef(node) - Detects @workflow.defn</element>
+        <element type="method">visit_FunctionDef(node) - Detects @workflow.run</element>
+        <element type="method">_is_workflow_decorator(decorator, target) - Helper for decorator detection</element>
+        <element type="attribute">_workflow_class - Stores detected workflow class name</element>
+        <element type="attribute">_workflow_run_method - Stores detected run method name</element>
+        <element type="attribute">_line_numbers - Dict tracking source line numbers</element>
+        <element type="attribute">_inside_workflow_class - Boolean flag for context tracking</element>
+      </key-elements>
+      <usage>
+        Extend this class by adding:
+        1. _activities: list[tuple[str, int]] instance variable in __init__
+        2. visit_Call method to detect execute_activity() calls
+        3. Helper methods: _is_execute_activity_call, _is_workflow_reference, _extract_activity_name
+        4. Update analyze() to pass activities to WorkflowMetadata
+        DO NOT modify existing methods (visit_ClassDef, visit_FunctionDef, _is_workflow_decorator)
+      </usage>
+    </file>
+
+    <file path="src/temporalio_graphs/_internal/graph_models.py" role="use">
+      <description>WorkflowMetadata dataclass from Story 2.1</description>
+      <key-elements>
+        <element type="dataclass">WorkflowMetadata</element>
+        <element type="field">workflow_class: str</element>
+        <element type="field">workflow_run_method: str</element>
+        <element type="field">activities: list[str] - POPULATE IN THIS STORY</element>
+        <element type="field">decision_points: list[str] - Empty in Epic 2</element>
+        <element type="field">signal_points: list[str] - Empty in Epic 2</element>
+        <element type="field">source_file: Path</element>
+        <element type="field">total_paths: int</element>
+      </key-elements>
+      <usage>
+        In analyzer.analyze(), convert _activities list of tuples to list of names:
+        activities=[name for name, _ in self._activities]
+        Pass to WorkflowMetadata constructor.
+      </usage>
+    </file>
+
+    <file path="src/temporalio_graphs/exceptions.py" role="use">
+      <description>Exception hierarchy from Story 1.1</description>
+      <key-elements>
+        <element type="exception">TemporalioGraphsError - Base exception</element>
+        <element type="exception">WorkflowParseError - Used for parse errors</element>
+      </key-elements>
+      <usage>
+        Import WorkflowParseError for error cases.
+        May log warnings for malformed execute_activity calls but continue analysis.
+      </usage>
+    </file>
+  </existing-code-dependencies>
+
+  <code-patterns>
+    <pattern name="ast-visitor-extension" source="Story 2.2">
+      <description>Extending ast.NodeVisitor with new visitor methods</description>
+      <example><![CDATA[
+def visit_Call(self, node: ast.Call) -> None:
+    """Visit function call nodes to detect execute_activity() calls.
+
+    Args:
+        node: AST node representing a function call.
+    """
+    if self._is_execute_activity_call(node):
+        activity_name = self._extract_activity_name(node.args[0])
+        self._activities.append((activity_name, node.lineno))
+        logger.debug(f"Found activity call: {activity_name} at line {node.lineno}")
+
+    # Continue traversal
+    self.generic_visit(node)
+      ]]></example>
+      <key-points>
+        - Always call self.generic_visit(node) to continue traversal
+        - Use logger.debug() for diagnostic messages
+        - Store line numbers via node.lineno
+        - Check conditions before processing (guard clauses)
+      </key-points>
+    </pattern>
+
+    <pattern name="helper-method-naming" source="Story 2.2">
+      <description>Helper method naming conventions</description>
+      <example><![CDATA[
+# Boolean checks use _is_* prefix
+def _is_execute_activity_call(self, node: ast.Call) -> bool:
+    """Check if call node is execute_activity."""
+    ...
+
+# Data extraction uses _extract_* prefix
+def _extract_activity_name(self, arg: ast.expr) -> str:
+    """Extract activity name from argument node."""
+    ...
+      ]]></example>
+      <key-points>
+        - Private methods start with underscore
+        - Boolean checks: _is_* prefix
+        - Data extraction: _extract_* prefix
+        - All helpers have type hints and docstrings
+      </key-points>
+    </pattern>
+
+    <pattern name="ast-pattern-matching" source="Architecture">
+      <description>AST node pattern matching for Python expressions</description>
+      <example><![CDATA[
+# Check for attribute access: workflow.execute_activity
+if isinstance(node.func, ast.Attribute):
+    if node.func.attr == "execute_activity":
+        if isinstance(node.func.value, ast.Name):
+            if node.func.value.id == "workflow":
+                # This is workflow.execute_activity(...)
+                return True
+
+# Extract from ast.Name node (function reference)
+if isinstance(arg, ast.Name):
+    return arg.id
+
+# Extract from ast.Constant node (string literal)
+if isinstance(arg, ast.Constant):
+    return arg.value
+      ]]></example>
+      <key-points>
+        - Use isinstance() for type checking AST nodes
+        - Check attributes exist before accessing (guard clauses)
+        - Handle multiple AST node types for same logical pattern
+        - Python 3.10+ uses ast.Constant (not ast.Str/ast.Num)
+      </key-points>
+    </pattern>
+
+    <pattern name="line-number-tracking" source="Story 2.2">
+      <description>Tracking source line numbers for debugging</description>
+      <example><![CDATA[
+# Store tuples of (name, line_number) internally
+self._activities: list[tuple[str, int]] = []
+
+# Record line number when detecting element
+self._activities.append((activity_name, node.lineno))
+self._line_numbers["workflow_class"] = node.lineno
+
+# Convert to simple list when returning
+activities = [name for name, _ in self._activities]
+      ]]></example>
+      <key-points>
+        - Internal storage uses tuples with line numbers
+        - All AST nodes have .lineno attribute
+        - External API uses simple lists (line numbers for internal debugging)
+        - Enables future error messages with precise source locations
+      </key-points>
+    </pattern>
+  </code-patterns>
+
+  <test-patterns>
+    <test-organization>
+      <file path="tests/test_analyzer.py">
+        <description>Unit tests for WorkflowAnalyzer - extend with activity detection tests</description>
+        <existing-tests>
+          - test_analyzer_detects_workflow_defn_decorator
+          - test_analyzer_detects_workflow_run_method
+          - test_analyzer_no_workflow_defn_raises_error
+          - test_analyzer_performance_simple_workflow
+          - (28 total existing tests from Story 2.2)
+        </existing-tests>
+        <new-tests-required>
+          - test_analyzer_detects_single_activity
+          - test_analyzer_detects_multiple_activities
+          - test_analyzer_detects_duplicate_activities
+          - test_analyzer_no_activities_workflow
+          - test_analyzer_extracts_activity_names
+          - test_analyzer_handles_await_prefix
+          - test_analyzer_handles_string_activity_names
+          - test_analyzer_handles_direct_function_references
+          - test_analyzer_activity_line_numbers
+          - test_analyzer_ignores_non_activity_calls
+        </new-tests-required>
+      </file>
+
+      <fixtures path="tests/fixtures/sample_workflows/">
+        <description>Sample workflow files for testing</description>
+        <existing-fixtures>
+          - valid_linear_workflow.py (Story 2.2)
+          - no_workflow_decorator.py (Story 2.2)
+          - no_run_method.py (Story 2.2)
+          - invalid_syntax.py (Story 2.2)
+          - empty_workflow.py (Story 2.2)
+        </existing-fixtures>
+        <new-fixtures-required>
+          - single_activity_workflow.py - Workflow with one execute_activity() call
+          - multi_activity_workflow.py - 3+ sequential activity calls
+          - duplicate_activity_workflow.py - Same activity called twice
+          - Create via tmp_path in tests (don't need physical files for all)
+        </new-fixtures-required>
+      </fixtures>
+    </test-organization>
+
+    <test-pattern name="activity-detection-test" source="Story 2.2">
+      <description>Standard pattern for testing activity detection</description>
+      <example><![CDATA[
+def test_analyzer_detects_single_activity(
+    analyzer: WorkflowAnalyzer, tmp_path: Path
+) -> None:
+    """Test that analyzer detects single execute_activity() call."""
+    workflow_file = tmp_path / "single_activity.py"
+    workflow_file.write_text('''
+from temporalio import workflow
+
+@workflow.defn
+class MyWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        await workflow.execute_activity(
+            my_activity,
+            start_to_close_timeout=timedelta(seconds=10)
+        )
+        return "done"
+''')
+
+    metadata = analyzer.analyze(workflow_file)
+
+    assert len(metadata.activities) == 1
+    assert metadata.activities[0] == "my_activity"
+      ]]></example>
+      <key-points>
+        - Use tmp_path fixture for dynamic test file creation
+        - Write complete valid workflow code
+        - Test both happy path and edge cases
+        - Assert on metadata.activities list
+        - Check both length and content of activities
+      </key-points>
+    </test-pattern>
+
+    <test-pattern name="pytest-fixture-usage" source="Story 2.2">
+      <description>Using pytest fixtures for test setup</description>
+      <example><![CDATA[
+@pytest.fixture
+def analyzer() -> WorkflowAnalyzer:
+    """Create a WorkflowAnalyzer instance for testing."""
+    return WorkflowAnalyzer()
+
+def test_something(analyzer: WorkflowAnalyzer) -> None:
+    """Test using fixture."""
+    metadata = analyzer.analyze("workflow.py")
+    assert metadata is not None
+      ]]></example>
+      <key-points>
+        - Fixtures defined in conftest.py or test file
+        - Type hints on fixture return and parameter
+        - Fixtures reused across multiple tests
+        - Clean, isolated test instances
+      </key-points>
+    </test-pattern>
+  </test-patterns>
+
+  <development-constraints>
+    <constraint type="backward-compatibility" severity="critical">
+      <description>Maintain backward compatibility with Story 2.2</description>
+      <requirements>
+        - DO NOT modify analyze() method signature
+        - DO NOT change visit_ClassDef or visit_FunctionDef behavior
+        - DO NOT remove or rename existing instance variables
+        - Only ADD new methods, do not MODIFY existing methods
+        - All existing tests from Story 2.2 must continue to pass
+      </requirements>
+    </constraint>
+
+    <constraint type="performance" severity="high">
+      <description>Activity detection must meet NFR-PERF-1</description>
+      <requirements>
+        - Complete in &lt;0.5ms for 10-activity workflows
+        - Single AST traversal (no second pass)
+        - Incremental detection during visit() call
+        - No external dependencies beyond Python stdlib
+      </requirements>
+    </constraint>
+
+    <constraint type="type-safety" severity="critical">
+      <description>Full type hints required per ADR-006</description>
+      <requirements>
+        - All new methods have complete type signatures
+        - No Any type in public interface
+        - Mypy --strict must pass with zero errors
+        - No type: ignore comments without justification
+      </requirements>
+    </constraint>
+
+    <constraint type="code-quality" severity="high">
+      <description>Code quality standards per ADR-007 and ADR-009</description>
+      <requirements>
+        - Ruff check must pass (no violations)
+        - Ruff format for consistent formatting
+        - Google-style docstrings on all public methods
+        - 100-char line length limit
+        - No commented-out code
+      </requirements>
+    </constraint>
+  </development-constraints>
+
+  <testing-requirements>
+    <coverage-target overall="80" core-logic="100">
+      <module name="analyzer.py" target="100">
+        All activity detection code paths must be tested.
+        visit_Call, _is_execute_activity_call, _extract_activity_name: 100% coverage.
+      </module>
+    </coverage-target>
+
+    <test-categories>
+      <category name="happy-path">
+        - Single activity detection
+        - Multiple sequential activities
+        - Activity name extraction from function reference
+        - Activity name extraction from string literal
+      </category>
+
+      <category name="edge-cases">
+        - Workflow with zero activities (empty list)
+        - Duplicate activities (same activity twice)
+        - Activities with await prefix
+        - Non-activity method calls (should be ignored)
+      </category>
+
+      <category name="error-handling">
+        - Malformed execute_activity calls (log warning, continue)
+        - Unknown activity name patterns (placeholder name)
+      </category>
+
+      <category name="integration">
+        - Line number tracking verified
+        - WorkflowMetadata activities field populated correctly
+        - Backward compatibility with Story 2.2 tests
+      </category>
+    </test-categories>
+
+    <test-execution>
+      <command>uv run pytest tests/test_analyzer.py -v</command>
+      <command>uv run pytest tests/test_analyzer.py --cov=src/temporalio_graphs/analyzer</command>
+      <command>uv run mypy src/temporalio_graphs/analyzer.py --strict</command>
+      <command>uv run ruff check src/temporalio_graphs/analyzer.py</command>
+    </test-execution>
+  </testing-requirements>
+
+  <implementation-notes>
+    <task-breakdown>
+      <task id="1" priority="high">
+        Extend WorkflowAnalyzer with activity tracking
+        - Add _activities: list[tuple[str, int]] instance variable
+        - Reset _activities in analyze() method
+        - Import additional typing if needed
+      </task>
+
+      <task id="2" priority="critical">
+        Implement visit_Call visitor method
+        - Check if call is execute_activity via helper
+        - Extract activity name from args[0]
+        - Store (name, line_number) tuple
+        - Call generic_visit to continue traversal
+        - Add comprehensive Google-style docstring
+      </task>
+
+      <task id="3" priority="critical">
+        Implement _is_execute_activity_call helper
+        - Check isinstance(node.func, ast.Attribute)
+        - Verify node.func.attr == "execute_activity"
+        - Check _is_workflow_reference(node.func.value)
+        - Return boolean result
+      </task>
+
+      <task id="4" priority="high">
+        Implement _is_workflow_reference helper
+        - Check isinstance(node, ast.Name) with id == "workflow"
+        - Return boolean result
+      </task>
+
+      <task id="5" priority="critical">
+        Implement _extract_activity_name helper
+        - Handle ast.Name nodes: return arg.id
+        - Handle ast.Constant nodes: return arg.value
+        - Handle unknown patterns: log warning, return placeholder
+        - Add type hints and docstring
+      </task>
+
+      <task id="6" priority="high">
+        Update analyze() to populate activities
+        - Extract names: [name for name, _ in self._activities]
+        - Pass activities list to WorkflowMetadata constructor
+        - Verify existing error handling unchanged
+      </task>
+
+      <task id="7" priority="critical">
+        Create comprehensive unit tests
+        - 10 new test functions in test_analyzer.py
+        - Test fixtures for activity detection
+        - Coverage verification
+      </task>
+
+      <task id="8" priority="high">
+        Run quality checks
+        - mypy --strict: zero errors
+        - ruff check: zero violations
+        - pytest coverage: 100% for new code
+      </task>
+    </task-breakdown>
+
+    <key-decisions>
+      <decision>
+        Activity storage uses tuples (name, line_number) internally but exposes list[str] externally.
+        Rationale: Line numbers needed for future error reporting, but public API stays simple.
+      </decision>
+
+      <decision>
+        Allow duplicate activities in list (same activity called multiple times).
+        Rationale: FR48 requires this. Path generation will handle deduplication if needed.
+      </decision>
+
+      <decision>
+        Continue analysis even with malformed activity calls (log warning).
+        Rationale: Graceful degradation. Better to generate partial graph than fail completely.
+      </decision>
+
+      <decision>
+        Use placeholder names for unknown activity patterns.
+        Rationale: Prevents crashes, enables debugging, user can identify issue in output.
+      </decision>
+    </key-decisions>
+
+    <warnings>
+      <warning severity="high">
+        DO NOT modify WorkflowAnalyzer.__init__() signature - maintain backward compatibility.
+      </warning>
+
+      <warning severity="high">
+        DO NOT change behavior of visit_ClassDef or visit_FunctionDef - only add visit_Call.
+      </warning>
+
+      <warning severity="medium">
+        Python 3.10+ uses ast.Constant for both strings and numbers. Don't check for ast.Str (deprecated).
+      </warning>
+
+      <warning severity="medium">
+        Always call self.generic_visit(node) at end of visitor methods to continue traversal.
+      </warning>
+    </warnings>
+  </implementation-notes>
+
+  <validation-checklist>
+    <validation-item id="V1">All 12 acceptance criteria met</validation-item>
+    <validation-item id="V2">All 10 tasks completed</validation-item>
+    <validation-item id="V3">Unit test coverage ≥80% (target 100% for new code)</validation-item>
+    <validation-item id="V4">mypy --strict: zero type errors</validation-item>
+    <validation-item id="V5">ruff check: zero violations</validation-item>
+    <validation-item id="V6">All public methods have Google-style docstrings</validation-item>
+    <validation-item id="V7">Activity detection integrated into WorkflowAnalyzer</validation-item>
+    <validation-item id="V8">Backward compatibility maintained with Story 2.2</validation-item>
+    <validation-item id="V9">Performance validated: &lt;0.5ms for 10-activity workflows</validation-item>
+    <validation-item id="V10">All Story 2.2 tests continue to pass</validation-item>
+    <validation-item id="V11">New tests demonstrate activity detection works correctly</validation-item>
+    <validation-item id="V12">Code review complete</validation-item>
+  </validation-checklist>
+
+  <next-steps>
+    <immediate>Story 2-3 implementation by dev agent</immediate>
+    <following>Story 2-4: Implement Basic Path Generator for Linear Workflows</following>
+    <dependent>Stories 2-5 through 2-8 all depend on accurate activity detection from this story</dependent>
+  </next-steps>
+</story-context>

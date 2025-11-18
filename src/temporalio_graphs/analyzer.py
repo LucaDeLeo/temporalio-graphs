@@ -60,6 +60,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._source_file: Path | None = None
         self._line_numbers: dict[str, int] = {}
         self._inside_workflow_class: bool = False
+        self._activities: list[tuple[str, int]] = []
 
     def analyze(self, workflow_file: Path | str) -> WorkflowMetadata:
         """Analyze a workflow source file and extract workflow metadata.
@@ -99,6 +100,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._workflow_run_method = None
         self._line_numbers = {}
         self._inside_workflow_class = False
+        self._activities = []
 
         # Convert to absolute path
         path = Path(workflow_file).resolve()
@@ -154,10 +156,13 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             )
 
         # Build and return WorkflowMetadata
+        # Extract activity names from tuples (name, line_number)
+        activities = [name for name, _ in self._activities]
+
         return WorkflowMetadata(
             workflow_class=self._workflow_class,
             workflow_run_method=self._workflow_run_method,
-            activities=[],  # Populated in Story 2.3
+            activities=activities,  # Populated in Story 2.3
             decision_points=[],  # Populated in Epic 3
             signal_points=[],  # Populated in Epic 4
             source_file=path,
@@ -200,16 +205,17 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             node: AST node representing a function/method definition.
         """
         # Only process if inside a workflow class
-        if not self._inside_workflow_class:
-            return
+        if self._inside_workflow_class:
+            # Check if method has @workflow.run decorator
+            for decorator in node.decorator_list:
+                if self._is_workflow_decorator(decorator, "run"):
+                    self._workflow_run_method = node.name
+                    self._line_numbers["workflow_run_method"] = node.lineno
+                    logger.debug(f"Found run method: {node.name} at line {node.lineno}")
+                    break
 
-        # Check if method has @workflow.run decorator
-        for decorator in node.decorator_list:
-            if self._is_workflow_decorator(decorator, "run"):
-                self._workflow_run_method = node.name
-                self._line_numbers["workflow_run_method"] = node.lineno
-                logger.debug(f"Found run method: {node.name} at line {node.lineno}")
-                break
+        # Continue traversal to find nested calls (activities)
+        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Visit async function definition nodes to find @workflow.run methods.
@@ -221,16 +227,17 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             node: AST node representing an async function/method definition.
         """
         # Only process if inside a workflow class
-        if not self._inside_workflow_class:
-            return
+        if self._inside_workflow_class:
+            # Check if method has @workflow.run decorator
+            for decorator in node.decorator_list:
+                if self._is_workflow_decorator(decorator, "run"):
+                    self._workflow_run_method = node.name
+                    self._line_numbers["workflow_run_method"] = node.lineno
+                    logger.debug(f"Found async run method: {node.name} at line {node.lineno}")
+                    break
 
-        # Check if method has @workflow.run decorator
-        for decorator in node.decorator_list:
-            if self._is_workflow_decorator(decorator, "run"):
-                self._workflow_run_method = node.name
-                self._line_numbers["workflow_run_method"] = node.lineno
-                logger.debug(f"Found async run method: {node.name} at line {node.lineno}")
-                break
+        # Continue traversal to find nested calls (activities)
+        self.generic_visit(node)
 
     def _is_workflow_decorator(self, decorator: ast.expr, target: str) -> bool:
         """Check if a decorator is a workflow decorator (@workflow.defn or @workflow.run).
@@ -264,3 +271,120 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                 return True
 
         return False
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Visit function call nodes to detect execute_activity() calls.
+
+        This visitor method is called for each function call node in the AST.
+        It identifies calls to workflow.execute_activity() and extracts the
+        activity name from the first argument, storing it for later processing.
+
+        Args:
+            node: AST node representing a function call.
+
+        Example:
+            Detects these patterns:
+            - workflow.execute_activity(my_activity, ...)
+            - await workflow.execute_activity(my_activity, ...)
+            - workflow.execute_activity("activity_name", ...)
+        """
+        if self._is_execute_activity_call(node):
+            # Extract activity name from first argument
+            if node.args:  # Ensure there is at least one argument
+                activity_name = self._extract_activity_name(node.args[0])
+                self._activities.append((activity_name, node.lineno))
+                logger.debug(
+                    f"Found activity call: {activity_name} at line {node.lineno}"
+                )
+
+        # Continue traversal to find nested calls
+        self.generic_visit(node)
+
+    def _is_execute_activity_call(self, node: ast.Call) -> bool:
+        """Check if a call node is an execute_activity() call.
+
+        This helper method identifies execute_activity() calls by pattern matching
+        on the AST node structure. It checks for the attribute access pattern
+        (workflow.execute_activity) and verifies the context.
+
+        Args:
+            node: AST node representing a function call.
+
+        Returns:
+            True if the call is a workflow.execute_activity() call, False otherwise.
+
+        Example:
+            Returns True for:
+            - workflow.execute_activity(...)
+            - await workflow.execute_activity(...)
+            Returns False for:
+            - workflow.execute_signal(...)
+            - other_module.execute_activity(...)
+        """
+        # Check if func is an attribute access (e.g., workflow.execute_activity)
+        if not isinstance(node.func, ast.Attribute):
+            return False
+
+        # Check if the attribute name is "execute_activity"
+        if node.func.attr != "execute_activity":
+            return False
+
+        # Check if the value is a workflow reference
+        if not self._is_workflow_reference(node.func.value):
+            return False
+
+        return True
+
+    def _is_workflow_reference(self, node: ast.expr) -> bool:
+        """Check if a node is a reference to the workflow module/object.
+
+        This helper method identifies references to the workflow object that
+        is used to call execute_activity(). It handles the common pattern where
+        workflow is imported from temporalio.
+
+        Args:
+            node: AST expression node to check.
+
+        Returns:
+            True if the node represents a workflow reference, False otherwise.
+        """
+        # Check for simple name reference: workflow
+        if isinstance(node, ast.Name):
+            return node.id == "workflow"
+
+        return False
+
+    def _extract_activity_name(self, arg: ast.expr) -> str:
+        """Extract activity name from a function call argument.
+
+        This helper method extracts the activity name from the first argument
+        of an execute_activity() call. It handles both function references
+        (ast.Name nodes) and string literals (ast.Constant nodes).
+
+        Args:
+            arg: AST expression node representing the activity argument.
+
+        Returns:
+            The activity name as a string. Returns a placeholder string if the
+            activity name cannot be extracted.
+
+        Example:
+            - my_activity (function reference) -> "my_activity"
+            - "my_activity" (string literal) -> "my_activity"
+        """
+        # Handle function reference: execute_activity(my_activity, ...)
+        if isinstance(arg, ast.Name):
+            return arg.id
+
+        # Handle string literal: execute_activity("my_activity", ...)
+        if isinstance(arg, ast.Constant):
+            if isinstance(arg.value, str):
+                return arg.value
+
+        # If we can't extract the activity name, log a warning and return placeholder
+        placeholder = f"<unknown_activity_{id(arg)}>"
+        logger.warning(
+            f"Could not extract activity name from argument at "
+            f"line {getattr(arg, 'lineno', '?')}. Using placeholder: {placeholder}"
+        )
+        return placeholder

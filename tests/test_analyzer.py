@@ -426,3 +426,222 @@ class SyncWorkflow:
     metadata = analyzer.analyze(workflow_file)
     assert metadata.workflow_class == "SyncWorkflow"
     assert metadata.workflow_run_method == "run"
+
+
+# ============================================================================
+# Activity Detection Tests (Story 2.3)
+# ============================================================================
+
+
+def test_analyzer_detects_single_activity(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer detects single execute_activity() call."""
+    workflow_file = fixtures_dir / "single_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert len(metadata.activities) == 1
+    assert metadata.activities[0] == "my_activity"
+
+
+def test_analyzer_detects_multiple_activities(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer detects multiple sequential activity calls."""
+    workflow_file = fixtures_dir / "multi_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert len(metadata.activities) == 3
+    assert metadata.activities[0] == "activity_one"
+    assert metadata.activities[1] == "activity_two"
+    assert metadata.activities[2] == "activity_three"
+
+
+def test_analyzer_detects_duplicate_activities(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer detects duplicate activity calls (same activity twice)."""
+    workflow_file = fixtures_dir / "duplicate_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert len(metadata.activities) == 2
+    assert metadata.activities[0] == "my_activity"
+    assert metadata.activities[1] == "my_activity"
+
+
+def test_analyzer_no_activities_workflow(analyzer: WorkflowAnalyzer, tmp_path: Path) -> None:
+    """Test that analyzer handles workflows with no activity calls."""
+    workflow_file = tmp_path / "no_activities.py"
+    workflow_file.write_text(
+        """from temporalio import workflow
+
+@workflow.defn
+class NoActivityWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        return "done"
+"""
+    )
+
+    metadata = analyzer.analyze(workflow_file)
+    assert len(metadata.activities) == 0
+    assert metadata.activities == []
+
+
+def test_analyzer_extracts_activity_names(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer correctly extracts activity names from function references."""
+    workflow_file = fixtures_dir / "single_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert "my_activity" in metadata.activities
+
+
+def test_analyzer_handles_string_activity_names(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer handles string literal activity names."""
+    workflow_file = fixtures_dir / "string_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert len(metadata.activities) == 2
+    assert metadata.activities[0] == "validate_input"
+    assert metadata.activities[1] == "process_data"
+
+
+def test_analyzer_handles_await_prefix(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer handles await prefixes on execute_activity calls."""
+    workflow_file = fixtures_dir / "single_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # The single_activity_workflow uses await, so this tests await handling
+    assert len(metadata.activities) == 1
+    assert metadata.activities[0] == "my_activity"
+
+
+def test_analyzer_activity_line_numbers(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer tracks source line numbers for activity calls."""
+    workflow_file = fixtures_dir / "single_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # Verify activities are detected (internal line tracking)
+    assert len(metadata.activities) >= 1
+
+    # Verify that line numbers are stored internally
+    assert hasattr(analyzer, "_activities")
+    assert len(analyzer._activities) >= 1
+
+    # Check that tuples contain (name, line_number)
+    for activity_name, line_no in analyzer._activities:
+        assert isinstance(activity_name, str)
+        assert isinstance(line_no, int)
+        assert line_no > 0
+
+
+def test_analyzer_ignores_non_activity_calls(
+    analyzer: WorkflowAnalyzer, tmp_path: Path
+) -> None:
+    """Test that analyzer ignores non-activity method calls."""
+    workflow_file = tmp_path / "non_activity_calls.py"
+    workflow_file.write_text(
+        """from temporalio import workflow
+
+@workflow.defn
+class NonActivityWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        workflow.execute_signal("my_signal")
+        other_module.execute_activity("something")
+        self.helper_method()
+        return "done"
+"""
+    )
+
+    metadata = analyzer.analyze(workflow_file)
+    # Should have no activities since only non-activity calls are present
+    assert len(metadata.activities) == 0
+
+
+def test_analyzer_activities_in_correct_order(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that activities are returned in the order they appear in source."""
+    workflow_file = fixtures_dir / "multi_activity_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    assert metadata.activities == ["activity_one", "activity_two", "activity_three"]
+
+
+def test_analyzer_performance_multi_activity(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer detects multiple activities in <0.5ms (NFR-PERF-1)."""
+    workflow_file = fixtures_dir / "multi_activity_workflow.py"
+
+    start_time = time.perf_counter()
+    metadata = analyzer.analyze(workflow_file)
+    elapsed_time = time.perf_counter() - start_time
+
+    # Verify correct detection
+    assert len(metadata.activities) == 3
+
+    # Performance requirement: <0.5ms for multi-activity workflows
+    # Allow some slack for CI environments (5ms max)
+    assert elapsed_time < 0.005, f"Analysis took {elapsed_time*1000:.2f}ms (>5ms threshold)"
+
+
+def test_analyzer_backward_compatibility_with_story_2_2(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that Story 2.3 maintains backward compatibility with Story 2.2."""
+    workflow_file = fixtures_dir / "valid_linear_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # All Story 2.2 requirements still work
+    assert metadata.workflow_class == "MyWorkflow"
+    assert metadata.workflow_run_method == "run"
+    assert metadata.source_file == workflow_file.resolve()
+    assert metadata.total_paths == 1
+    assert metadata.decision_points == []
+    assert metadata.signal_points == []
+
+    # New Story 2.3 field is present
+    assert hasattr(metadata, "activities")
+    assert isinstance(metadata.activities, list)
+
+
+def test_analyzer_handles_malformed_activity_call(
+    analyzer: WorkflowAnalyzer, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test that analyzer logs warning for malformed activity calls."""
+    import logging
+
+    workflow_file = tmp_path / "malformed_activity.py"
+    workflow_file.write_text(
+        """from temporalio import workflow
+
+@workflow.defn
+class MalformedActivityWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        # Malformed: numeric literal as activity (invalid but parseable)
+        await workflow.execute_activity(123, start_to_close_timeout=None)
+        return "done"
+"""
+    )
+
+    # Capture warnings
+    with caplog.at_level(logging.WARNING, logger="temporalio_graphs.analyzer"):
+        metadata = analyzer.analyze(workflow_file)
+
+        # Should detect the malformed activity with placeholder name
+        assert len(metadata.activities) == 1
+        assert "<unknown_activity_" in metadata.activities[0]
+
+        # Check that warning was logged
+        assert any("Could not extract activity name" in record.message for record in caplog.records)
