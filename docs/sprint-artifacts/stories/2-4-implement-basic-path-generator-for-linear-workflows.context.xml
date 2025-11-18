@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-id>2-4</story-id>
+    <story-title>Implement Basic Path Generator for Linear Workflows</story-title>
+    <epic-id>2</epic-id>
+    <epic-title>Basic Graph Generation (Linear Workflows)</epic-title>
+    <status>ready-for-dev</status>
+    <created-date>2025-11-18</created-date>
+    <story-file>docs/sprint-artifacts/stories/2-4-implement-basic-path-generator-for-linear-workflows.md</story-file>
+    <tech-spec-file>docs/sprint-artifacts/tech-spec-epic-2.md</tech-spec-file>
+  </metadata>
+
+  <summary>
+    Implement PathPermutationGenerator class that transforms WorkflowMetadata (activity sequences)
+    into GraphPath objects for linear workflows (0 decisions, single execution path). This is the
+    4th component in Epic 2's 6-stage analysis pipeline: Input → AST Parsing → Metadata Extraction
+    → PATH GENERATION → Graph Construction → Mermaid Rendering. For Epic 2, only linear workflows
+    are supported; decision-based permutations (2^n paths) will be implemented in Epic 3.
+  </summary>
+
+  <acceptance-criteria>
+    <criterion id="AC-1">
+      PathPermutationGenerator class in src/temporalio_graphs/generator.py with generate_paths() method
+    </criterion>
+    <criterion id="AC-2">
+      Single linear path generation for 0 decision points (exactly 1 path with all activities)
+    </criterion>
+    <criterion id="AC-3">
+      GraphPath construction with ordered activity sequence (Start→Activity1→...→ActivityN→End)
+    </criterion>
+    <criterion id="AC-4">
+      Node ID generation: Start="s", End="e", Activities="1","2","3"... (deterministic strings)
+    </criterion>
+    <criterion id="AC-5">
+      Handle workflows with varying activity counts (0 activities, 1 activity, 100+ activities)
+    </criterion>
+    <criterion id="AC-6">
+      GraphBuildingContext integration (respects start_node_label, end_node_label, max_decision_points)
+    </criterion>
+    <criterion id="AC-7">
+      Performance &lt;0.1ms for 100 activities (linear scalability, O(n) algorithm)
+    </criterion>
+    <criterion id="AC-8">
+      Complete type hints: def generate_paths(metadata: WorkflowMetadata, context: GraphBuildingContext) -&gt; list[GraphPath]
+    </criterion>
+    <criterion id="AC-9">
+      Integration with existing data models (WorkflowMetadata, GraphPath, GraphBuildingContext - no modifications)
+    </criterion>
+    <criterion id="AC-10">
+      100% unit test coverage with 10+ tests (empty workflow, single activity, multiple activities, performance, etc.)
+    </criterion>
+    <criterion id="AC-11">
+      Google-style docstrings with Args/Returns/Raises/Example sections
+    </criterion>
+    <criterion id="AC-12">
+      Error handling: NotImplementedError if decision_points &gt; 0, ValueError for invalid inputs
+    </criterion>
+  </acceptance-criteria>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+      <section>Path Generation (Epic 2 Algorithm)</section>
+      <lines>959-988</lines>
+      <description>
+        Epic 2 linear path generation algorithm: For 0 decisions, creates single GraphPath with
+        path_id="path_0", adds activities in sequence, raises NotImplementedError for non-linear.
+        Shows exact algorithm implementation pattern.
+      </description>
+      <relevance>Direct implementation guidance for generate_paths() method</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+      <section>PathPermutationGenerator Module</section>
+      <lines>300-320</lines>
+      <description>
+        Module specification: PathPermutationGenerator class with generate_paths() method,
+        _create_linear_path() helper for Epic 2, _generate_permutations() stub for Epic 3.
+        Algorithm is O(n) for linear workflows.
+      </description>
+      <relevance>Class structure, method signatures, Epic 2/3 separation</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <section>Graph Generation Flow (6 Stages)</section>
+      <lines>447-457</lines>
+      <description>
+        Stage 4 "Path Permutation: Generate 2^n paths for n decisions (with explosion check)".
+        Story 2.4 implements Epic 2 subset (n=0, single path). Shows context in overall pipeline.
+      </description>
+      <relevance>Architectural context for where path generation fits in pipeline</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <section>ADR-008: Path Explosion Limit</section>
+      <lines>1425-1447</lines>
+      <description>
+        Decision to set max_decision_points=10 (1024 paths max) to prevent path explosion.
+        Configurable via GraphBuildingContext. Epic 2 enforces via NotImplementedError.
+      </description>
+      <relevance>Error handling for decision_points &gt; 0 in Epic 2</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</path>
+      <section>GraphPath API</section>
+      <description>
+        GraphPath dataclass with path_id, steps, decisions fields. add_activity() method returns
+        sequential node ID. Story 2.4 consumes this API without modifications.
+      </description>
+      <relevance>GraphPath interface that generator must use</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/2-3-implement-activity-call-detection.md</path>
+      <section>WorkflowMetadata Structure</section>
+      <description>
+        WorkflowMetadata.activities list[str] contains activity names in order. Story 2.4 transforms
+        this into GraphPath.steps. Story 2.3 provides the input data for path generation.
+      </description>
+      <relevance>Input data structure from analyzer</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <code-interfaces>
+    <interface>
+      <module>src/temporalio_graphs/context.py</module>
+      <class>GraphBuildingContext</class>
+      <description>
+        Immutable configuration dataclass (frozen=True) with fields: start_node_label: str = "Start",
+        end_node_label: str = "End", max_decision_points: int = 10, max_paths: int = 1024.
+        Generator validates max_decision_points, uses labels for logging/validation.
+      </description>
+      <usage>
+        Passed as parameter to generate_paths(). Read-only access to configuration.
+        No modifications allowed (frozen dataclass).
+      </usage>
+    </interface>
+
+    <interface>
+      <module>src/temporalio_graphs/path.py</module>
+      <class>GraphPath</class>
+      <description>
+        Execution path tracker with path_id: str, steps: list[str], decisions: dict[str, bool].
+        add_activity(name: str) -&gt; str returns sequential node IDs ("1", "2", "3"...).
+        add_decision() and add_signal() raise NotImplementedError in Epic 2.
+      </description>
+      <usage>
+        Generator creates GraphPath(path_id="path_0"), calls add_activity() for each activity
+        in metadata.activities, returns [path] single-element list.
+      </usage>
+      <implementation-note>
+        Node IDs are auto-generated by counting len(steps). Start and End nodes are NOT added
+        to path.steps (renderer adds them implicitly).
+      </implementation-note>
+    </interface>
+
+    <interface>
+      <module>src/temporalio_graphs/_internal/graph_models.py</module>
+      <class>WorkflowMetadata</class>
+      <description>
+        Analysis result with workflow_class: str, workflow_run_method: str, activities: list[str],
+        decision_points: list[str], signal_points: list[str], source_file: Path, total_paths: int.
+        Story 2.4 reads activities and decision_points fields.
+      </description>
+      <usage>
+        Input parameter to generate_paths(). Read activities list for path generation.
+        Check len(decision_points) - if &gt; 0, raise NotImplementedError (Epic 3 feature).
+      </usage>
+    </interface>
+
+    <interface>
+      <module>src/temporalio_graphs/analyzer.py</module>
+      <class>WorkflowAnalyzer</class>
+      <description>
+        AST-based analyzer that produces WorkflowMetadata. Story 2.3 implemented activity detection.
+        Generator consumes WorkflowMetadata output from analyzer.analyze().
+      </description>
+      <usage>
+        No direct usage - analyzer produces WorkflowMetadata which generator consumes.
+        Shows data flow: Analyzer → WorkflowMetadata → Generator → list[GraphPath].
+      </usage>
+    </interface>
+
+    <interface>
+      <module>src/temporalio_graphs/exceptions.py</module>
+      <class>TemporalioGraphsError, WorkflowParseError</class>
+      <description>
+        Exception hierarchy for library errors. Generator needs NotImplementedError (built-in)
+        for Epic 3 features, ValueError for invalid inputs. May need GraphGenerationError
+        (to be defined if not exists).
+      </description>
+      <usage>
+        raise NotImplementedError("Decision support in Epic 3") if len(metadata.decision_points) &gt; 0.
+        raise ValueError("metadata cannot be None") for validation failures.
+      </usage>
+    </interface>
+  </code-interfaces>
+
+  <existing-code-patterns>
+    <pattern>
+      <name>Module Initialization Pattern</name>
+      <description>
+        Classes have __init__() for state initialization with type hints. Instance variables
+        are typed in __init__ signature or with inline comments.
+      </description>
+      <example-from>src/temporalio_graphs/analyzer.py</example-from>
+      <code>
+def __init__(self) -&gt; None:
+    """Initialize the workflow analyzer with empty state."""
+    self._workflow_class: str | None = None
+    self._workflow_run_method: str | None = None
+    self._activities: list[tuple[str, int]] = []
+      </code>
+      <application>
+        PathPermutationGenerator may need minimal state or be stateless.
+        Initialize logger in module scope: logger = logging.getLogger(__name__)
+      </application>
+    </pattern>
+
+    <pattern>
+      <name>Google-Style Docstring Pattern</name>
+      <description>
+        All public methods have complete docstrings with Args, Returns, Raises, Example sections.
+        Class docstrings include Attributes and overall purpose.
+      </description>
+      <example-from>src/temporalio_graphs/path.py (add_activity method)</example-from>
+      <code>
+def add_activity(self, name: str) -&gt; str:
+    """Add an activity to this execution path.
+
+    Records the activity name in the steps list and generates a unique
+    node ID for the activity. Node IDs are sequential integers starting
+    from 1: "1", "2", "3", etc.
+
+    Args:
+        name: Activity method name (e.g., "ValidateInput", "ProcessOrder").
+
+    Returns:
+        Auto-generated node ID for this activity. Sequential string starting
+        from "1".
+
+    Example:
+        &gt;&gt;&gt; path = GraphPath(path_id="0")
+        &gt;&gt;&gt; path.add_activity("Withdraw")
+        '1'
+      </code>
+      <application>
+        generate_paths() needs similar complete docstring with Args (metadata, context),
+        Returns (list[GraphPath]), Raises (NotImplementedError, ValueError), Example section.
+      </application>
+    </pattern>
+
+    <pattern>
+      <name>Type Hints with Python 3.10+ Syntax</name>
+      <description>
+        Use | for Union types, built-in generics (list[T] not List[T]), Optional[T] for nullable,
+        explicit return types on all public functions.
+      </description>
+      <example-from>src/temporalio_graphs/context.py</example-from>
+      <code>
+graph_output_file: Path | None = None
+      </code>
+      <application>
+        def generate_paths(
+            self,
+            metadata: WorkflowMetadata,
+            context: GraphBuildingContext
+        ) -&gt; list[GraphPath]:
+      </application>
+    </pattern>
+
+    <pattern>
+      <name>Validation with Actionable Errors</name>
+      <description>
+        Input validation with clear error messages including suggestions. Multi-line error messages
+        with context and guidance.
+      </description>
+      <example-from>src/temporalio_graphs/analyzer.py</example-from>
+      <code>
+if self._workflow_class is None:
+    raise WorkflowParseError(
+        f"No @workflow.defn decorated class found in {path}\n"
+        f"Ensure the workflow class has @workflow.defn decorator from temporalio"
+    )
+      </code>
+      <application>
+        Validate metadata is not None: "metadata cannot be None. Pass WorkflowMetadata from analyzer."
+        Check decision_points: "Decision support not in Epic 2. Will be added in Epic 3 (Story 3.x)."
+      </application>
+    </pattern>
+
+    <pattern>
+      <name>Debug Logging Pattern</name>
+      <description>
+        Use logger.debug() for diagnostic messages during processing. Log key decisions and state changes.
+      </description>
+      <example-from>src/temporalio_graphs/analyzer.py</example-from>
+      <code>
+logger.debug(f"Found workflow class: {node.name} at line {node.lineno}")
+      </code>
+      <application>
+        logger.debug(f"Generating linear path for {len(metadata.activities)} activities")
+        logger.debug(f"Created path with ID: {path.path_id}")
+      </application>
+    </pattern>
+
+    <pattern>
+      <name>Test Naming Convention</name>
+      <description>
+        Test functions named test_{class}_{method}_{scenario}() or test_{behavior}_description().
+        One test per logical scenario.
+      </description>
+      <example-from>tests/test_path.py</example-from>
+      <code>
+def test_add_activity() -&gt; None:
+    """Create GraphPath, call add_activity, verify node ID and steps."""
+
+def test_activity_node_id_generation() -&gt; None:
+    """Add 3 activities, verify IDs are sequential."""
+      </code>
+      <application>
+        def test_generate_paths_empty_workflow() -&gt; None:
+        def test_generate_paths_single_activity() -&gt; None:
+        def test_generate_paths_preserves_activity_order() -&gt; None:
+      </application>
+    </pattern>
+  </existing-code-patterns>
+
+  <development-constraints>
+    <constraint type="architectural">
+      DO NOT modify existing classes: GraphPath, GraphBuildingContext, WorkflowMetadata.
+      Only USE their APIs. Story 2.4 is additive only.
+    </constraint>
+
+    <constraint type="architectural">
+      Start and End nodes are NOT added to GraphPath.steps. Renderer adds them implicitly.
+      GraphPath.steps contains only activities.
+    </constraint>
+
+    <constraint type="performance">
+      Algorithm must be O(n) where n = number of activities. No exponential operations.
+      Target &lt;0.1ms for 100 activities per NFR-PERF-1.
+    </constraint>
+
+    <constraint type="epic-scope">
+      Epic 2 scope: Linear workflows ONLY (0 decisions). Decision point permutations (2^n paths)
+      deferred to Epic 3. Raise NotImplementedError if metadata.decision_points is non-empty.
+    </constraint>
+
+    <constraint type="type-safety">
+      mypy --strict compliance required. All public methods fully typed. No Any types.
+      No type: ignore comments unless absolutely necessary with explanation.
+    </constraint>
+
+    <constraint type="testing">
+      100% coverage target for PathPermutationGenerator. Minimum 10 tests covering: empty workflow,
+      single activity, multiple activities, large workflow (100+), error cases, performance validation.
+    </constraint>
+
+    <constraint type="immutability">
+      GraphBuildingContext is frozen (immutable). Read-only access. Do not attempt to modify fields.
+    </constraint>
+
+    <constraint type="backward-compatibility">
+      Must not break existing tests for Story 2.1 (data models), 2.2 (analyzer), 2.3 (activity detection).
+      Verify with: uv run pytest tests/test_context.py tests/test_path.py tests/test_analyzer.py
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <type>Python Runtime</type>
+      <name>Python 3.10+</name>
+      <version>&gt;=3.10.0</version>
+      <usage>Type hints (X | Y syntax), match statements, dataclass features</usage>
+    </dependency>
+
+    <dependency>
+      <type>Required Library</type>
+      <name>temporalio</name>
+      <version>&gt;=1.7.1</version>
+      <usage>Type definitions only (no runtime usage in generator)</usage>
+    </dependency>
+
+    <dependency>
+      <type>Standard Library</type>
+      <name>dataclasses</name>
+      <version>built-in</version>
+      <usage>May use @dataclass for generator if state is needed</usage>
+    </dependency>
+
+    <dependency>
+      <type>Standard Library</type>
+      <name>logging</name>
+      <version>built-in</version>
+      <usage>Debug logging for path generation steps</usage>
+    </dependency>
+
+    <dependency>
+      <type>Development Tool</type>
+      <name>pytest</name>
+      <version>&gt;=8.0.0</version>
+      <usage>Unit testing framework</usage>
+    </dependency>
+
+    <dependency>
+      <type>Development Tool</type>
+      <name>pytest-cov</name>
+      <version>&gt;=4.1.0</version>
+      <usage>Coverage measurement (target 100%)</usage>
+    </dependency>
+
+    <dependency>
+      <type>Development Tool</type>
+      <name>mypy</name>
+      <version>&gt;=1.8.0</version>
+      <usage>Strict type checking</usage>
+    </dependency>
+
+    <dependency>
+      <type>Development Tool</type>
+      <name>ruff</name>
+      <version>&gt;=0.2.0</version>
+      <usage>Linting and formatting (100-char line length)</usage>
+    </dependency>
+
+    <dependency>
+      <type>Package Manager</type>
+      <name>uv</name>
+      <version>latest</version>
+      <usage>User requirement - always use uv for commands</usage>
+    </dependency>
+  </dependencies>
+
+  <testing-requirements>
+    <test-file>tests/test_generator.py</test-file>
+    <coverage-target>100%</coverage-target>
+    <minimum-tests>10</minimum-tests>
+
+    <test-case id="TC-1">
+      <name>test_generate_paths_empty_workflow</name>
+      <description>
+        Workflow with 0 activities. Should generate single path with path_id="path_0",
+        empty steps list. Validates edge case handling.
+      </description>
+    </test-case>
+
+    <test-case id="TC-2">
+      <name>test_generate_paths_single_activity</name>
+      <description>
+        Workflow with 1 activity. Should generate path with single step.
+        Validates minimal workflow handling.
+      </description>
+    </test-case>
+
+    <test-case id="TC-3">
+      <name>test_generate_paths_multiple_activities</name>
+      <description>
+        Workflow with 3-5 activities. Should generate path with all activities in order.
+        Validates typical workflow scenario.
+      </description>
+    </test-case>
+
+    <test-case id="TC-4">
+      <name>test_generate_paths_large_workflow</name>
+      <description>
+        Workflow with 100 activities. Should complete in &lt;0.1ms.
+        Validates performance requirement NFR-PERF-1.
+      </description>
+    </test-case>
+
+    <test-case id="TC-5">
+      <name>test_generate_paths_preserves_activity_order</name>
+      <description>
+        Create metadata with activities ["A", "B", "C"], verify generated path has steps in same order.
+        Validates order preservation.
+      </description>
+    </test-case>
+
+    <test-case id="TC-6">
+      <name>test_generate_paths_returns_single_element_list</name>
+      <description>
+        For linear workflow (0 decisions), verify return value is list with exactly 1 element.
+        Validates Epic 2 constraint.
+      </description>
+    </test-case>
+
+    <test-case id="TC-7">
+      <name>test_generate_paths_with_custom_labels</name>
+      <description>
+        Create context with custom start_node_label="BEGIN", end_node_label="FINISH".
+        Verify generator respects context (logs or uses labels). Validates context integration.
+      </description>
+    </test-case>
+
+    <test-case id="TC-8">
+      <name>test_generate_paths_node_id_assignment</name>
+      <description>
+        Generate path with 3 activities. Verify node IDs are "1", "2", "3" (sequential strings).
+        Validates deterministic ID generation.
+      </description>
+    </test-case>
+
+    <test-case id="TC-9">
+      <name>test_generate_paths_raises_not_implemented_for_decisions</name>
+      <description>
+        Create metadata with decision_points=["SomeDecision"]. Verify NotImplementedError raised
+        with message mentioning Epic 3. Validates Epic 2 scope enforcement.
+      </description>
+    </test-case>
+
+    <test-case id="TC-10">
+      <name>test_generate_paths_validates_metadata_not_none</name>
+      <description>
+        Call generate_paths(None, context). Verify ValueError raised with clear message.
+        Validates input validation.
+      </description>
+    </test-case>
+
+    <test-pattern>
+      Follow existing test patterns from tests/test_path.py: simple assertions,
+      clear test function names, docstrings describing scenario, use pytest.raises for exceptions.
+    </test-pattern>
+
+    <fixture-suggestion>
+      Create conftest.py fixtures for common WorkflowMetadata instances:
+      empty_metadata, single_activity_metadata, multi_activity_metadata.
+      Reduces test boilerplate.
+    </fixture-suggestion>
+  </testing-requirements>
+
+  <implementation-notes>
+    <note priority="critical">
+      GraphPath node IDs are generated by add_activity() method, NOT by generator.
+      Generator calls path.add_activity(name) and receives back the node ID.
+      Do not manually assign node IDs.
+    </note>
+
+    <note priority="critical">
+      Path ID should be "path_0" for single linear path in Epic 2. This establishes naming
+      convention for Epic 3 where IDs will be "path_0", "path_1", etc. for multiple paths.
+    </note>
+
+    <note priority="high">
+      Algorithm is trivial for Epic 2: create single GraphPath, iterate activities, call add_activity()
+      for each, return [path]. Complexity deferred to Epic 3 for decision permutations.
+    </note>
+
+    <note priority="high">
+      Consider whether PathPermutationGenerator needs instance state or can be stateless.
+      Stateless design (no __init__ or empty __init__) is simpler if no state needed.
+      See analyzer.py for stateful example if state is required.
+    </note>
+
+    <note priority="medium">
+      Validation order: (1) Check metadata not None, (2) Check context not None (or use default),
+      (3) Check decision_points empty. Fail fast with clear errors.
+    </note>
+
+    <note priority="medium">
+      Performance test should use time.perf_counter() to measure &lt;0.1ms. Example:
+      start = time.perf_counter(); generate_paths(...); elapsed = time.perf_counter() - start;
+      assert elapsed &lt; 0.0001
+    </note>
+
+    <note priority="low">
+      Consider adding helper method _create_linear_path(activities: list[str]) -&gt; GraphPath
+      for Epic 2 implementation. This keeps generate_paths() clean and separates concerns.
+      Epic 3 will add _generate_permutations() alongside it.
+    </note>
+
+    <note priority="low">
+      Logger usage: logger.debug() for path generation steps, logger.info() not needed (library
+      best practice: minimize info logging). No logger.warning() or logger.error() in generator
+      (exceptions handle errors).
+    </note>
+  </implementation-notes>
+
+  <quality-checklist>
+    <check>Run uv run mypy src/temporalio_graphs/generator.py --strict (zero errors)</check>
+    <check>Run uv run ruff check src/temporalio_graphs/generator.py (zero violations)</check>
+    <check>Run uv run ruff format src/temporalio_graphs/generator.py (consistent formatting)</check>
+    <check>Run uv run pytest tests/test_generator.py -v (all tests pass)</check>
+    <check>Run uv run pytest tests/test_generator.py --cov=src/temporalio_graphs/generator --cov-report=term-missing (100% coverage)</check>
+    <check>Verify backward compatibility: uv run pytest tests/test_context.py tests/test_path.py tests/test_analyzer.py (no failures)</check>
+    <check>Verify imports work: uv run python -c "from temporalio_graphs.generator import PathPermutationGenerator; print('OK')"</check>
+    <check>Check docstring completeness: All public methods have Args, Returns, Raises, Example sections</check>
+    <check>Validate type hints: All parameters and return types explicitly declared</check>
+    <check>Performance validation: 100-activity test completes in &lt;0.1ms</check>
+  </quality-checklist>
+
+  <next-steps>
+    <step>Story 2.5: Implement Mermaid renderer (consumes list[GraphPath] from this story)</step>
+    <step>Story 2.6: Create public API entry point (orchestrates analyzer → generator → renderer)</step>
+    <step>Story 2.7: Add configuration options and validation</step>
+    <step>Story 2.8: End-to-end integration test with simple linear workflow</step>
+    <step>Epic 3: Extend generator for decision permutations (2^n paths)</step>
+  </next-steps>
+
+  <reference-links>
+    <link type="story">docs/sprint-artifacts/stories/2-4-implement-basic-path-generator-for-linear-workflows.md</link>
+    <link type="tech-spec">docs/sprint-artifacts/tech-spec-epic-2.md</link>
+    <link type="architecture">docs/architecture.md</link>
+    <link type="prd">docs/prd.md</link>
+    <link type="previous-story">docs/sprint-artifacts/stories/2-3-implement-activity-call-detection.md</link>
+    <link type="data-models">docs/sprint-artifacts/stories/2-1-implement-core-data-models-with-type-safety.md</link>
+    <link type="epic-breakdown">docs/epics.md (lines 417-452)</link>
+  </reference-links>
+
+  <validation-status>
+    <all-artifacts-gathered>true</all-artifacts-gathered>
+    <code-interfaces-validated>true</code-interfaces-validated>
+    <dependencies-identified>true</dependencies-identified>
+    <constraints-documented>true</constraints-documented>
+    <testing-requirements-complete>true</testing-requirements-complete>
+    <ready-for-implementation>true</ready-for-implementation>
+  </validation-status>
+</story-context>
