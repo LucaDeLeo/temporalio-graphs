@@ -1,0 +1,312 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>5</storyId>
+    <title>Implement Mermaid Renderer with Format Compliance</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/2-5-implement-mermaid-renderer-with-format-compliance.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>generated Mermaid syntax to be valid and render correctly</iWant>
+    <soThat>I can use diagrams in documentation and viewers</soThat>
+    <tasks>
+      1. Create MermaidRenderer class in src/temporalio_graphs/renderer.py with to_mermaid() method
+      2. Implement output format: triple-backtick fenced code blocks with "flowchart LR" syntax
+      3. Implement Start/End node rendering: s((Start)), e((End)) with customizable labels
+      4. Implement Activity node rendering: 1[ActivityName], 2[ActivityName] with sequential IDs
+      5. Implement edge rendering: node1 --> node2 arrow syntax
+      6. Implement node and edge deduplication using sets
+      7. Implement word splitting for camelCase names when context.split_names_by_words=True
+      8. Implement path iteration to extract activity sequences from list[GraphPath]
+      9. Add complete type hints passing mypy --strict validation
+      10. Integrate with GraphBuildingContext (read-only access to start_node_label, end_node_label, split_names_by_words)
+      11. Optimize for performance: <1ms for 50-node graphs using StringIO or list+join
+      12. Add unit tests achieving 100% coverage with golden file regression tests
+      13. Add Google-style docstrings with Args, Returns, Raises, Example sections
+      14. Handle edge cases: empty paths, null activity names, special characters
+      15. Validate against .NET Temporalio.Graphs output structure for regression testing
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC1: MermaidRenderer class exists with correct module placement (src/temporalio_graphs/renderer.py)
+    AC2: Output format follows Mermaid flowchart LR structure with fenced code blocks
+    AC3: Start and End node rendering with correct syntax: s((Start)), e((End))
+    AC4: Activity node rendering with correct syntax: 1[Activity Name]
+    AC5: Edge rendering with arrow syntax: node1 --> node2
+    AC6: Node and edge deduplication prevents duplicate definitions
+    AC7: Word splitting for camelCase names when enabled (executePayment → execute Payment)
+    AC8: Path iteration extracts ordered activity sequences from list[GraphPath]
+    AC9: Type safety with complete type hints passing mypy --strict
+    AC10: Integration with GraphBuildingContext for read-only configuration access
+    AC11: Performance meets NFR-PERF-1: <1ms for simple linear workflows
+    AC12: Regression testing against .NET Temporalio.Graphs output with golden files
+    AC13: Handling edge cases: empty paths, null names, invalid characters
+    AC14: Unit test coverage 100% for MermaidRenderer class
+    AC15: Google-style docstrings per ADR-009
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Mermaid Generation Optimization (lines 952-1010)</section>
+        <snippet>Describes efficient string building using StringIO, deduplication using sets, and the rendering algorithm pattern for converting GraphNode/GraphEdge objects to Mermaid syntax.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Implementation Patterns - Format Patterns (lines 332-394)</section>
+        <snippet>Defines type hints requirements (mypy strict mode), Google-style docstring format with Args/Returns/Example sections, and code formatting standards (100 char line length, string building patterns).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Consistency Rules - Mermaid Syntax Conventions (lines 496-502)</section>
+        <snippet>Defines Mermaid syntax conventions: Start/End as s((Start)) e((End)), Activity as 1[ActivityName], Decision as 0{DecisionName}, Signal as 2{{SignalName}}, edge labels as -- yes --> or -- no -->.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-009: Google-Style Docstrings (lines 1451-1473)</section>
+        <snippet>Decision to use Google-style docstrings for all public APIs with Args, Returns, Example, and Note sections for readability and tool compatibility.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-006: mypy Strict Mode for Type Safety (lines 1373-1396)</section>
+        <snippet>Decision to use mypy strict mode for all source code to ensure 100% type hint coverage, excellent IDE support, and type error prevention.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Technical Specification - Epic 2</title>
+        <section>Stage 6: Mermaid Rendering (lines 1026-1076)</section>
+        <snippet>Detailed rendering algorithm using StringIO for efficient string building, deduplication logic for nodes and edges, output format with triple-backtick fences, and example Mermaid output structure.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Technical Specification - Epic 2</title>
+        <section>Stage 5: Graph Construction (lines 990-1024)</section>
+        <snippet>Describes node generation sequence (Start → Activities → End), sequential ID assignment (s, 1, 2, 3, ..., e), edge generation pattern, and name formatting with split_names_by_words.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/stories/2-4-implement-basic-path-generator-for-linear-workflows.md</path>
+        <title>Story 2.4 - Path Generator</title>
+        <section>Learnings from Previous Story</section>
+        <snippet>Story 2.4 established that GraphPath.steps contains activity names in sequence, validated context integration pattern (read-only), demonstrated strict mypy compliance, and achieved <0.1ms performance for 100 activities.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>module</kind>
+        <symbol>GraphPath</symbol>
+        <lines>12-156</lines>
+        <reason>Primary input data structure. GraphPath.steps contains list[str] of activity names in order. The path_id identifies the path. This is what renderer receives as list[GraphPath] parameter.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>module</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>12-90</lines>
+        <reason>Configuration context that renderer reads for start_node_label, end_node_label, split_names_by_words settings. Immutable frozen dataclass - read-only access only.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>GraphNode</symbol>
+        <lines>34-111</lines>
+        <reason>Node representation with to_mermaid() method showing correct syntax for each NodeType (START, END, ACTIVITY, DECISION, SIGNAL). Reference implementation for node rendering patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>GraphEdge</symbol>
+        <lines>113-204</lines>
+        <reason>Edge representation with to_mermaid() method, __hash__ and __eq__ for set-based deduplication. Shows edge syntax: "from --> to" or "from -- label --> to".</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-32</lines>
+        <reason>Enum defining node types (START, END, ACTIVITY, DECISION, SIGNAL) that determine Mermaid shape syntax in rendering.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>module</kind>
+        <symbol>PathPermutationGenerator</symbol>
+        <lines>20-185</lines>
+        <reason>Produces list[GraphPath] that renderer consumes. Shows pattern of creating paths with path_id="path_0" and adding activities via path.add_activity(). Output of Story 2.4.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_generator.py</path>
+        <kind>test</kind>
+        <symbol>test_generate_paths_performance_100_activities</symbol>
+        <lines>317-346</lines>
+        <reason>Performance test pattern using time.perf_counter() to validate <0.1ms requirement. Renderer should follow similar pattern for <1ms requirement with 50-node graphs.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/conftest.py</path>
+        <kind>test</kind>
+        <symbol>pytest fixtures</symbol>
+        <lines>1-50</lines>
+        <reason>Test fixture patterns for creating test instances. Shows how to set up fixtures for default_context, custom_context, and renderer instances.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" usage="Workflow type definitions (not directly used by renderer but part of library)"/>
+        <package name="pytest" version=">=8.0.0" dev="true" usage="Testing framework for unit tests"/>
+        <package name="pytest-cov" version=">=4.1.0" dev="true" usage="Coverage measurement, 100% coverage requirement"/>
+        <package name="mypy" version=">=1.8.0" dev="true" usage="Type checking in strict mode"/>
+        <package name="ruff" version=">=0.2.0" dev="true" usage="Linting and formatting"/>
+      </python>
+      <stdlib>
+        <module name="io.StringIO" usage="Efficient string building for Mermaid output (O(n) instead of O(n²) concatenation)"/>
+        <module name="re" usage="Regular expressions for camelCase word splitting: re.sub(r'([a-z])([A-Z])', r'\1 \2', name)"/>
+        <module name="logging" usage="Logger for debug/info messages during rendering"/>
+        <module name="dataclasses" usage="Type annotations for dataclass compatibility"/>
+      </stdlib>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <source>ADR-006: mypy Strict Mode</source>
+      <description>All code must pass mypy --strict with 100% type hint coverage. No use of Any type. All parameters, return types, and variables must be explicitly typed.</description>
+    </constraint>
+    <constraint>
+      <source>ADR-007: Ruff Linting</source>
+      <description>Code must pass ruff check with no errors. Line length 100 chars, double quotes for strings, trailing commas in multi-line collections.</description>
+    </constraint>
+    <constraint>
+      <source>ADR-009: Google-Style Docstrings</source>
+      <description>Public API methods require complete Google-style docstrings with Args, Returns, Raises, Example sections. Description explains what method does and when to use it.</description>
+    </constraint>
+    <constraint>
+      <source>ADR-010: >80% Test Coverage</source>
+      <description>Story 2.5 requires 100% coverage for MermaidRenderer class. All branches, edge cases, and error conditions must be tested.</description>
+    </constraint>
+    <constraint>
+      <source>NFR-PERF-1: Performance Requirements</source>
+      <description>Rendering must complete in <1ms for simple linear workflows (50-node graph benchmark). Use efficient string building (StringIO or list+join), O(1) set lookups for deduplication, O(n) algorithm complexity.</description>
+    </constraint>
+    <constraint>
+      <source>Architecture: Immutable Context</source>
+      <description>GraphBuildingContext is frozen dataclass - read-only access only. Renderer must not modify context fields. Access via context.start_node_label, context.end_node_label, context.split_names_by_words.</description>
+    </constraint>
+    <constraint>
+      <source>Architecture: Stateless Renderer Pattern</source>
+      <description>MermaidRenderer should be stateless - single to_mermaid() method that takes paths and context as parameters. No instance variables storing state between calls.</description>
+    </constraint>
+    <constraint>
+      <source>Architecture: Node ID Conventions</source>
+      <description>Start node always ID "s", End node always ID "e", Activity nodes sequential "1", "2", "3", etc. Node IDs generated by GraphPath.add_activity() - renderer uses these IDs.</description>
+    </constraint>
+    <constraint>
+      <source>FR51-FR55: Mermaid Format Compliance</source>
+      <description>Output must be valid Mermaid syntax that renders in Mermaid Live Editor. Structure must match .NET Temporalio.Graphs output for regression testing.</description>
+    </constraint>
+    <constraint>
+      <source>Epic 2 Scope: Linear Workflows Only</source>
+      <description>Story 2.5 handles linear workflows (single path in list[GraphPath]). Decision node rendering (diamond shapes, yes/no edges) deferred to Epic 3. Signal node rendering (hexagons) deferred to Epic 4.</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>MermaidRenderer.to_mermaid()</name>
+      <kind>method signature</kind>
+      <signature>def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str:</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>Primary method signature for renderer. Takes list of GraphPath objects and GraphBuildingContext, returns Mermaid markdown string with fenced code blocks.</description>
+    </interface>
+    <interface>
+      <name>GraphPath.steps</name>
+      <kind>attribute</kind>
+      <signature>steps: list[str]</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Ordered list of activity names for this execution path. Renderer iterates through steps to generate activity nodes and edges.</description>
+    </interface>
+    <interface>
+      <name>GraphPath.path_id</name>
+      <kind>attribute</kind>
+      <signature>path_id: str</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Unique identifier for path (e.g., "path_0" for linear workflows). Used for logging/debugging, not rendered in output.</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext.start_node_label</name>
+      <kind>attribute</kind>
+      <signature>start_node_label: str = "Start"</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Display label for Start node in diagram. Renderer uses to generate s((label)) syntax. Default "Start", customizable by user.</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext.end_node_label</name>
+      <kind>attribute</kind>
+      <signature>end_node_label: str = "End"</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Display label for End node in diagram. Renderer uses to generate e((label)) syntax. Default "End", customizable by user.</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext.split_names_by_words</name>
+      <kind>attribute</kind>
+      <signature>split_names_by_words: bool = True</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Whether to split camelCase activity names into "Camel Case" format for readability. Renderer applies regex: re.sub(r'([a-z])([A-Z])', r'\1 \2', name) when True.</description>
+    </interface>
+    <interface>
+      <name>GraphNode.to_mermaid()</name>
+      <kind>method reference</kind>
+      <signature>def to_mermaid(self) -> str:</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Reference implementation showing correct Mermaid syntax for each node type. Renderer can use GraphNode objects internally or generate syntax directly.</description>
+    </interface>
+    <interface>
+      <name>GraphEdge.to_mermaid()</name>
+      <kind>method reference</kind>
+      <signature>def to_mermaid(self) -> str:</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Reference implementation showing edge syntax with optional labels. Renderer can use GraphEdge objects internally or generate syntax directly.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing uses pytest framework with pytest-cov for coverage measurement. All tests must follow naming convention test_*.py with test_* functions. Type hints required in test functions. Fixtures defined in conftest.py or test files. Performance tests use time.perf_counter() for precise timing. Golden file comparisons for regression testing against .NET output. Assertion messages should be descriptive. Test organization mirrors source structure (test_renderer.py for renderer.py).
+    </standards>
+    <locations>
+      tests/test_renderer.py (new file for MermaidRenderer unit tests)
+      tests/fixtures/expected_outputs/ (golden files for regression testing)
+      tests/conftest.py (shared fixtures)
+    </locations>
+    <ideas>
+      <test id="AC1,AC9" name="test_mermaid_renderer_class_exists">Verify MermaidRenderer class exists in correct module with to_mermaid method having correct type signature</test>
+      <test id="AC2" name="test_to_mermaid_output_format">Verify output starts with ```mermaid, has flowchart LR line, ends with ``` fence</test>
+      <test id="AC3" name="test_to_mermaid_start_end_nodes">Verify Start renders as s((Start)) and End as e((End)) with default labels</test>
+      <test id="AC3" name="test_to_mermaid_custom_labels">Verify custom start_node_label and end_node_label are used in output</test>
+      <test id="AC4" name="test_to_mermaid_activity_nodes">Verify activities render as 1[ActivityName], 2[ActivityName] with sequential IDs</test>
+      <test id="AC5" name="test_to_mermaid_edge_syntax">Verify edges render with --> arrow syntax connecting nodes</test>
+      <test id="AC6" name="test_to_mermaid_node_deduplication">Verify each node appears exactly once in output (no duplicates)</test>
+      <test id="AC6" name="test_to_mermaid_edge_deduplication">Verify each edge appears exactly once in output (no duplicates)</test>
+      <test id="AC7" name="test_to_mermaid_word_splitting_enabled">Verify camelCase names split to "camel Case" when split_names_by_words=True</test>
+      <test id="AC7" name="test_to_mermaid_word_splitting_disabled">Verify camelCase names preserved when split_names_by_words=False</test>
+      <test id="AC8" name="test_to_mermaid_empty_workflow">Verify empty paths list generates Start → End only</test>
+      <test id="AC8" name="test_to_mermaid_single_activity">Verify single activity path generates Start → Activity → End</test>
+      <test id="AC8" name="test_to_mermaid_multiple_activities">Verify multiple activities generate correct sequence with edges</test>
+      <test id="AC11" name="test_to_mermaid_performance_50_nodes">Measure rendering time for 50-node graph, assert <1ms per NFR-PERF-1</test>
+      <test id="AC12" name="test_to_mermaid_matches_dotnet_golden">Compare output to .NET golden file for simple linear workflow</test>
+      <test id="AC13" name="test_to_mermaid_handles_special_chars">Verify activity names with spaces, quotes, special chars render correctly</test>
+      <test id="AC13" name="test_to_mermaid_raises_on_null_activity">Verify ValueError raised with clear message for None/null activity names</test>
+      <test id="AC14" name="Coverage: 100%">All lines, branches, edge cases in MermaidRenderer covered by tests above</test>
+      <test id="AC15" name="test_to_mermaid_docstring_complete">Verify to_mermaid() has complete Google-style docstring with all sections</test>
+    </ideas>
+  </tests>
+</story-context>

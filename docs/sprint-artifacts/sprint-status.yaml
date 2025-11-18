@@ -47,7 +47,7 @@ development_status:
   2-2-implement-ast-based-workflow-analyzer: done
   2-3-implement-activity-call-detection: review
   2-4-implement-basic-path-generator-for-linear-workflows: done
-  2-5-implement-mermaid-renderer-with-format-compliance: backlog
+  2-5-implement-mermaid-renderer-with-format-compliance: done
   2-6-implement-public-api-entry-point: backlog
   2-7-implement-configuration-options: backlog
   2-8-add-integration-test-with-simple-linear-workflow-example: backlog
