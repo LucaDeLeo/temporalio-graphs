@@ -1,0 +1,335 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-1</epicId>
+    <storyId>1-1</storyId>
+    <title>Initialize Python Library Project with Modern Tooling</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/1-1-initialize-python-library-project-with-modern-tooling.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>Python library developer</asA>
+    <iWant>a properly initialized project with modern build tools and dependencies</iWant>
+    <soThat>I can begin implementing graph generation features with confidence in the project structure</soThat>
+    <tasks>
+      - Task 1: Verify prerequisites and initialize project (AC: 1, 2, 3, 4)
+        - 1.1: Verify uv is installed on system (per user global requirement)
+        - 1.2: Execute `uv init --lib --build-backend hatchling` in project directory
+        - 1.3: Verify pyproject.toml created with hatchling build backend
+        - 1.4: Create .python-version file with content "3.11"
+      - Task 2: Install core dependencies (AC: 5)
+        - 2.1: Execute `uv add "temporalio>=1.7.1"`
+        - 2.2: Verify pyproject.toml updated with temporalio in dependencies
+        - 2.3: Verify uv.lock created/updated
+        - 2.4: Test temporalio import with version check
+      - Task 3: Install development dependencies (AC: 6)
+        - 3.1: Execute `uv add --dev pytest pytest-cov pytest-asyncio mypy ruff`
+        - 3.2: Verify pyproject.toml [project.optional-dependencies.dev] updated
+        - 3.3: Verify all dev tools runnable via `uv run &lt;tool&gt; --version`
+      - Task 4: Create project directory structure (AC: 2, 9)
+        - 4.1: Create tests/ directory with __init__.py
+        - 4.2: Create examples/ directory (with optional .gitkeep)
+        - 4.3: Update src/temporalio_graphs/__init__.py with version and docstring
+        - 4.4: Create src/temporalio_graphs/py.typed marker file (empty)
+      - Task 5: Configure development tools (AC: 11, 12, 13)
+        - 5.1: Add [tool.mypy] configuration to pyproject.toml (strict mode)
+        - 5.2: Add [tool.ruff] configuration to pyproject.toml (line-length 100)
+        - 5.3: Add [tool.pytest.ini_options] configuration (coverage settings)
+        - 5.4: Verify mypy runs successfully: `uv run mypy src/`
+        - 5.5: Verify ruff runs successfully: `uv run ruff check src/`
+      - Task 6: Create configuration files (AC: 10, 7)
+        - 6.1: Create comprehensive .gitignore for Python projects
+        - 6.2: Update pyproject.toml [project] section with complete metadata
+        - 6.3: Add license, authors, keywords, classifiers to pyproject.toml
+        - 6.4: Create placeholder README.md
+      - Task 7: Synchronize and validate environment (AC: 14, 15)
+        - 7.1: Execute `uv sync` to ensure all dependencies installed
+        - 7.2: Run verification command: `uv run python -c "import temporalio; print('Temporal SDK ready')"`
+        - 7.3: Test package build: `uv build`
+        - 7.4: Verify dist/ contains wheel and source distribution
+        - 7.5: Test local installation and import: `import temporalio_graphs`
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Project uses uv package manager per global user requirements (uv.lock exists, NOT requirements.txt; pyproject.toml contains build-backend = "hatchling.build"; virtual environment via uv venv; dependencies added via uv add; workflow uses uv run)
+    2. Project structure follows src/ layout per Architecture ADR-004 (complete directory structure with src/temporalio_graphs/, tests/, examples/, .python-version, .gitignore, pyproject.toml, README.md, uv.lock, __init__.py files, py.typed marker)
+    3. Build backend is hatchling per Architecture ADR-003 (pyproject.toml [build-system] section configured; uv build succeeds; dist/ contains wheel and source distribution)
+    4. Python 3.10+ is set as minimum version (.python-version specifies Python 3.11; pyproject.toml requires-python = ">=3.10")
+    5. temporalio SDK >=1.7.1 is installed as core dependency (pyproject.toml [project.dependencies] contains "temporalio>=1.7.1"; import succeeds with version >=1.7.1)
+    6. Development tools are installed (pyproject.toml [project.optional-dependencies.dev] contains pytest >=7.4.0, pytest-cov >=4.1.0, pytest-asyncio >=0.21.0, mypy, ruff; all tools runnable via uv run)
+    7. pyproject.toml contains complete project metadata (name = "temporalio-graphs"; version = "0.1.0"; description; readme; requires-python; license = MIT; authors; keywords; classifiers)
+    8. py.typed marker file exists in src/temporalio_graphs/ (enables type hint distribution per NFR-QUAL-1)
+    9. __init__.py files exist for package recognition (src/temporalio_graphs/__init__.py contains version "0.1.0" and docstring; tests/__init__.py exists)
+    10. .gitignore excludes build and runtime artifacts (excludes: .venv/, dist/, __pycache__/, *.pyc, .pytest_cache/, .mypy_cache/, *.egg-info/, .vscode/, .idea/, *.swp)
+    11. mypy strict mode configured per ADR-006 (pyproject.toml [tool.mypy] section with strict = true, python_version = "3.10", warn_return_any = true, warn_unused_configs = true, disallow_untyped_defs = true; uv run mypy src/ succeeds with 0 errors)
+    12. ruff configured per ADR-007 (pyproject.toml [tool.ruff] section with line-length = 100, target-version = "py310", select = ["E", "F", "I", "N", "W", "UP"]; uv run ruff check src/ passes with no violations)
+    13. pytest + coverage configured per ADR-010 (pyproject.toml [tool.pytest.ini_options] with testpaths = ["tests"], addopts = "--cov=src/temporalio_graphs --cov-report=term-missing --cov-fail-under=80"; uv run pytest executes without errors)
+    14. Package builds and installs successfully (uv build creates wheel successfully; wheel can be installed locally; python -c "import temporalio_graphs; print(temporalio_graphs.__version__)" outputs "0.1.0")
+    15. Verification command succeeds (uv run python -c "import temporalio; print('Temporal SDK ready')" succeeds; output displays "Temporal SDK ready"; no import errors or warnings)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>Executive Summary</section>
+        <snippet>Port the .NET Temporalio.Graphs library to Python, providing Python developers with the same capability to generate complete workflow visualization diagrams from Temporal workflows. A Python library that analyzes workflow source code using Python AST to generate Mermaid diagrams showing ALL possible execution paths.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>Product Scope - MVP</section>
+        <snippet>Python Package Structure: Installable via pip install temporalio-graphs. Core classes: GraphBuildingContext, GraphPath, GraphGenerator. Workflow helpers: to_decision(), wait_condition(). Clean public API with type hints. Configuration options matching .NET.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Project Initialization</section>
+        <snippet>First implementation story should execute: uv init --lib --build-backend hatchling; uv add "temporalio>=1.7.1"; uv add --dev pytest pytest-cov pytest-asyncio mypy ruff. This establishes base architecture with modern src/ layout, Hatchling build system, uv package manager, and py.typed marker file.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Decision Summary</section>
+        <snippet>Package Manager: uv (user requirement, fast, modern, Rust-based). Build Backend: hatchling (modern, zero-config, PyPA-maintained). Python Version: 3.10+ (3.11+ recommended). Project Layout: src/ layout (modern best practice, prevents accidental imports). Type Checker: mypy strict mode (NFR-QUAL-1: 100% public API type coverage). Linter: ruff (modern, fast, replaces flake8/isort).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Project Structure</section>
+        <snippet>temporalio-graphs/ with .python-version, docs/, examples/, src/temporalio_graphs/ (__init__.py, py.typed), tests/ (__init__.py), pyproject.toml (hatchling, dependencies, tool configs), .gitignore, README.md. The src/ layout prevents accidental imports during development and forces tests to import from installed package.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Foundation &amp; Project Setup</title>
+        <section>Overview</section>
+        <snippet>Epic 1 establishes the foundational infrastructure for the temporalio-graphs Python library. This epic implements greenfield project initialization, creating production-ready Python library structure with modern build tooling (uv + hatchling), proper package layout (src/), comprehensive type safety (mypy strict), and development infrastructure that enables all subsequent implementation work across Epics 2-5.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Foundation &amp; Project Setup</title>
+        <section>Objectives and Scope</section>
+        <snippet>Specific Goals: 1) Modern Tooling Compliance: Implement mandatory uv package manager, integrate hatchling build backend, establish Python 3.10+ compatibility. 2) Type Safety Foundation: Achieve mypy strict mode compliance from day one (NFR-QUAL-1: 100% type hint coverage). 3) Development Environment: Create reproducible development setup with virtual environment, dependency management (temporalio SDK >=1.7.1), development tools.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Foundation &amp; Project Setup</title>
+        <section>System Architecture Alignment - ADR Implementation</section>
+        <snippet>ADR-002: uv as Package Manager (MANDATORY) - Implements user global requirement: "always ALWAYS use uv". All dependency management, virtual environments, and builds via uv commands. Establishes uv.lock for deterministic dependency resolution. ADR-003: Hatchling as Build Backend - pyproject.toml configured with build-backend = "hatchling.build". Zero-configuration setup leveraging hatchling's native src/ layout support. ADR-004: src/ Layout - Implements modern best practice preventing accidental local imports.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Foundation &amp; Project Setup</title>
+        <section>Detailed Design - Services and Modules</section>
+        <snippet>Epic 1 is infrastructure-focused, creating scaffolding for future module development. Components: uv Package Manager (dependency resolution, virtual environment management), hatchling Build Backend (package building, src/ layout handling), mypy Type Checker (static type analysis, strict mode enforcement), ruff Linter &amp; Formatter (code quality checks), pytest Test Framework (test discovery, execution, coverage measurement), temporalio SDK (workflow type definitions).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Functional Requirements Inventory</section>
+        <snippet>65 functional requirements from PRD ensuring complete coverage. Core Graph Generation (FR1-FR10), Decision Node Support (FR11-FR17), Signal/Wait Condition Support (FR18-FR22), Graph Output (FR23-FR30), Configuration &amp; Control (FR31-FR36), API &amp; Integration (FR37-FR44), Advanced Patterns (FR45-FR50).</snippet>
+      </artifact>
+      <artifact>
+        <path>CLAUDE.md</path>
+        <title>Project Instructions</title>
+        <section>Project Overview</section>
+        <snippet>Temporalio.Graphs (Python Port) - A library for generating complete workflow visualization diagrams from Temporal workflows using static code analysis. Key Innovation: Unlike DAG-based workflow engines, Temporal workflows don't provide complete visualization of all possible execution paths. This project generates Mermaid diagrams showing ALL possible workflow paths by analyzing workflow code structure with Python AST.</snippet>
+      </artifact>
+      <artifact>
+        <path>CLAUDE.md</path>
+        <title>Project Instructions</title>
+        <section>Common Commands</section>
+        <snippet>Environment setup (always use uv per user preference): uv venv; source .venv/bin/activate; uv sync. Code quality: mypy src/ (type checking); ruff check src/ (linting); ruff format src/ (formatting). Usage (planned): temporalio-graphs analyze workflow.py --output diagram.md.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>pyproject.toml</path>
+        <kind>config</kind>
+        <symbol>project metadata</symbol>
+        <lines>1-63</lines>
+        <reason>Existing pyproject.toml with partial configuration. Story must update this file to match all acceptance criteria specifications (complete metadata, strict mypy settings, ruff configuration, pytest coverage settings). Current state has basic structure but needs enhancements for AC7, AC11, AC12, AC13.</reason>
+      </artifact>
+      <artifact>
+        <path>.gitignore</path>
+        <kind>config</kind>
+        <symbol>git exclusions</symbol>
+        <lines>1-63</lines>
+        <reason>Existing .gitignore file with comprehensive Python exclusions. Story must verify it meets AC10 requirements (excludes .venv/, dist/, __pycache__/, *.pyc, .pytest_cache/, .mypy_cache/, *.egg-info/, .vscode/, .idea/, *.swp). Current file appears comprehensive.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>module</kind>
+        <symbol>__version__</symbol>
+        <lines>1-13</lines>
+        <reason>Existing __init__.py file with __version__ = "0.1.0" and docstring. Story must verify this meets AC9 requirements (contains version "0.1.0" and docstring). Current file appears to meet requirements.</reason>
+      </artifact>
+      <artifact>
+        <path>spike/temporal-spike/approach3_static_analysis.py</path>
+        <kind>reference</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>1-80</lines>
+        <reason>Reference implementation from Phase 0.5 spike showing the validated static analysis approach using Python AST. This demonstrates the core technical approach that Epic 1 foundation must support. Contains DecisionPoint, ActivityCall dataclasses and WorkflowAnalyzer ast.NodeVisitor pattern that will be implemented in later epics.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" />
+        <package name="pytest" version=">=7.4.0" dev="true" />
+        <package name="pytest-cov" version=">=4.1.0" dev="true" />
+        <package name="pytest-asyncio" version=">=0.21.0" dev="true" />
+        <package name="mypy" version="latest" dev="true" />
+        <package name="ruff" version="latest" dev="true" />
+      </python>
+      <build-system>
+        <package name="hatchling" version="latest" />
+      </build-system>
+      <tools>
+        <package name="uv" version="latest" scope="system" note="User requirement: ALWAYS use uv for all Python package management" />
+      </tools>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="MANDATORY-UV-USAGE">
+      <source>CLAUDE.md - User Global Requirements</source>
+      <rule>MANDATORY: "always ALWAYS use uv" - All Python package management, virtual environment creation, dependency installation, and command execution MUST use uv. This is a non-negotiable user requirement.</rule>
+      <impact>All tasks must use uv commands: uv init, uv add, uv sync, uv run, uv build. Never use pip, python -m venv, or direct python commands. Use `uv run &lt;command&gt;` for tool execution.</impact>
+    </constraint>
+    <constraint id="ADR-002">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Package Manager: uv (user requirement, fast, modern, Rust-based). Handles venv, deps, builds. Establishes uv.lock for deterministic dependency resolution.</rule>
+      <impact>Creates uv.lock file (NOT requirements.txt). All dependency management through uv add/uv sync. Virtual environment via uv venv.</impact>
+    </constraint>
+    <constraint id="ADR-003">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Build Backend: hatchling (modern, zero-config, PyPA-maintained). Native src/ layout support.</rule>
+      <impact>pyproject.toml [build-system] must specify requires = ["hatchling"] and build-backend = "hatchling.build". Use uv build (not python -m build).</impact>
+    </constraint>
+    <constraint id="ADR-004">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Project Layout: src/ layout (modern best practice). Prevents accidental imports. Clean separation.</rule>
+      <impact>All library code must be under src/temporalio_graphs/. Tests import from installed package. Forces proper package structure. Directory structure: src/temporalio_graphs/__init__.py, src/temporalio_graphs/py.typed.</impact>
+    </constraint>
+    <constraint id="ADR-006">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Type Checker: mypy strict mode. NFR-QUAL-1: 100% public API type coverage. Strict mode enforces quality.</rule>
+      <impact>pyproject.toml [tool.mypy] must include: strict = true, python_version = "3.10", warn_return_any = true, warn_unused_configs = true, disallow_untyped_defs = true. All code must pass mypy strict checks.</impact>
+    </constraint>
+    <constraint id="ADR-007">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Linter: ruff (modern, fast, Rust-based). Replaces flake8/isort. NFR-QUAL-3. 100-char line length.</rule>
+      <impact>pyproject.toml [tool.ruff] must include: line-length = 100, target-version = "py310", select = ["E", "F", "I", "N", "W", "UP"]. All code must pass ruff check.</impact>
+    </constraint>
+    <constraint id="ADR-010">
+      <source>docs/architecture.md - Decision Summary</source>
+      <rule>Coverage Tool: pytest-cov. NFR-QUAL-2: &gt;80% coverage requirement.</rule>
+      <impact>pyproject.toml [tool.pytest.ini_options] must include: testpaths = ["tests"], addopts = "--cov=src/temporalio_graphs --cov-report=term-missing --cov-fail-under=80". Coverage threshold enforced at 80%.</impact>
+    </constraint>
+    <constraint id="PYTHON-VERSION">
+      <source>docs/architecture.md - Decision Summary; docs/sprint-artifacts/tech-spec-epic-1.md</source>
+      <rule>Python Version: 3.10+ minimum (3.11+ recommended). NFR-COMPAT-1. AST features stable, dataclass improvements in 3.10+.</rule>
+      <impact>.python-version file must specify "3.11". pyproject.toml requires-python = ">=3.10". All code must be compatible with Python 3.10+.</impact>
+    </constraint>
+    <constraint id="TYPE-DISTRIBUTION">
+      <source>docs/architecture.md - Project Initialization; docs/sprint-artifacts/tech-spec-epic-1.md</source>
+      <rule>Type Distribution: py.typed marker file included. Enables type hint distribution to downstream consumers.</rule>
+      <impact>src/temporalio_graphs/py.typed must exist (empty file). This enables PEP 561 type distribution for library consumers.</impact>
+    </constraint>
+    <constraint id="NO-FEATURE-CODE">
+      <source>docs/sprint-artifacts/tech-spec-epic-1.md - Out-of-Scope</source>
+      <rule>Epic 1 is infrastructure-focused only. No feature implementation (covered in Epics 2-5). No examples or documentation beyond placeholders. No test writing beyond directory structure.</rule>
+      <impact>This story creates ONLY project structure, configuration files, and build infrastructure. No actual library functionality is implemented. tests/ directory created but remains empty (0 tests collected is acceptable).</impact>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>temporalio SDK imports</name>
+      <kind>external-library</kind>
+      <signature>import temporalio; temporalio.__version__</signature>
+      <path>External dependency: temporalio>=1.7.1</path>
+      <note>AC5 and AC15 require successful import and version verification. This validates that the temporalio SDK is properly installed and functional in the environment.</note>
+    </interface>
+    <interface>
+      <name>temporalio_graphs package import</name>
+      <kind>package-api</kind>
+      <signature>import temporalio_graphs; print(temporalio_graphs.__version__)</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <note>AC14 requires successful package import after build and installation. This validates the complete package structure (src/ layout, __init__.py, version export) and build system (hatchling) are working correctly.</note>
+    </interface>
+    <interface>
+      <name>uv package manager CLI</name>
+      <kind>tool-interface</kind>
+      <signature>uv init --lib --build-backend hatchling; uv add &lt;package&gt;; uv sync; uv run &lt;command&gt;; uv build</signature>
+      <path>System tool (must be pre-installed)</path>
+      <note>MANDATORY user requirement. All package management, dependency installation, virtual environment creation, and command execution must use uv. Task 1.1 must verify uv is installed before proceeding.</note>
+    </interface>
+    <interface>
+      <name>mypy type checker</name>
+      <kind>dev-tool</kind>
+      <signature>uv run mypy src/</signature>
+      <path>Development dependency</path>
+      <note>AC11 requires mypy strict mode configuration and successful execution with 0 errors. Configured in pyproject.toml [tool.mypy] section. Validates type safety compliance.</note>
+    </interface>
+    <interface>
+      <name>ruff linter and formatter</name>
+      <kind>dev-tool</kind>
+      <signature>uv run ruff check src/; uv run ruff format src/</signature>
+      <path>Development dependency</path>
+      <note>AC12 requires ruff configuration and successful execution with no violations. Configured in pyproject.toml [tool.ruff] section. Validates code quality standards.</note>
+    </interface>
+    <interface>
+      <name>pytest test framework</name>
+      <kind>dev-tool</kind>
+      <signature>uv run pytest</signature>
+      <path>Development dependency</path>
+      <note>AC13 requires pytest + coverage configuration. Execution without errors is acceptable (0 tests collected is expected for Epic 1). Configured in pyproject.toml [tool.pytest.ini_options] section.</note>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing infrastructure is established in Epic 1 but no actual tests are written (out of scope). pytest >=7.4.0 is the test framework with pytest-cov >=4.1.0 for coverage measurement and pytest-asyncio >=0.21.0 for async test support. Configuration in pyproject.toml specifies testpaths = ["tests"], coverage source = ["src"], and coverage threshold of 80% (--cov-fail-under=80). AC13 requires pytest execution to succeed without errors - "0 tests collected" is acceptable for this story. Tests will be added in subsequent stories starting with Epic 2. Type checking via mypy strict mode and linting via ruff are also part of quality standards.
+    </standards>
+    <locations>
+      <location>tests/</location>
+      <location>tests/__init__.py</location>
+    </locations>
+    <ideas>
+      <idea ac="AC1">Verify uv.lock file exists (not requirements.txt)</idea>
+      <idea ac="AC1">Verify pyproject.toml [build-system] contains build-backend = "hatchling.build"</idea>
+      <idea ac="AC1">Verify virtual environment created in .venv/ directory</idea>
+      <idea ac="AC2">Test directory structure matches expected layout (src/temporalio_graphs/, tests/, examples/)</idea>
+      <idea ac="AC2">Verify __init__.py files exist in correct locations</idea>
+      <idea ac="AC2">Verify py.typed marker file exists</idea>
+      <idea ac="AC3">Test uv build command succeeds</idea>
+      <idea ac="AC3">Verify dist/ directory contains both .whl and .tar.gz files</idea>
+      <idea ac="AC4">Verify .python-version file contains "3.11"</idea>
+      <idea ac="AC4">Verify pyproject.toml requires-python = ">=3.10"</idea>
+      <idea ac="AC5">Test temporalio import succeeds: import temporalio</idea>
+      <idea ac="AC5">Verify temporalio version is >=1.7.1</idea>
+      <idea ac="AC6">Test all dev tools are installed and runnable via uv run</idea>
+      <idea ac="AC7">Verify pyproject.toml metadata completeness (name, version, description, readme, license, authors, keywords, classifiers)</idea>
+      <idea ac="AC8">Verify src/temporalio_graphs/py.typed exists and is empty</idea>
+      <idea ac="AC9">Test src/temporalio_graphs/__init__.py contains __version__ = "0.1.0"</idea>
+      <idea ac="AC9">Verify __init__.py contains module docstring</idea>
+      <idea ac="AC10">Verify .gitignore excludes all required artifacts (.venv/, dist/, __pycache__/, *.pyc, etc.)</idea>
+      <idea ac="AC11">Test mypy runs successfully with strict mode: uv run mypy src/</idea>
+      <idea ac="AC11">Verify mypy configuration in pyproject.toml matches strict mode requirements</idea>
+      <idea ac="AC12">Test ruff check passes with no violations: uv run ruff check src/</idea>
+      <idea ac="AC12">Verify ruff configuration in pyproject.toml (line-length 100, target py310)</idea>
+      <idea ac="AC13">Test pytest executes without errors: uv run pytest</idea>
+      <idea ac="AC13">Verify pytest configuration includes coverage settings</idea>
+      <idea ac="AC14">Test package build creates wheel successfully</idea>
+      <idea ac="AC14">Test package imports successfully after installation: import temporalio_graphs</idea>
+      <idea ac="AC14">Verify __version__ attribute is accessible and returns "0.1.0"</idea>
+      <idea ac="AC15">Test verification command: uv run python -c "import temporalio; print('Temporal SDK ready')"</idea>
+      <idea ac="AC15">Verify output contains "Temporal SDK ready" with no errors</idea>
+    </ideas>
+  </tests>
+</story-context>

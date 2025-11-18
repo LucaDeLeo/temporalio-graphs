@@ -1,0 +1,80 @@
+# generated: 2025-11-18
+# project: temporalio-graphs-python-port
+# project_key: temporalio-graphs-python-port
+# tracking_system: file-system
+# story_location: /Users/luca/dev/bounty/docs/sprint-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic exists in epic file but not contexted
+#   - contexted: Epic tech context created (required before drafting stories)
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - drafted: Story file created in stories folder
+#   - ready-for-dev: Draft approved and story context created
+#   - in-progress: Developer actively working on implementation
+#   - review: Under SM review (via code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - completed: Retrospective has been done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epics should be 'contexted' before stories can be 'drafted'
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically drafts next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
+
+generated: 2025-11-18
+project: temporalio-graphs-python-port
+project_key: temporalio-graphs-python-port
+tracking_system: file-system
+story_location: /Users/luca/dev/bounty/docs/sprint-artifacts
+
+development_status:
+  # Epic 1: Foundation & Project Setup
+  epic-1: contexted
+  1-1-initialize-python-library-project-with-modern-tooling: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Basic Graph Generation (Linear Workflows)
+  epic-2: backlog
+  2-1-implement-core-data-models-with-type-safety: backlog
+  2-2-implement-ast-based-workflow-analyzer: backlog
+  2-3-implement-activity-call-detection: backlog
+  2-4-implement-basic-path-generator-for-linear-workflows: backlog
+  2-5-implement-mermaid-renderer-with-format-compliance: backlog
+  2-6-implement-public-api-entry-point: backlog
+  2-7-implement-configuration-options: backlog
+  2-8-add-integration-test-with-simple-linear-workflow-example: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Decision Node Support (Branching Workflows)
+  epic-3: backlog
+  3-1-implement-decision-point-detection-in-ast: backlog
+  3-2-implement-to-decision-helper-function: backlog
+  3-3-implement-path-permutation-generator-for-decisions: backlog
+  3-4-implement-decision-node-rendering-in-mermaid: backlog
+  3-5-add-integration-test-with-moneytransfer-example: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Signal & Wait Condition Support
+  epic-4: backlog
+  4-1-implement-signal-point-detection-in-ast: backlog
+  4-2-implement-wait-condition-helper-function: backlog
+  4-3-implement-signal-node-rendering-in-mermaid: backlog
+  4-4-add-integration-test-with-signal-example: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Production Readiness
+  epic-5: backlog
+  5-1-implement-validation-warnings-for-graph-quality: backlog
+  5-2-implement-comprehensive-error-handling-hierarchy: backlog
+  5-3-implement-path-list-output-format: backlog
+  5-4-create-comprehensive-example-gallery: backlog
+  5-5-create-production-grade-documentation: backlog
+  epic-5-retrospective: optional

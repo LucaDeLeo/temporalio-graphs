@@ -1,5 +1,8 @@
 # Temporalio.Graphs Python Port - Implementation Plan
 
+> [!CAUTION]
+> **THIS IS THE OLD FIRST DRAFT** - This implementation plan describes the **Runtime Interceptor** approach, which was explored but ultimately rejected in favor of **Static Analysis** (AST-based). Please refer to `docs/architecture.md` and `docs/prd.md` for the current approved architecture. See ADR-001 in the Architecture document for the decision rationale.
+
 ## Executive Summary
 
 This document outlines the comprehensive plan to port the .NET Temporalio.Graphs library to Python. The library generates complete workflow visualizations as Mermaid diagrams by running Temporal workflows in mock mode and exploring all execution paths through decision permutations.
