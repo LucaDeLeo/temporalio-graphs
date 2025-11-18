@@ -126,6 +126,12 @@ Contributions welcome! Please see the implementation plan for current priorities
 
 MIT
 
+## Sponsors
+
+This project is made possible by the generous support of:
+
+- [@davidhw](https://github.com/davidhw) - Original bounty sponsor
+
 ## Credits
 
 Python port of [Temporalio.Graphs (.NET)](https://github.com/original/repo) with architectural adaptations for Python SDK constraints.
