@@ -720,3 +720,327 @@ def test_performance_ten_decisions(
     # Should complete in <5 seconds
     assert elapsed_time < 5.0, \
         f"Performance requirement: <5s for 1024 paths, got {elapsed_time:.4f}s"
+
+
+# ============================================================================
+# Epic 4: Signal Path Permutation Tests (Story 4-3)
+# ============================================================================
+
+
+def test_single_signal_generates_two_paths() -> None:
+    """Verify workflow with 1 signal generates 2 paths (Signaled, Timeout).
+    
+    AC3, AC6: Each signal point generates exactly 2 branches.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ProcessOrder", 35)],
+        decision_points=[],
+        signal_points=[
+            SignalPoint(
+                name="WaitApproval",
+                condition_expr="lambda: approved",
+                timeout_expr="timedelta(hours=24)",
+                source_line=42,
+                node_id="sig_waitapproval_42"
+            )
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=2
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    paths = generator.generate_paths(metadata, context)
+    
+    # Should generate 2^1 = 2 paths
+    assert len(paths) == 2, "1 signal should generate 2 paths"
+    
+    # Check that paths have different signal outcomes
+    outcomes = set()
+    for path in paths:
+        for step in path.steps:
+            if step.node_type == 'signal':
+                outcomes.add(step.signal_outcome)
+    
+    assert outcomes == {"Signaled", "Timeout"}, \
+        "Signal paths should include both Signaled and Timeout outcomes"
+
+
+def test_decision_and_signal_generate_four_paths() -> None:
+    """Verify 1 decision + 1 signal generates 4 paths (2^2 permutations).
+    
+    AC3, AC6: Workflow with d decisions + s signals generates 2^(d+s) paths.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ProcessOrder", 35)],
+        decision_points=[
+            DecisionPoint(
+                id="d0",
+                name="NeedApproval",
+                line_number=38,
+                line_num=38,
+                true_label="yes",
+                false_label="no"
+            )
+        ],
+        signal_points=[
+            SignalPoint(
+                name="WaitApproval",
+                condition_expr="lambda: approved",
+                timeout_expr="timedelta(hours=24)",
+                source_line=42,
+                node_id="sig_waitapproval_42"
+            )
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=4
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    paths = generator.generate_paths(metadata, context)
+    
+    # Should generate 2^2 = 4 paths
+    assert len(paths) == 4, "1 decision + 1 signal should generate 4 paths"
+    
+    # Verify all permutations exist
+    permutations = set()
+    for path in paths:
+        # Extract decision value and signal outcome
+        decision_value = path.decisions.get("d0")
+        signal_outcome = None
+        for step in path.steps:
+            if step.node_type == 'signal':
+                signal_outcome = step.signal_outcome
+                break
+        
+        permutations.add((decision_value, signal_outcome))
+    
+    # Should have all 4 combinations
+    assert len(permutations) == 4, "All 4 permutations should exist"
+    assert (True, "Signaled") in permutations
+    assert (True, "Timeout") in permutations
+    assert (False, "Signaled") in permutations
+    assert (False, "Timeout") in permutations
+
+
+def test_two_signals_generate_four_paths() -> None:
+    """Verify 2 signals generate 4 paths (2^2 permutations).
+    
+    AC3: Signals treated identically to decisions in permutation logic.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ProcessOrder", 35)],
+        decision_points=[],
+        signal_points=[
+            SignalPoint(
+                name="WaitApproval",
+                condition_expr="lambda: approved",
+                timeout_expr="timedelta(hours=24)",
+                source_line=42,
+                node_id="sig_waitapproval_42"
+            ),
+            SignalPoint(
+                name="WaitConfirmation",
+                condition_expr="lambda: confirmed",
+                timeout_expr="timedelta(minutes=30)",
+                source_line=55,
+                node_id="sig_waitconfirmation_55"
+            )
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=4
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    paths = generator.generate_paths(metadata, context)
+    
+    # Should generate 2^2 = 4 paths
+    assert len(paths) == 4, "2 signals should generate 4 paths"
+
+
+def test_path_explosion_limit_includes_signals() -> None:
+    """Verify path explosion limit applies to total branch points (decisions + signals).
+    
+    AC3: Path explosion limit includes signals in calculation.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    # Create workflow with 6 decisions + 5 signals = 11 total branch points
+    # This exceeds default max_decision_points (10)
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ProcessOrder", 35)],
+        decision_points=[
+            DecisionPoint(f"d{i}", f"Decision{i}", i*10, i*10, "yes", "no")
+            for i in range(6)
+        ],
+        signal_points=[
+            SignalPoint(
+                name=f"Signal{i}",
+                condition_expr="lambda: True",
+                timeout_expr="timedelta(hours=1)",
+                source_line=100+i*10,
+                node_id=f"sig_signal{i}_{100+i*10}"
+            )
+            for i in range(5)
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=2048  # 2^11
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext(max_decision_points=10)
+    
+    # Should raise error because total branch points (11) exceeds limit (10)
+    with pytest.raises(GraphGenerationError) as exc_info:
+        generator.generate_paths(metadata, context)
+    
+    error_msg = str(exc_info.value)
+    assert "Too many branch points" in error_msg
+    assert "6 decisions + 5 signals" in error_msg or "11" in error_msg
+
+
+def test_signal_outcomes_stored_in_path() -> None:
+    """Verify signal outcomes are correctly stored in path steps.
+    
+    AC3: Signal outcomes stored in GraphPath.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[
+            SignalPoint(
+                name="WaitApproval",
+                condition_expr="lambda: approved",
+                timeout_expr="timedelta(hours=24)",
+                source_line=42,
+                node_id="sig_waitapproval_42"
+            )
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=2
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    paths = generator.generate_paths(metadata, context)
+    
+    # Find path with Signaled outcome
+    signaled_path = None
+    timeout_path = None
+    
+    for path in paths:
+        for step in path.steps:
+            if step.node_type == 'signal':
+                if step.signal_outcome == "Signaled":
+                    signaled_path = path
+                elif step.signal_outcome == "Timeout":
+                    timeout_path = path
+    
+    assert signaled_path is not None, "Should have path with Signaled outcome"
+    assert timeout_path is not None, "Should have path with Timeout outcome"
+
+
+def test_all_signal_permutations_generated() -> None:
+    """Verify all signal permutations are generated for completeness.
+    
+    AC6: Uses itertools.product to generate all 2^(d+s) permutations.
+    """
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    # 3 signals = 2^3 = 8 paths
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[
+            SignalPoint(
+                name=f"Signal{i}",
+                condition_expr="lambda: True",
+                timeout_expr="timedelta(hours=1)",
+                source_line=40+i*10,
+                node_id=f"sig_signal{i}_{40+i*10}"
+            )
+            for i in range(3)
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=8
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    paths = generator.generate_paths(metadata, context)
+    
+    # Should generate 2^3 = 8 paths
+    assert len(paths) == 8, "3 signals should generate 8 paths"
+    
+    # Each path should have unique combination of signal outcomes
+    path_signatures = set()
+    for path in paths:
+        signature = []
+        for step in path.steps:
+            if step.node_type == 'signal':
+                signature.append(step.signal_outcome)
+        path_signatures.add(tuple(signature))
+    
+    # Should have 8 unique combinations
+    assert len(path_signatures) == 8, "All 8 permutations should be unique"
+
+
+def test_signal_permutation_performance() -> None:
+    """Verify signal path generation completes in <1s for 32 paths.
+    
+    AC6: Performance: generates 32 paths (5 signals) in <1 second.
+    """
+    import time
+    from temporalio_graphs._internal.graph_models import SignalPoint, Activity
+    
+    # 5 signals = 2^5 = 32 paths
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[
+            SignalPoint(
+                name=f"Signal{i}",
+                condition_expr="lambda: True",
+                timeout_expr="timedelta(hours=1)",
+                source_line=40+i*10,
+                node_id=f"sig_signal{i}_{40+i*10}"
+            )
+            for i in range(5)
+        ],
+        source_file=Path("workflow.py"),
+        total_paths=32
+    )
+    
+    generator = PathPermutationGenerator()
+    context = GraphBuildingContext()
+    
+    start_time = time.time()
+    paths = generator.generate_paths(metadata, context)
+    elapsed = time.time() - start_time
+    
+    assert len(paths) == 32, "5 signals should generate 32 paths"
+    assert elapsed < 1.0, f"Path generation should complete in <1s, took {elapsed:.3f}s"

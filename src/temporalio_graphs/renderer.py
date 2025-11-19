@@ -124,12 +124,22 @@ class MermaidRenderer:
         # Build mapping of decision IDs to their names from PathStep objects
         # With typed steps, we can directly identify decisions without heuristics
         decision_id_to_name: dict[str, str] = {}
-        if paths and paths[0].decisions:
-            # Use the first path to build the mapping
+        # Build mapping of signal names to their outcomes in each path
+        signal_outcomes: dict[str, dict[str, str]] = {}  # path_id -> {signal_name -> outcome}
+
+        if paths:
+            # Use the first path to build the decision mapping
             first_path = paths[0]
             for step in first_path.steps:
                 if step.node_type == 'decision' and step.decision_id:
                     decision_id_to_name[step.decision_id] = step.name
+
+            # Build signal outcomes mapping for all paths
+            for path in paths:
+                signal_outcomes[path.path_id] = {}
+                for step in path.steps:
+                    if step.node_type == 'signal' and step.signal_outcome:
+                        signal_outcomes[path.path_id][step.name] = step.signal_outcome
 
         # First pass: collect all nodes and edges
         # Handle empty paths (edge case: Start -> End only)
@@ -149,7 +159,6 @@ class MermaidRenderer:
                 # Process activities and decisions in path
                 # With typed PathStep objects, we can directly check node_type
                 prev_node_id = "s"
-                activity_counter = 0  # Separate counter for activities only
                 for step_index, step in enumerate(path.steps, 1):
                     # Validate step
                     if step.name is None or step.name == "":
@@ -160,12 +169,53 @@ class MermaidRenderer:
 
                     # Determine node type directly from PathStep
                     is_decision = step.node_type == 'decision'
+                    is_signal = step.node_type == 'signal'
 
-                    if is_decision:
+                    if is_signal:
+                        # Signal node - use signal name as node ID for reconvergence
+                        node_id = step.name
+
+                        # Apply word splitting if enabled
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step.name)
+
+                        # Add signal node definition (deduplicated by dict key)
+                        if node_id not in node_definitions:
+                            signal_node = GraphNode(node_id, NodeType.SIGNAL, display_name)
+                            node_definitions[node_id] = signal_node.to_mermaid()
+
+                        # Add edge from previous node to signal node
+                        # Check if previous node was a decision or signal to add appropriate label
+                        edge_label = ""
+                        if prev_node_id in path.decisions:
+                            # Previous node is a decision - check its value
+                            decision_value = path.decisions[prev_node_id]
+                            edge_label = (
+                                context.decision_true_label
+                                if decision_value
+                                else context.decision_false_label
+                            )
+                        elif prev_node_id in signal_outcomes[path.path_id]:
+                            # Previous node is a signal - use its outcome as label
+                            edge_label = signal_outcomes[path.path_id][prev_node_id]
+
+                        edge_key = (prev_node_id, node_id, edge_label)
+                        if edge_key not in seen_edges:
+                            if edge_label:
+                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            else:
+                                edges.append(f"{prev_node_id} --> {node_id}")
+                            seen_edges.add(edge_key)
+
+                        prev_node_id = node_id
+
+                    elif is_decision:
                         # Get decision ID directly from PathStep
                         if step.decision_id is None:
                             raise ValueError(
-                                f"Decision step '{step.name}' missing decision_id in path {path.path_id}"
+                                f"Decision step '{step.name}' missing decision_id "
+                                f"in path {path.path_id}"
                             )
 
                         node_id = step.decision_id
@@ -181,7 +231,7 @@ class MermaidRenderer:
                             node_definitions[node_id] = decision_node.to_mermaid()
 
                         # Add edges from previous node to decision node
-                        # Check if previous node was a decision to add appropriate label
+                        # Check if previous node was a decision or signal to add appropriate label
                         edge_label = ""
                         if prev_node_id in path.decisions:
                             # Previous node is a decision - check its value
@@ -191,6 +241,9 @@ class MermaidRenderer:
                                 if decision_value
                                 else context.decision_false_label
                             )
+                        elif prev_node_id in signal_outcomes[path.path_id]:
+                            # Previous node is a signal - use its outcome as label
+                            edge_label = signal_outcomes[path.path_id][prev_node_id]
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
@@ -217,7 +270,7 @@ class MermaidRenderer:
                             node_definitions[node_id] = f"{node_id}[{display_name}]"
 
                         # Add edge from previous node to this activity
-                        # Check if previous node was a decision to add appropriate label
+                        # Check if previous node was a decision or signal to add appropriate label
                         edge_label = ""
                         if prev_node_id in path.decisions:
                             # Previous node is a decision - check its value
@@ -227,6 +280,9 @@ class MermaidRenderer:
                                 if decision_value
                                 else context.decision_false_label
                             )
+                        elif prev_node_id in signal_outcomes[path.path_id]:
+                            # Previous node is a signal - use its outcome as label
+                            edge_label = signal_outcomes[path.path_id][prev_node_id]
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
@@ -243,7 +299,7 @@ class MermaidRenderer:
                     node_definitions["e"] = f"e(({context.end_node_label}))"
 
                 # Record edge to End node
-                # Check if previous node was a decision to add appropriate label
+                # Check if previous node was a decision or signal to add appropriate label
                 edge_label_to_end = ""
                 if prev_node_id in path.decisions:
                     # Previous node is a decision - check its value
@@ -253,6 +309,9 @@ class MermaidRenderer:
                         if decision_value
                         else context.decision_false_label
                     )
+                elif prev_node_id in signal_outcomes[path.path_id]:
+                    # Previous node is a signal - use its outcome as label
+                    edge_label_to_end = signal_outcomes[path.path_id][prev_node_id]
 
                 edge_key = (prev_node_id, "e", edge_label_to_end)
                 if edge_key not in seen_edges:

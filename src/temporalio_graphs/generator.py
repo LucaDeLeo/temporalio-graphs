@@ -11,7 +11,12 @@ Epic 3 scope: Decision-based permutations (2^n paths for n decision points).
 import logging
 from itertools import product
 
-from temporalio_graphs._internal.graph_models import DecisionPoint, WorkflowMetadata
+from temporalio_graphs._internal.graph_models import (
+    Activity,
+    DecisionPoint,
+    SignalPoint,
+    WorkflowMetadata,
+)
 from temporalio_graphs.context import GraphBuildingContext
 from temporalio_graphs.exceptions import GraphGenerationError
 from temporalio_graphs.path import GraphPath
@@ -163,20 +168,23 @@ class PathPermutationGenerator:
             logger.debug("context is None, using GraphBuildingContext defaults")
             context = GraphBuildingContext()
 
-        # Check for decision points and explosion limit
+        # Check for decision points + signal points and explosion limit
         num_decisions = len(metadata.decision_points)
+        num_signals = len(metadata.signal_points)
+        total_branch_points = num_decisions + num_signals
 
-        # Validate explosion limit
-        if num_decisions > context.max_decision_points:
-            paths_count = 2**num_decisions
+        # Validate explosion limit (decisions + signals combined)
+        if total_branch_points > context.max_decision_points:
+            paths_count = 2**total_branch_points
             raise GraphGenerationError(
-                f"Too many decision points ({num_decisions}) would generate "
+                f"Too many branch points ({total_branch_points}) would generate "
                 f"{paths_count} paths (limit: {context.max_decision_points}). "
+                f"Branch points: {num_decisions} decisions + {num_signals} signals. "
                 f"Suggestion: Refactor workflow or increase max_decision_points limit"
             )
 
         # Log path generation start
-        if num_decisions == 0:
+        if total_branch_points == 0:
             logger.debug(
                 f"Generating paths for linear workflow with {len(metadata.activities)} activities"
             )
@@ -186,19 +194,21 @@ class PathPermutationGenerator:
             return [path]
         else:
             logger.debug(
-                f"Generating {2**num_decisions} paths for workflow with "
-                f"{num_decisions} decision points and {len(metadata.activities)} activities"
+                f"Generating {2**total_branch_points} paths for workflow with "
+                f"{num_decisions} decision points, {num_signals} signal points, "
+                f"and {len(metadata.activities)} activities"
             )
-            # Generate permutations for workflows with decisions
-            paths = self._generate_paths_with_decisions(
-                metadata.decision_points, metadata.activities, context
+            # Generate permutations for workflows with decisions and/or signals
+            paths = self._generate_paths_with_branches(
+                metadata.decision_points, metadata.signal_points, metadata.activities, context
             )
             logger.debug(
-                f"Generated {len(paths)} paths for workflow with {num_decisions} decisions"
+                f"Generated {len(paths)} paths for workflow with {num_decisions} decisions "
+                f"and {num_signals} signals"
             )
             return paths
 
-    def _create_linear_path(self, activities: list) -> GraphPath:
+    def _create_linear_path(self, activities: list[Activity]) -> GraphPath:
         """Create a single linear path from activity sequence.
 
         Helper method that constructs a GraphPath with all activities in order.
@@ -225,104 +235,116 @@ class PathPermutationGenerator:
 
         return path
 
-    def _generate_paths_with_decisions(
+    def _generate_paths_with_branches(
         self,
         decisions: list[DecisionPoint],
-        activities: list,
+        signals: list[SignalPoint],
+        activities: list[Activity],
         context: GraphBuildingContext,
     ) -> list[GraphPath]:
-        """Generate 2^n execution paths for workflows with decision points.
+        """Generate 2^n execution paths for workflows with decision and signal points.
 
         Uses itertools.product to efficiently generate all 2^n boolean combinations
-        for the given decision points. For each combination, creates a GraphPath
-        that records the decisions and activities in PROPER EXECUTION ORDER by
+        for the given decision and signal points. For each combination, creates a GraphPath
+        that records the decisions, signals, and activities in PROPER EXECUTION ORDER by
         merging and sorting them by source line number.
 
-        This method implements the Epic 3 path permutation algorithm using the
+        This method implements the Epic 3/4 path permutation algorithm using the
         efficient C-optimized itertools.product function, maintaining O(2^n)
         time complexity while avoiding manual recursion.
 
-        CRITICAL: Activities and decisions are interleaved based on their source
-        line numbers to generate correct branching decision-tree topology instead
-        of incorrect sequential linear topology.
+        CRITICAL: Activities, decisions, and signals are interleaved based on their source
+        line numbers to generate correct branching topology instead of incorrect sequential
+        linear topology.
 
         Args:
             decisions: List of DecisionPoint objects from workflow analysis.
+            signals: List of SignalPoint objects from workflow analysis.
             activities: List of Activity objects from workflow analysis.
             context: GraphBuildingContext for configuration (branch labels, etc.).
 
         Returns:
             List of GraphPath objects, one for each 2^n permutation. Each path
-            contains the activities and decisions for that specific execution path
+            contains the activities, decisions, and signals for that specific execution path
             in correct source code order.
 
         Example:
             >>> from temporalio_graphs._internal.graph_models import Activity
             >>> decisions = [
             ...     DecisionPoint("d0", "NeedConvert", 42, 42, "yes", "no"),
-            ...     DecisionPoint("d1", "HighValue", 55, 55, "yes", "no"),
+            ... ]
+            >>> signals = [
+            ...     SignalPoint(
+            ...         "WaitApproval", "lambda: approved", "timedelta(hours=24)", 55, "sig_0"
+            ...     ),
             ... ]
             >>> activities = [
             ...     Activity("Withdraw", 35),
-            ...     Activity("CurrencyConvert", 45),
             ...     Activity("Deposit", 60),
             ... ]
             >>> context = GraphBuildingContext()
             >>> gen = PathPermutationGenerator()
-            >>> paths = gen._generate_paths_with_decisions(decisions, activities, context)
+            >>> paths = gen._generate_paths_with_branches(decisions, signals, activities, context)
             >>> len(paths)
             4
-            >>> # Each path should have a unique decision combination
+            >>> # Each path should have a unique decision+signal combination
             >>> for path in paths:
-            ...     assert len(path.decisions) == 2
-            ...     assert all(isinstance(v, bool) for v in path.decisions.values())
+            ...     assert len(path.decisions) == 1
         """
         num_decisions = len(decisions)
+        num_signals = len(signals)
+        total_branches = num_decisions + num_signals
         paths: list[GraphPath] = []
 
-        # Merge activities and decisions with their positions
+        # Merge activities, decisions, and signals with their positions
         # Each element is a tuple: (node_type, node_object, line_number)
-        execution_order = []
+        execution_order: list[tuple[str, Activity | DecisionPoint | SignalPoint, int]] = []
         for i, activity in enumerate(activities):
-            # Handle both Activity objects and strings for backward compatibility
-            if isinstance(activity, str):
-                # Use index * 10 as a default line number for string activities
-                execution_order.append(('activity', activity, (i + 1) * 10))
-            else:
-                execution_order.append(('activity', activity, activity.line_num))
+            execution_order.append(('activity', activity, activity.line_num))
         for decision in decisions:
             execution_order.append(('decision', decision, decision.line_num))
+        for signal in signals:
+            execution_order.append(('signal', signal, signal.source_line))
 
         # Sort by line number to get execution order
         execution_order.sort(key=lambda x: x[2])
 
         # Generate all 2^n boolean combinations using itertools.product
-        for path_index, decision_values in enumerate(
-            product([False, True], repeat=num_decisions)
+        for path_index, branch_values in enumerate(
+            product([False, True], repeat=total_branches)
         ):
             # Create path ID in binary format for clarity
             # path_0b00, path_0b01, path_0b10, path_0b11, etc.
-            binary_str = "".join(str(int(v)) for v in decision_values)
+            binary_str = "".join(str(int(v)) for v in branch_values)
             path_id = f"path_0b{binary_str}"
 
             # Create new path for this permutation
             path = GraphPath(path_id=path_id)
 
-            # Build decision value lookup dictionary for this permutation
+            # Build decision and signal value lookup dictionaries for this permutation
             decision_value_map = {}
-            for decision, value in zip(decisions, decision_values):
-                decision_value_map[decision.id] = value
+            signal_value_map = {}
+
+            # Assign values to decisions first, then signals
+            branch_index = 0
+            for decision in decisions:
+                decision_value_map[decision.id] = branch_values[branch_index]
+                branch_index += 1
+            for signal in signals:
+                signal_value_map[signal.node_id] = branch_values[branch_index]
+                branch_index += 1
 
             # Track decisions encountered so far in this path (for control flow)
-            decisions_encountered = []
+            decisions_encountered: list[DecisionPoint] = []
 
             # Add nodes in correct interleaved order based on source line numbers
             # Only include activities that match the decision path (control flow aware)
             for node_type, node, line_num in execution_order:
                 if node_type == 'activity':
-                    # Handle both Activity objects and strings
-                    activity_name = node if isinstance(node, str) else node.name
-                    activity_line = line_num if isinstance(node, str) else node.line_num
+                    # node is Activity object
+                    assert isinstance(node, Activity)
+                    activity_name = node.name
+                    activity_line = node.line_num
 
                     # Check if this activity is conditional on any decision
                     should_include_activity = True
@@ -340,17 +362,32 @@ class PathPermutationGenerator:
                             if decision_value_map[decision.id]:
                                 should_include_activity = False
                                 break
-                        # If not in either branch, activity is unconditional relative to this decision
+                        # If not in either branch, activity is unconditional
+                        # relative to this decision
 
                     # Only add activity if it should execute in this path
                     if should_include_activity:
                         path.add_activity(activity_name)
 
                 elif node_type == 'decision':
+                    # node is DecisionPoint object
+                    assert isinstance(node, DecisionPoint)
                     value = decision_value_map[node.id]
                     path.add_decision(node.id, value, node.name)
                     # Track this decision for checking future activities
                     decisions_encountered.append(node)
+
+                elif node_type == 'signal':
+                    # node is SignalPoint object
+                    assert isinstance(node, SignalPoint)
+                    value = signal_value_map[node.node_id]
+                    # True = Signaled, False = Timeout
+                    outcome = (
+                        context.signal_success_label
+                        if value
+                        else context.signal_timeout_label
+                    )
+                    path.add_signal(node.name, outcome)
 
             paths.append(path)
 

@@ -1,0 +1,613 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <story-reference>
+    <story-key>4-3-implement-signal-node-rendering-in-mermaid</story-key>
+    <story-file>docs/sprint-artifacts/stories/4-3-implement-signal-node-rendering-in-mermaid.md</story-file>
+    <epic>Epic 4: Signal and Wait Condition Support</epic>
+    <epic-tech-spec>docs/sprint-artifacts/tech-spec-epic-4.md</epic-tech-spec>
+    <parent-epic-file>docs/sprint-artifacts/epics.md</parent-epic-file>
+  </story-reference>
+
+  <epic-context>
+    <epic-objective>
+      Epic 4 extends the library to support signal node visualization for workflows containing
+      wait conditions and asynchronous signals. This builds on Epic 2 (linear workflows) and
+      Epic 3 (decision nodes) by adding the third node type: signal nodes (hexagons).
+
+      Signal nodes enable visualization of workflows that wait for external events or conditions,
+      showing both successful signal receipt (Signaled path) and timeout scenarios (Timeout path).
+
+      By completing signal node support, the library achieves full node type coverage matching
+      .NET Temporalio.Graphs: START, END, ACTIVITY, DECISION, SIGNAL.
+    </epic-objective>
+
+    <dependencies>
+      <depends-on>
+        <story-key>4-1-implement-signal-point-detection-in-ast</story-key>
+        <reason>Provides SignalPoint metadata and SignalDetector for populating WorkflowMetadata.signal_points</reason>
+        <status>done</status>
+      </depends-on>
+      <depends-on>
+        <story-key>4-2-implement-wait-condition-helper-function</story-key>
+        <reason>Provides wait_condition() helper that users call in workflows to mark signal points</reason>
+        <status>done</status>
+      </depends-on>
+      <depends-on>
+        <story-key>3-4-implement-decision-node-rendering-in-mermaid</story-key>
+        <reason>Signal rendering follows EXACT pattern from decision rendering (diamond vs hexagon)</reason>
+        <status>done</status>
+      </depends-on>
+      <depends-on>
+        <story-key>2-5-implement-mermaid-renderer-with-format-compliance</story-key>
+        <reason>Base MermaidRenderer infrastructure for graph output</reason>
+        <status>done</status>
+      </depends-on>
+    </dependencies>
+
+    <enables>
+      <story-key>4-4-add-integration-test-with-signal-example</story-key>
+      <reason>Integration test validates end-to-end signal visualization</reason>
+    </enables>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+      <type>Technical Specification</type>
+      <relevance>Complete technical specification for Epic 4 signal support</relevance>
+      <key-sections>
+        - Lines 94-119: Rendering modules (MermaidRenderer, GraphNode.to_mermaid)
+        - Lines 186-194: GraphNode.to_mermaid() hexagon syntax for SIGNAL type
+        - Lines 309-351: PathPermutationGenerator signal integration
+        - Lines 122-174: SignalPoint and GraphPath.add_signal() data models
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/architecture.md</path>
+      <type>Architecture Documentation</type>
+      <relevance>Architecture patterns and constraints for signal rendering</relevance>
+      <key-sections>
+        - Lines 542-548: NodeType enum with SIGNAL value
+        - Lines 569: Hexagon rendering syntax
+        - Lines 616: WorkflowMetadata.signal_points field
+        - Lines 984-1010: Mermaid rendering patterns
+        - Lines 935-963: Path permutation logic
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/3-4-implement-decision-node-rendering-in-mermaid.md</path>
+      <type>Reference Story (Pattern Source)</type>
+      <relevance>Decision rendering pattern to mirror for signal rendering (diamond vs hexagon)</relevance>
+      <key-sections>
+        - Lines 54-59: Decision node rendering in MermaidRenderer
+        - Lines 61-67: Branch label rendering (yes/no vs Signaled/Timeout)
+        - Lines 73-75: Path branching logic (2 branches per decision/signal)
+        - Lines 99-105: Hexagon syntax task (parallels decision diamond syntax)
+        - Lines 239-332: Completion notes showing implementation approach
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>Project Documentation</type>
+      <relevance>Project overview, architecture decisions, and key innovations</relevance>
+      <key-sections>
+        - Lines 1-17: Project overview and key innovation (static analysis approach)
+        - Lines 56-82: Architecture components and design patterns
+        - Lines 84-112: Main classes and workflow helpers
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <type>Configuration Data Model</type>
+      <description>GraphBuildingContext already has signal_success_label and signal_timeout_label fields (lines 88-89)</description>
+      <key-elements>
+        - signal_success_label: str = "Signaled" (line 88)
+        - signal_timeout_label: str = "Timeout" (line 89)
+        - decision_true_label: str = "yes" (line 86) - pattern to follow
+        - decision_false_label: str = "no" (line 87) - pattern to follow
+        - frozen=True dataclass (immutable)
+      </key-elements>
+      <usage>Configuration passed to MermaidRenderer for edge labeling</usage>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>Core Data Models</type>
+      <description>NodeType enum, GraphNode, GraphPath, SignalPoint already exist</description>
+      <key-elements>
+        - NodeType.SIGNAL = "signal" (line 31) - already defined
+        - GraphNode.to_mermaid() (lines 82-110) - needs SIGNAL case added
+        - SignalPoint dataclass (lines 288-324) - complete with all fields
+        - WorkflowMetadata.signal_points: list[SignalPoint] (line 387)
+        - WorkflowMetadata.total_branch_points property (lines 419-425)
+      </key-elements>
+      <usage>Story 4-3 extends GraphNode.to_mermaid() and GraphPath for signal rendering</usage>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/renderer.py</file>
+      <type>Mermaid Rendering Engine</type>
+      <description>MermaidRenderer with decision rendering pattern to mirror for signals</description>
+      <key-elements>
+        - Line 9: Imports GraphNode, NodeType from graph_models
+        - Lines 14-37: MermaidRenderer class with stateless rendering
+        - Lines 39-118: to_mermaid() method (decision rendering lines 124-154)
+        - Lines 124-133: Decision ID to name mapping (pattern for signals)
+        - Decision edge labels: context.decision_true_label/decision_false_label
+      </key-elements>
+      <usage>Extend to_mermaid() to handle NodeType.SIGNAL with hexagon syntax and edge labels</usage>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/generator.py</file>
+      <type>Path Permutation Generator</type>
+      <description>PathPermutationGenerator for generating 2^n paths from n branch points</description>
+      <key-elements>
+        - Line 12: itertools.product import for permutations
+        - Lines 22-80: PathPermutationGenerator class
+        - Lines 82-150: generate_paths() method with decision handling
+        - Lines 14: DecisionPoint import (pattern for SignalPoint)
+        - Decision permutation logic using itertools.product([True, False], repeat=n)
+      </key-elements>
+      <usage>Extend to combine decision_points + signal_points into unified branch_points list</usage>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/helpers.py</file>
+      <type>Workflow Helper Functions</type>
+      <description>wait_condition() helper from Story 4-2 provides signal points for analysis</description>
+      <key-elements>
+        - Lines 83-164: wait_condition() async function (complete implementation)
+        - Lines 100-109: Args: condition_check, timeout, name (name is AST-extractable)
+        - Lines 155-163: Runtime behavior (wraps workflow.wait_condition, returns bool)
+        - Lines 22-80: to_decision() pattern (mirror for signal implementation)
+      </key-elements>
+      <usage>AST detector finds wait_condition() calls to populate signal_points metadata</usage>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/detector.py</file>
+      <type>AST Decision/Signal Detector</type>
+      <description>DecisionDetector with signal detection already implemented (Story 4-1)</description>
+      <key-elements>
+        - Line 29: SignalPoint import from graph_models
+        - Lines 35-100: DecisionDetector class structure (pattern for signals)
+        - Signal detection likely in separate SignalDetector or combined in DecisionDetector
+      </key-elements>
+      <usage>SignalDetector populates WorkflowMetadata.signal_points for path generation</usage>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <type>Pattern Consistency</type>
+      <description>Signal rendering MUST follow EXACT pattern from decision rendering (Story 3.4)</description>
+      <rationale>
+        Users expect consistent visualization: diamonds for decisions, hexagons for signals.
+        Decision rendering established proven patterns for branch labels, deduplication, permutation.
+      </rationale>
+      <enforcement>
+        - Hexagon syntax uses double braces {{NodeName}} (decision uses single braces {NodeName})
+        - Signal edges labeled with context.signal_success_label/signal_timeout_label
+        - Signal permutations use same itertools.product logic as decisions
+        - Deduplication reuses existing node/edge deduplication infrastructure
+      </enforcement>
+    </constraint>
+
+    <constraint>
+      <type>Mermaid Syntax Compliance</type>
+      <description>MUST generate valid Mermaid hexagon syntax with double braces</description>
+      <rationale>
+        Mermaid specification requires {{NodeName}} for hexagon shapes (not single braces).
+        Generated output must validate in Mermaid Live Editor.
+      </rationale>
+      <enforcement>
+        - GraphNode.to_mermaid() for NodeType.SIGNAL: f"{node_id}{{{{{display_name}}}}}"
+        - Test in Mermaid Live Editor (https://mermaid.live) for validation
+        - Unit tests verify exact syntax match
+      </enforcement>
+    </constraint>
+
+    <constraint>
+      <type>Path Permutation Integration</type>
+      <description>Signals treated identically to decisions in path generation (both create 2-branch points)</description>
+      <rationale>
+        From graph perspective, signals are equivalent to decisions (both create 2 outcomes).
+        Workflow with d decisions + s signals generates 2^(d+s) paths.
+      </rationale>
+      <enforcement>
+        - PathPermutationGenerator combines metadata.decision_points + metadata.signal_points
+        - Path explosion limit applies to total_branch_points (decisions + signals combined)
+        - Error message: "Too many branch points (X decisions + Y signals = Z total)"
+      </enforcement>
+    </constraint>
+
+    <constraint>
+      <type>Type Safety</type>
+      <description>MUST pass mypy --strict with complete type hints</description>
+      <rationale>
+        Project enforces strict type checking. All new fields/methods need complete type annotations.
+      </rationale>
+      <enforcement>
+        - GraphBuildingContext signal label fields already typed (lines 88-89 in context.py)
+        - GraphPath.add_signal() needs complete parameter/return type annotations
+        - All signal rendering code must have type hints
+      </enforcement>
+    </constraint>
+
+    <constraint>
+      <type>Backward Compatibility</type>
+      <description>Epic 4 changes MUST NOT break existing Epic 2-3 functionality</description>
+      <rationale>
+        Existing workflows without signals should continue to work identically.
+        Regression tests ensure no breaking changes.
+      </rationale>
+      <enforcement>
+        - Re-run Epic 2 integration tests (linear workflows) → should pass unchanged
+        - Re-run Epic 3 integration tests (MoneyTransfer) → should produce identical output
+        - Path generation for 0 signals should behave exactly as before
+      </enforcement>
+    </constraint>
+
+    <constraint>
+      <type>Performance</type>
+      <description>Path generation with signals MUST complete in less than 1 second for 32 paths (5 branch points)</description>
+      <rationale>
+        NFR-PERF-1 requires fast graph generation. Signal permutations use same itertools.product
+        approach as decisions (no performance regression expected).
+      </rationale>
+      <enforcement>
+        - Benchmark test: 3 decisions + 2 signals = 32 paths in less than 1 second
+        - Benchmark test: 5 signals + 0 decisions = 32 paths in less than 1 second
+        - No new algorithms or data structures (reuse decision permutation logic)
+      </enforcement>
+    </constraint>
+  </development-constraints>
+
+  <dependencies-external>
+    <dependency>
+      <name>temporalio</name>
+      <version>&gt;=1.7.1</version>
+      <usage>workflow.wait_condition() wrapped by helpers.wait_condition()</usage>
+      <notes>Already declared in pyproject.toml from Epic 2, no new dependencies needed</notes>
+    </dependency>
+
+    <dependency>
+      <name>itertools</name>
+      <version>built-in</version>
+      <usage>itertools.product for signal+decision permutations</usage>
+      <notes>Python standard library, already used in Epic 3 for decision permutations</notes>
+    </dependency>
+  </dependencies-external>
+
+  <dependencies-internal>
+    <module>
+      <name>temporalio_graphs._internal.graph_models</name>
+      <components>
+        - NodeType enum (SIGNAL type)
+        - GraphNode class (to_mermaid method)
+        - SignalPoint dataclass (metadata from Story 4-1)
+        - WorkflowMetadata (signal_points field)
+      </components>
+      <usage>Core data models for signal representation</usage>
+    </module>
+
+    <module>
+      <name>temporalio_graphs.context</name>
+      <components>
+        - GraphBuildingContext.signal_success_label
+        - GraphBuildingContext.signal_timeout_label
+      </components>
+      <usage>Configuration for signal edge labels</usage>
+    </module>
+
+    <module>
+      <name>temporalio_graphs.generator</name>
+      <components>
+        - PathPermutationGenerator.generate_paths()
+      </components>
+      <usage>Extend to combine decisions + signals for permutations</usage>
+    </module>
+
+    <module>
+      <name>temporalio_graphs.renderer</name>
+      <components>
+        - MermaidRenderer.to_mermaid()
+      </components>
+      <usage>Extend to render NodeType.SIGNAL as hexagons with labels</usage>
+    </module>
+  </dependencies-internal>
+
+  <testing-context>
+    <test-framework>pytest</test-framework>
+    <coverage-target>80%</coverage-target>
+    <coverage-actual-renderer>94%</coverage-actual-renderer>
+    <coverage-actual-overall>95%</coverage-actual-overall>
+
+    <test-files>
+      <test-file>
+        <path>tests/test_renderer.py</path>
+        <purpose>Unit tests for signal node hexagon rendering</purpose>
+        <existing-patterns>
+          - Lines 749-800: test_single_decision_renders_diamond (pattern for signals)
+          - Lines 814-817: test_decision_with_custom_labels (pattern for signal labels)
+          - Lines 856-883: test_decision_node_deduplication (pattern for signal dedup)
+        </existing-patterns>
+        <new-tests-needed>
+          - test_signal_node_hexagon_syntax() - validates {{NodeName}} output
+          - test_signal_edges_labeled_correctly() - checks "Signaled"/"Timeout"
+          - test_signal_custom_labels() - validates custom label configuration
+          - test_signal_node_deduplication() - ensures no duplicate signal nodes
+          - test_mermaid_output_valid() - validates in Mermaid Live Editor
+        </new-tests-needed>
+      </test-file>
+
+      <test-file>
+        <path>tests/test_generator.py</path>
+        <purpose>Unit tests for signal path permutations</purpose>
+        <existing-patterns>
+          - Decision permutation tests showing 2^n paths pattern
+          - Path explosion limit tests showing error handling
+        </existing-patterns>
+        <new-tests-needed>
+          - test_single_signal_generates_two_paths()
+          - test_decision_and_signal_generate_four_paths()
+          - test_two_signals_generate_four_paths()
+          - test_path_explosion_limit_includes_signals()
+          - test_signal_outcomes_stored_in_path()
+          - test_all_permutations_generated()
+        </new-tests-needed>
+      </test-file>
+    </test-files>
+
+    <test-standards>
+      <standard>All tests must pass with pytest -v (100% pass rate)</standard>
+      <standard>Code coverage must exceed 80% for new signal rendering code</standard>
+      <standard>mypy --strict must pass with 0 errors</standard>
+      <standard>ruff check must pass with 0 errors (linting and formatting)</standard>
+      <standard>Epic 2-3 regression tests must pass (backward compatibility)</standard>
+    </test-standards>
+
+    <testing-approach>
+      Follow Story 3.4 (decision rendering) testing pattern:
+      - Unit tests for hexagon syntax generation
+      - Unit tests for edge label rendering
+      - Unit tests for permutation logic
+      - Integration tests for full pipeline
+      - Regression tests for Epic 2-3 workflows
+      - Manual validation in Mermaid Live Editor
+    </testing-approach>
+  </testing-context>
+
+  <implementation-notes>
+    <key-design-decisions>
+      <decision>
+        <title>Signal = Decision Pattern</title>
+        <description>
+          Signals treated identically to decisions in permutation logic (both create 2-branch points).
+          This simplifies implementation and ensures consistency.
+        </description>
+        <rationale>
+          From graph perspective, signal has 2 outcomes (Signaled/Timeout) just like decision (True/False).
+          Reusing decision permutation logic reduces code duplication and testing burden.
+        </rationale>
+      </decision>
+
+      <decision>
+        <title>Hexagon Syntax with Double Braces</title>
+        <description>
+          Signal nodes use {{NodeName}} syntax per Mermaid specification for hexagon shapes.
+        </description>
+        <rationale>
+          Mermaid standard syntax. Single braces {NodeName} create diamonds (decisions),
+          double braces {{NodeName}} create hexagons (signals).
+        </rationale>
+      </decision>
+
+      <decision>
+        <title>Configuration via Context</title>
+        <description>
+          Signal labels configured via GraphBuildingContext.signal_success_label and signal_timeout_label.
+        </description>
+        <rationale>
+          Follows established pattern from decision labels (decision_true_label/decision_false_label).
+          Immutable frozen dataclass ensures configuration consistency.
+        </rationale>
+      </decision>
+
+      <decision>
+        <title>Deduplication Reuse</title>
+        <description>
+          Signal nodes use existing deduplication logic (same as activities/decisions).
+        </description>
+        <rationale>
+          No special cases needed. Signals are just another node type with deterministic IDs.
+          Reusing existing infrastructure reduces complexity and bug risk.
+        </rationale>
+      </decision>
+    </key-design-decisions>
+
+    <implementation-guidance>
+      <step>
+        <order>1</order>
+        <task>Extend GraphPath with signal support (if not already done in Story 4-1/4-2)</task>
+        <file>src/temporalio_graphs/_internal/graph_models.py</file>
+        <details>
+          Add GraphPath.signal_outcomes: dict[str, bool] field
+          Implement GraphPath.add_signal(signal_id: str, signaled: bool, name: str) -> str method
+          Method stores outcome in signal_outcomes dict and adds signal node to path steps
+        </details>
+      </step>
+
+      <step>
+        <order>2</order>
+        <task>Implement hexagon rendering in GraphNode.to_mermaid()</task>
+        <file>src/temporalio_graphs/_internal/graph_models.py</file>
+        <details>
+          Add NodeType.SIGNAL case to match statement (lines 102-110)
+          Return f"{self.node_id}{{{{{self.display_name}}}}}" for SIGNAL type
+          Double braces create hexagon shape per Mermaid specification
+        </details>
+      </step>
+
+      <step>
+        <order>3</order>
+        <task>Extend PathPermutationGenerator for signals</task>
+        <file>src/temporalio_graphs/generator.py</file>
+        <details>
+          Combine metadata.decision_points + metadata.signal_points into branch_points list
+          Calculate total_paths = 2 ** len(branch_points)
+          Check total_paths against context.max_paths limit
+          Use itertools.product([True, False], repeat=len(branch_points))
+          Build paths with both decision outcomes and signal outcomes
+          Call path.add_signal() for each signal branch point
+        </details>
+      </step>
+
+      <step>
+        <order>4</order>
+        <task>Add signal edge labels to MermaidRenderer</task>
+        <file>src/temporalio_graphs/renderer.py</file>
+        <details>
+          Locate edge rendering logic (where decision edges are labeled)
+          For signal nodes, use context.signal_success_label for True branch
+          For signal nodes, use context.signal_timeout_label for False branch
+          Ensure edge label syntax: -- label -->
+          Verify custom labels from context are used if provided
+        </details>
+      </step>
+
+      <step>
+        <order>5</order>
+        <task>Create comprehensive unit tests</task>
+        <file>tests/test_renderer.py, tests/test_generator.py</file>
+        <details>
+          Follow Story 3.4 testing patterns (7 renderer tests, 6 generator tests)
+          Test hexagon syntax, edge labels, permutations, deduplication
+          Verify coverage exceeds 80% target
+        </details>
+      </step>
+    </implementation-guidance>
+
+    <code-examples>
+      <example>
+        <title>GraphNode.to_mermaid() Hexagon Syntax</title>
+        <file>src/temporalio_graphs/_internal/graph_models.py</file>
+        <code>
+def to_mermaid(self) -> str:
+    match self.node_type:
+        case NodeType.START | NodeType.END:
+            return f"{self.node_id}(({self.display_name}))"
+        case NodeType.ACTIVITY:
+            return f"{self.node_id}[{self.display_name}]"
+        case NodeType.DECISION:
+            return f"{self.node_id}{{{self.display_name}}}"
+        case NodeType.SIGNAL:
+            # Double braces create hexagon: {{NodeName}}
+            return f"{self.node_id}{{{{{self.display_name}}}}}"
+        </code>
+      </example>
+
+      <example>
+        <title>PathPermutationGenerator Signal Integration</title>
+        <file>src/temporalio_graphs/generator.py</file>
+        <code>
+# Combine decision points and signal points
+branch_points = metadata.decision_points + metadata.signal_points
+num_branches = len(branch_points)
+
+# Check explosion limit
+total_paths = 2 ** num_branches
+if total_paths > context.max_paths:
+    raise GraphGenerationError(
+        f"Too many branch points ({num_branches}) would generate "
+        f"{total_paths} paths (limit: {context.max_paths})\n"
+        f"Branch points: {len(metadata.decision_points)} decisions + "
+        f"{len(metadata.signal_points)} signals"
+    )
+
+# Generate permutations using itertools.product
+from itertools import product
+paths = []
+for choices in product([True, False], repeat=num_branches):
+    path = self._build_path_with_branches(
+        metadata, branch_points, choices, context
+    )
+    paths.append(path)
+        </code>
+      </example>
+
+      <example>
+        <title>Signal Edge Labels in Renderer</title>
+        <file>src/temporalio_graphs/renderer.py</file>
+        <code>
+# For signal nodes, use context signal labels
+if step.node_type == 'signal':
+    signaled = path.signal_outcomes.get(step.signal_id, True)
+    if signaled:
+        label = context.signal_success_label  # "Signaled" (default)
+    else:
+        label = context.signal_timeout_label  # "Timeout" (default)
+
+    edge_str = f"{from_node} -- {label} --> {to_node}"
+        </code>
+      </example>
+    </code-examples>
+  </implementation-notes>
+
+  <validation-checklist>
+    <item checked="false">GraphBuildingContext has signal_success_label and signal_timeout_label fields (already exists)</item>
+    <item checked="false">GraphPath.add_signal() method implemented and tested</item>
+    <item checked="false">PathPermutationGenerator combines decisions + signals for permutations</item>
+    <item checked="false">2^(d+s) paths generated correctly for d decisions + s signals</item>
+    <item checked="false">MermaidRenderer renders signal nodes as hexagons with double braces</item>
+    <item checked="false">Signal edges labeled "Signaled" / "Timeout" (or custom labels)</item>
+    <item checked="false">All 8 acceptance criteria validated with passing tests</item>
+    <item checked="false">Test coverage exceeds 80% for signal rendering code</item>
+    <item checked="false">mypy --strict passes (0 type errors)</item>
+    <item checked="false">ruff check passes (0 lint errors)</item>
+    <item checked="false">Epic 2-3 regression tests pass (no breaking changes)</item>
+    <item checked="false">Generated Mermaid validates in Mermaid Live Editor</item>
+    <item checked="false">Performance: less than 1s for 32 paths (5 branch points)</item>
+  </validation-checklist>
+
+  <warnings-and-gaps>
+    <warning>
+      <severity>medium</severity>
+      <description>
+        Configuration fields (signal_success_label, signal_timeout_label) already exist in
+        GraphBuildingContext (lines 88-89). Verify no additional configuration changes needed.
+      </description>
+    </warning>
+
+    <warning>
+      <severity>low</severity>
+      <description>
+        SignalPoint dataclass exists from Story 4-1 with all required fields. Verify GraphPath
+        has signal_outcomes field and add_signal() method, or implement if missing.
+      </description>
+    </warning>
+
+    <warning>
+      <severity>low</severity>
+      <description>
+        Path explosion limit (max_paths) should include both decisions and signals in error message.
+        Ensure error message format matches tech spec example (line 334-338).
+      </description>
+    </warning>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step>Story validation: Run story-context-validator to check completeness</step>
+    <step>Implementation: Developer executes tasks per story markdown</step>
+    <step>Testing: Comprehensive unit and integration tests</step>
+    <step>Code review: Senior developer review via code-review workflow</step>
+    <step>Integration test: Story 4-4 validates end-to-end signal visualization</step>
+  </next-steps>
+</story-context>
