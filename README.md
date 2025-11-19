@@ -47,6 +47,7 @@ Unlike DAG-based workflow engines, Temporal workflows don't provide complete vis
 - **Complete Path Visualization**: Generates 2^n paths for n decision points
 - **Decision Node Support**: Mark decision points with `to_decision()` helper
 - **Signal Node Support**: Mark wait conditions with `wait_condition()` helper
+- **Cross-Workflow Visualization**: Analyze parent and child workflows with multiple expansion modes
 - **Mermaid Output**: Industry-standard flowchart LR syntax
 - **Path List Format**: Text-based alternative for CI/CD integration
 - **Validation Warnings**: Detects unreachable activities and path explosion
@@ -339,6 +340,8 @@ All configuration options are provided via the `GraphBuildingContext` dataclass.
 | `graph_output_file` | Path \| None | `None` | Write output to file instead of returning string |
 | `output_format` | str | `"full"` | Output mode: "mermaid", "paths", or "full" |
 | `include_path_list` | bool | `True` | Include text path list in output |
+| `child_workflow_expansion` | str | `"reference"` | Child workflow rendering: "reference", "inline", or "subgraph" (Epic 6) |
+| `max_expansion_depth` | int | `2` | Maximum recursion depth for multi-workflow analysis (Epic 6) |
 
 ### Configuration Patterns
 
@@ -622,6 +625,57 @@ class LoanApprovalWorkflow:
 
 ---
 
+### 5. Parent-Child Workflow (Advanced)
+
+**Pattern**: Multi-workflow visualization with parent-child relationships
+**Path Count**: Varies by expansion mode (reference: 2, inline: 4, subgraph: 2)
+**Use Case**: Workflow composition, microservices orchestration, complex distributed systems
+
+```bash
+python examples/parent_child_workflow/run.py
+```
+
+This demonstrates cross-workflow visualization with three expansion modes for analyzing parent workflows that call child workflows:
+
+```python
+from temporalio_graphs import analyze_workflow_graph, GraphBuildingContext
+from pathlib import Path
+
+# Mode 1: Reference (default) - child as atomic node
+context = GraphBuildingContext(child_workflow_expansion="reference")
+result = analyze_workflow_graph("parent_workflow.py", context=context)
+# Child appears as [[ChildWorkflow]] node
+
+# Mode 2: Inline - complete end-to-end paths
+context = GraphBuildingContext(child_workflow_expansion="inline")
+result = analyze_workflow_graph("parent_workflow.py", context=context)
+# Paths span both parent and child: 2 parent × 2 child = 4 total paths
+
+# Mode 3: Subgraph - structural visualization
+context = GraphBuildingContext(child_workflow_expansion="subgraph")
+result = analyze_workflow_graph("parent_workflow.py", context=context)
+# Separate subgraph blocks with clear workflow boundaries
+```
+
+**Key Features**:
+- **Reference mode**: Treat child workflows as atomic operations (prevents path explosion)
+- **Inline mode**: Generate complete end-to-end execution paths across workflow boundaries
+- **Subgraph mode**: Show workflow composition structure with Mermaid subgraphs
+- **Automatic child workflow discovery**: Detects `execute_child_workflow()` calls via AST
+- **Path explosion prevention**: Reference mode caps at parent paths only
+
+**Expansion Mode Comparison**:
+
+| Mode | Child Rendering | Path Count | Use Case |
+|------|----------------|------------|----------|
+| Reference (default) | `[[ChildWorkflow]]` node | Parent only (2) | Overview, documentation |
+| Inline | Expanded inline | Parent × Child (4) | Complete flow analysis |
+| Subgraph | Separate subgraph | Parent + Child (2+2) | Architecture diagrams |
+
+**Learn More**: See [`examples/parent_child_workflow/`](examples/parent_child_workflow/) for complete code and all three expansion modes.
+
+---
+
 ### Example Structure
 
 Each example follows a consistent structure:
@@ -871,6 +925,7 @@ temporalio-graphs is a Python port of [Temporalio.Graphs (.NET)](https://github.
 | Path Permutations (2^n) | ✅ Execution-based | ✅ Analysis-based | ✅ **Equivalent** |
 | Mermaid Output | ✅ Flowchart LR | ✅ Flowchart LR | ✅ **Compatible** |
 | Signal Support | ✅ GraphBuilder context | ✅ `wait_condition()` helper | ✅ **Equivalent** |
+| Cross-Workflow Visualization | ❌ Not available | ✅ `analyze_workflow_graph()` | ✅ **New Feature** |
 | Configuration Options | ✅ `GraphBuildingContext` | ✅ `GraphBuildingContext` | ✅ **Same API** |
 | Validation Warnings | ❌ Not available | ✅ Built-in | ✅ **Enhanced** |
 | Error Handling | ⚠️ Basic | ✅ Comprehensive | ✅ **Enhanced** |
@@ -977,7 +1032,8 @@ result = analyze_workflow("workflow.py", context)
 
 See [docs/api-reference.md](docs/api-reference.md) for complete API documentation including:
 
-- `analyze_workflow()` - Main entry point
+- `analyze_workflow()` - Main entry point (single workflow analysis)
+- `analyze_workflow_graph()` - Multi-workflow analysis entry point (parent + child workflows, Epic 6)
 - `GraphBuildingContext` - Configuration dataclass
 - `to_decision()` - Decision node helper
 - `wait_condition()` - Signal node helper
