@@ -13,8 +13,11 @@ from itertools import product
 
 from temporalio_graphs._internal.graph_models import (
     Activity,
+    ChildWorkflowCall,
     DecisionPoint,
+    MultiWorkflowPath,
     SignalPoint,
+    WorkflowCallGraph,
     WorkflowMetadata,
 )
 from temporalio_graphs.context import GraphBuildingContext
@@ -195,21 +198,27 @@ class PathPermutationGenerator:
         # Log path generation start
         if total_branch_points == 0:
             logger.debug(
-                f"Generating paths for linear workflow with {len(metadata.activities)} activities"
+                f"Generating paths for linear workflow with {len(metadata.activities)} activities "
+                f"and {len(metadata.child_workflow_calls)} child workflows"
             )
             # Create single linear path for linear workflows
-            path = self._create_linear_path(metadata.activities)
+            path = self._create_linear_path(metadata.activities, metadata.child_workflow_calls)
             logger.debug(f"Created path with ID: {path.path_id}")
             return [path]
         else:
             logger.debug(
                 f"Generating {2**total_branch_points} paths for workflow with "
                 f"{num_decisions} decision points, {num_signals} signal points, "
-                f"and {len(metadata.activities)} activities"
+                f"{len(metadata.activities)} activities, and "
+                f"{len(metadata.child_workflow_calls)} child workflows"
             )
             # Generate permutations for workflows with decisions and/or signals
             paths = self._generate_paths_with_branches(
-                metadata.decision_points, metadata.signal_points, metadata.activities, context
+                metadata.decision_points,
+                metadata.signal_points,
+                metadata.activities,
+                metadata.child_workflow_calls,
+                context,
             )
             logger.debug(
                 f"Generated {len(paths)} paths for workflow with {num_decisions} decisions "
@@ -217,30 +226,57 @@ class PathPermutationGenerator:
             )
             return paths
 
-    def _create_linear_path(self, activities: list[Activity]) -> GraphPath:
-        """Create a single linear path from activity sequence.
+    def _create_linear_path(
+        self, activities: list[Activity], child_workflows: list[ChildWorkflowCall]
+    ) -> GraphPath:
+        """Create a single linear path from activity and child workflow sequence.
 
-        Helper method that constructs a GraphPath with all activities in order.
-        This implements the Epic 2 algorithm: create path with path_id="path_0",
-        add each activity sequentially, return the path.
+        Helper method that constructs a GraphPath with all activities and child workflows
+        in execution order based on source line numbers. This implements the Epic 2 algorithm
+        extended for Epic 6: create path with path_id="path_0", add each activity and child
+        workflow sequentially in source code order, return the path.
 
         Args:
-            activities: List of Activity objects or strings in order from workflow analysis.
+            activities: List of Activity objects in order from workflow analysis.
                 May be empty for workflows with no activities.
+            child_workflows: List of ChildWorkflowCall objects in order from workflow analysis.
+                May be empty for workflows with no child workflow calls.
 
         Returns:
-            GraphPath with path_id="path_0" and all activities added in order
-            via add_activity() calls.
+            GraphPath with path_id="path_0" and all activities/child workflows added in
+            source line order via add_activity() and add_child_workflow() calls.
         """
         path = GraphPath(path_id="path_0")
 
-        # Add all activities in sequence
+        # Merge activities and child workflows, then sort by line number
+        execution_order: list[tuple[str, Activity | ChildWorkflowCall | str, int]] = []
         for activity in activities:
             # Handle both Activity objects and strings for backward compatibility
             if isinstance(activity, str):
-                path.add_activity(activity)
+                # Strings don't have line numbers, so use index as fallback for ordering
+                execution_order.append(("activity", activity, activities.index(activity)))
             else:
-                path.add_activity(activity.name)
+                execution_order.append(("activity", activity, activity.line_num))
+        for child_workflow in child_workflows:
+            execution_order.append(
+                ("child_workflow", child_workflow, child_workflow.call_site_line)
+            )
+
+        # Sort by line number to get execution order
+        execution_order.sort(key=lambda x: x[2])
+
+        # Add all nodes in sequence
+        for node_type, node, _ in execution_order:
+            if node_type == "activity":
+                # Handle both Activity objects and strings for backward compatibility
+                if isinstance(node, str):
+                    path.add_activity(node)
+                else:
+                    assert isinstance(node, Activity)
+                    path.add_activity(node.name)
+            elif node_type == "child_workflow":
+                assert isinstance(node, ChildWorkflowCall)
+                path.add_child_workflow(node.workflow_name, node.call_site_line)
 
         return path
 
@@ -249,33 +285,35 @@ class PathPermutationGenerator:
         decisions: list[DecisionPoint],
         signals: list[SignalPoint],
         activities: list[Activity],
+        child_workflows: list[ChildWorkflowCall],
         context: GraphBuildingContext,
     ) -> list[GraphPath]:
         """Generate 2^n execution paths for workflows with decision and signal points.
 
         Uses itertools.product to efficiently generate all 2^n boolean combinations
         for the given decision and signal points. For each combination, creates a GraphPath
-        that records the decisions, signals, and activities in PROPER EXECUTION ORDER by
-        merging and sorting them by source line number.
+        that records the decisions, signals, activities, and child workflows in PROPER
+        EXECUTION ORDER by merging and sorting them by source line number.
 
-        This method implements the Epic 3/4 path permutation algorithm using the
+        This method implements the Epic 3/4/6 path permutation algorithm using the
         efficient C-optimized itertools.product function, maintaining O(2^n)
         time complexity while avoiding manual recursion.
 
-        CRITICAL: Activities, decisions, and signals are interleaved based on their source
-        line numbers to generate correct branching topology instead of incorrect sequential
-        linear topology.
+        CRITICAL: Activities, decisions, signals, and child workflows are interleaved
+        based on their source line numbers to generate correct branching topology instead
+        of incorrect sequential linear topology.
 
         Args:
             decisions: List of DecisionPoint objects from workflow analysis.
             signals: List of SignalPoint objects from workflow analysis.
             activities: List of Activity objects from workflow analysis.
+            child_workflows: List of ChildWorkflowCall objects from workflow analysis.
             context: GraphBuildingContext for configuration (branch labels, etc.).
 
         Returns:
             List of GraphPath objects, one for each 2^n permutation. Each path
-            contains the activities, decisions, and signals for that specific execution path
-            in correct source code order.
+            contains the activities, decisions, signals, and child workflows for that
+            specific execution path in correct source code order.
 
         Example:
             >>> from temporalio_graphs._internal.graph_models import Activity
@@ -305,23 +343,27 @@ class PathPermutationGenerator:
         total_branches = num_decisions + num_signals
         paths: list[GraphPath] = []
 
-        # Merge activities, decisions, and signals with their positions
+        # Merge activities, decisions, signals, and child workflows with their positions
         # Each element is a tuple: (node_type, node_object, line_number)
-        execution_order: list[tuple[str, Activity | DecisionPoint | SignalPoint, int]] = []
+        execution_order: list[
+            tuple[str, Activity | DecisionPoint | SignalPoint | ChildWorkflowCall, int]
+        ] = []
         for i, activity in enumerate(activities):
-            execution_order.append(('activity', activity, activity.line_num))
+            execution_order.append(("activity", activity, activity.line_num))
         for decision in decisions:
-            execution_order.append(('decision', decision, decision.line_num))
+            execution_order.append(("decision", decision, decision.line_num))
         for signal in signals:
-            execution_order.append(('signal', signal, signal.source_line))
+            execution_order.append(("signal", signal, signal.source_line))
+        for child_workflow in child_workflows:
+            execution_order.append(
+                ("child_workflow", child_workflow, child_workflow.call_site_line)
+            )
 
         # Sort by line number to get execution order
         execution_order.sort(key=lambda x: x[2])
 
         # Generate all 2^n boolean combinations using itertools.product
-        for path_index, branch_values in enumerate(
-            product([False, True], repeat=total_branches)
-        ):
+        for path_index, branch_values in enumerate(product([False, True], repeat=total_branches)):
             # Create path ID in binary format for clarity
             # path_0b00, path_0b01, path_0b10, path_0b11, etc.
             binary_str = "".join(str(int(v)) for v in branch_values)
@@ -350,7 +392,7 @@ class PathPermutationGenerator:
             # Add nodes in correct interleaved order based on source line numbers
             # Only include activities that match the decision/signal path (control flow aware)
             for node_type, node, line_num in execution_order:
-                if node_type == 'activity':
+                if node_type == "activity":
                     # node is Activity object
                     assert isinstance(node, Activity)
                     activity_name = node.name
@@ -396,7 +438,7 @@ class PathPermutationGenerator:
                     if should_include_activity:
                         path.add_activity(activity_name)
 
-                elif node_type == 'decision':
+                elif node_type == "decision":
                     # node is DecisionPoint object
                     assert isinstance(node, DecisionPoint)
                     value = decision_value_map[node.id]
@@ -404,20 +446,357 @@ class PathPermutationGenerator:
                     # Track this decision for checking future activities
                     decisions_encountered.append(node)
 
-                elif node_type == 'signal':
+                elif node_type == "signal":
                     # node is SignalPoint object
                     assert isinstance(node, SignalPoint)
                     value = signal_value_map[node.node_id]
                     # True = Signaled, False = Timeout
                     outcome = (
-                        context.signal_success_label
-                        if value
-                        else context.signal_timeout_label
+                        context.signal_success_label if value else context.signal_timeout_label
                     )
                     path.add_signal(node.name, outcome)
                     # Track this signal for checking future activities
                     signals_encountered.append(node)
 
+                elif node_type == "child_workflow":
+                    # node is ChildWorkflowCall object
+                    assert isinstance(node, ChildWorkflowCall)
+                    # Child workflows are treated like activities (linear, no branching)
+                    # Add them unconditionally unless they're in a conditional branch
+                    child_workflow_line = node.call_site_line
+                    should_include_child_workflow = True
+
+                    # Check if this child workflow is conditional on any decision
+                    for decision in decisions_encountered:
+                        if child_workflow_line in decision.true_branch_activities:
+                            if not decision_value_map[decision.id]:
+                                should_include_child_workflow = False
+                                break
+                        elif child_workflow_line in decision.false_branch_activities:
+                            if decision_value_map[decision.id]:
+                                should_include_child_workflow = False
+                                break
+
+                    # Check if this child workflow is conditional on any signal
+                    for signal in signals_encountered:
+                        if child_workflow_line in signal.signaled_branch_activities:
+                            if not signal_value_map[signal.node_id]:
+                                should_include_child_workflow = False
+                                break
+                        elif child_workflow_line in signal.timeout_branch_activities:
+                            if signal_value_map[signal.node_id]:
+                                should_include_child_workflow = False
+                                break
+
+                    # Only add child workflow if it should execute in this path
+                    if should_include_child_workflow:
+                        path.add_child_workflow(node.workflow_name, node.call_site_line)
+
             paths.append(path)
 
         return paths
+
+    def generate_cross_workflow_paths(
+        self, call_graph: WorkflowCallGraph, context: GraphBuildingContext
+    ) -> list[MultiWorkflowPath]:
+        """Generate end-to-end execution paths across parent and child workflows.
+
+        Generates complete execution paths that span workflow boundaries based on the
+        configured expansion mode. Three modes are supported:
+
+        1. Reference mode (default): Child workflows appear as atomic nodes with no
+           path expansion. Returns parent paths only with child workflows as steps.
+        2. Inline mode: Generates parent_paths × child_paths permutations showing
+           complete end-to-end execution flow. Can cause exponential path growth.
+        3. Subgraph mode: Generates separate path sets for each workflow (same as
+           reference mode for path generation; rendering differs).
+
+        The method enforces path explosion safeguards for inline mode by checking
+        total_paths = parent_paths × child_paths before generation.
+
+        Args:
+            call_graph: WorkflowCallGraph from WorkflowCallGraphAnalyzer containing
+                root workflow, child workflows, and call relationships.
+            context: GraphBuildingContext for configuration including child_workflow_expansion mode.
+
+        Returns:
+            List of MultiWorkflowPath objects representing end-to-end execution paths.
+            For reference/subgraph modes, returns one MultiWorkflowPath per parent path.
+            For inline mode, returns parent_paths × child_paths MultiWorkflowPath objects.
+
+        Raises:
+            GraphGenerationError: If inline mode path explosion exceeds context.max_paths limit.
+                Error message includes calculation breakdown showing parent × child = total.
+
+        Example:
+            >>> # Reference mode (default) - no path expansion
+            >>> # Parent with 2 decisions, child with 2 decisions
+            >>> call_graph = WorkflowCallGraph(...)
+            >>> context = GraphBuildingContext()
+            >>> generator = PathPermutationGenerator()
+            >>> mw_paths = generator.generate_cross_workflow_paths(call_graph, context)
+            >>> len(mw_paths)
+            4  # Only parent paths (2^2), child not expanded
+
+            >>> # Inline mode - full path expansion
+            >>> context_inline = GraphBuildingContext(
+            ...     child_workflow_expansion="inline"
+            ... )
+            >>> mw_paths = generator.generate_cross_workflow_paths(
+            ...     call_graph, context_inline
+            ... )
+            >>> len(mw_paths)
+            16  # Parent paths × child paths (4 × 4)
+        """
+        expansion_mode = context.child_workflow_expansion
+
+        if expansion_mode == "reference":
+            # Reference mode: treat child workflows as atomic nodes
+            return self._generate_reference_mode_paths(call_graph, context)
+        elif expansion_mode == "inline":
+            # Inline mode: expand child workflows into parent paths
+            return self._generate_inline_mode_paths(call_graph, context)
+        elif expansion_mode == "subgraph":
+            # Subgraph mode: same path generation as reference, different rendering
+            return self._generate_subgraph_mode_paths(call_graph, context)
+        else:
+            raise ValueError(
+                f"Invalid child_workflow_expansion mode: {expansion_mode}. "
+                f"Expected 'reference', 'inline', or 'subgraph'."
+            )
+
+    def _generate_reference_mode_paths(
+        self, call_graph: WorkflowCallGraph, context: GraphBuildingContext
+    ) -> list[MultiWorkflowPath]:
+        """Generate paths for reference mode (child workflows as atomic nodes).
+
+        This is the simplest and safest mode. Child workflows appear as [[ChildWorkflow]]
+        nodes in the parent workflow paths without any path expansion. No path explosion risk.
+
+        Args:
+            call_graph: WorkflowCallGraph containing root and child workflows.
+            context: GraphBuildingContext for configuration.
+
+        Returns:
+            List of MultiWorkflowPath objects, one per parent path. Each path includes
+            only the root workflow with child workflows as atomic steps.
+        """
+        # Generate parent workflow paths using existing generate_paths method
+        parent_paths = self.generate_paths(call_graph.root_workflow, context)
+
+        # Convert GraphPath objects to MultiWorkflowPath objects
+        mw_paths: list[MultiWorkflowPath] = []
+        for i, parent_path in enumerate(parent_paths):
+            # Extract step names from PathStep objects
+            step_names = [step.name for step in parent_path.steps]
+
+            # In reference mode, only root workflow is included (no child expansion)
+            mw_path = MultiWorkflowPath(
+                path_id=f"mwpath_{i}",
+                workflows=[call_graph.root_workflow.workflow_class],
+                steps=step_names,
+                workflow_transitions=[],  # No transitions in reference mode
+                total_decisions=len(parent_path.decisions),
+            )
+            mw_paths.append(mw_path)
+
+        logger.debug(
+            f"Reference mode: Generated {len(mw_paths)} paths for root workflow "
+            f"{call_graph.root_workflow.workflow_class}"
+        )
+        return mw_paths
+
+    def _generate_inline_mode_paths(
+        self, call_graph: WorkflowCallGraph, context: GraphBuildingContext
+    ) -> list[MultiWorkflowPath]:
+        """Generate paths for inline mode (full cross-workflow path expansion).
+
+        This mode generates the cross-product of parent and child workflow paths,
+        creating complete end-to-end execution flows. Path explosion safeguards
+        are enforced BEFORE generation.
+
+        Args:
+            call_graph: WorkflowCallGraph containing root and child workflows.
+            context: GraphBuildingContext for configuration.
+
+        Returns:
+            List of MultiWorkflowPath objects showing end-to-end execution across
+            workflow boundaries. Count = parent_paths × child1_paths × child2_paths × ...
+
+        Raises:
+            GraphGenerationError: If total paths exceed context.max_paths limit.
+        """
+        # Generate parent workflow paths
+        parent_paths = self.generate_paths(call_graph.root_workflow, context)
+
+        # If no child workflows, return reference mode paths
+        if not call_graph.child_workflows:
+            logger.debug("Inline mode: No child workflows, using reference mode")
+            return self._generate_reference_mode_paths(call_graph, context)
+
+        # Calculate total paths BEFORE generation (path explosion safeguard)
+        total_paths = len(parent_paths)
+        child_path_counts: dict[str, int] = {}
+        for child_name, child_metadata in call_graph.child_workflows.items():
+            child_paths = self.generate_paths(child_metadata, context)
+            child_path_counts[child_name] = len(child_paths)
+            total_paths *= len(child_paths)
+
+        # Check path explosion limit
+        if total_paths > context.max_paths:
+            # Build detailed error message
+            breakdown = f"Parent ({len(parent_paths)} paths)"
+            for child_name, count in child_path_counts.items():
+                breakdown += f" × {child_name} ({count} paths)"
+            breakdown += f" = {total_paths} total paths"
+
+            raise GraphGenerationError(
+                reason=(
+                    f"Cross-workflow path explosion: {breakdown} "
+                    f"exceeds limit {context.max_paths}. "
+                    f"Use 'reference' mode or increase max_paths."
+                ),
+                context={
+                    "parent_paths": len(parent_paths),
+                    "child_path_counts": child_path_counts,
+                    "total_paths": total_paths,
+                    "limit": context.max_paths,
+                    "expansion_mode": "inline",
+                },
+            )
+
+        # Generate child workflow paths for all children
+        child_paths_map: dict[str, list[GraphPath]] = {}
+        for child_name, child_metadata in call_graph.child_workflows.items():
+            child_paths_map[child_name] = self.generate_paths(child_metadata, context)
+
+        # Expand parent paths with child workflow paths
+        mw_paths: list[MultiWorkflowPath] = []
+        mw_path_id = 0
+
+        for parent_path in parent_paths:
+            # Find child workflow call sites in this parent path
+            child_call_sites: list[
+                tuple[int, str, int]
+            ] = []  # (step_index, workflow_name, line_number)
+            for step_index, step in enumerate(parent_path.steps):
+                if step.node_type == "child_workflow":
+                    child_call_sites.append((step_index, step.name, step.line_number or 0))
+
+            # If no child calls in this path, create simple MultiWorkflowPath
+            if not child_call_sites:
+                step_names = [step.name for step in parent_path.steps]
+                mw_path = MultiWorkflowPath(
+                    path_id=f"mwpath_{mw_path_id}",
+                    workflows=[call_graph.root_workflow.workflow_class],
+                    steps=step_names,
+                    workflow_transitions=[],
+                    total_decisions=len(parent_path.decisions),
+                )
+                mw_paths.append(mw_path)
+                mw_path_id += 1
+                continue
+
+            # Expand this parent path with all child path combinations
+            # For each child call site, get all possible child paths
+            child_call_path_options: list[list[GraphPath]] = []
+            for _, child_name, _ in child_call_sites:
+                if child_name in child_paths_map:
+                    child_call_path_options.append(child_paths_map[child_name])
+                else:
+                    # Child workflow not found in call graph, skip expansion
+                    child_call_path_options.append([])
+
+            # Generate cross-product of child path combinations
+            if all(child_call_path_options):
+                for child_path_combo in product(*child_call_path_options):
+                    # Build end-to-end path by injecting child paths at call sites
+                    end_to_end_steps: list[str] = []
+                    workflows_traversed: list[str] = [call_graph.root_workflow.workflow_class]
+                    transitions: list[tuple[int, str, str]] = []
+                    total_decisions_count = len(parent_path.decisions)
+
+                    current_step_index = 0
+
+                    # Add parent steps before first child call
+                    first_child_index = child_call_sites[0][0]
+                    for i in range(first_child_index):
+                        end_to_end_steps.append(parent_path.steps[i].name)
+                        current_step_index += 1
+
+                    # Inject each child workflow paths
+                    for child_idx, (child_step_idx, child_name, _) in enumerate(child_call_sites):
+                        child_path = child_path_combo[child_idx]
+
+                        # Record transition from parent to child
+                        transitions.append(
+                            (
+                                current_step_index,
+                                call_graph.root_workflow.workflow_class,
+                                child_name,
+                            )
+                        )
+                        if child_name not in workflows_traversed:
+                            workflows_traversed.append(child_name)
+
+                        # Add child workflow steps
+                        for child_step in child_path.steps:
+                            end_to_end_steps.append(child_step.name)
+                            current_step_index += 1
+                        total_decisions_count += len(child_path.decisions)
+
+                        # Record transition from child back to parent
+                        transitions.append(
+                            (
+                                current_step_index,
+                                child_name,
+                                call_graph.root_workflow.workflow_class,
+                            )
+                        )
+
+                        # Add parent steps between this child call and next (or end)
+                        next_child_index = (
+                            child_call_sites[child_idx + 1][0]
+                            if child_idx + 1 < len(child_call_sites)
+                            else len(parent_path.steps)
+                        )
+                        for i in range(child_step_idx + 1, next_child_index):
+                            end_to_end_steps.append(parent_path.steps[i].name)
+                            current_step_index += 1
+
+                    # Create MultiWorkflowPath
+                    mw_path = MultiWorkflowPath(
+                        path_id=f"mwpath_{mw_path_id}",
+                        workflows=workflows_traversed,
+                        steps=end_to_end_steps,
+                        workflow_transitions=transitions,
+                        total_decisions=total_decisions_count,
+                    )
+                    mw_paths.append(mw_path)
+                    mw_path_id += 1
+
+        logger.debug(
+            f"Inline mode: Generated {len(mw_paths)} end-to-end paths across "
+            f"{call_graph.total_workflows} workflows"
+        )
+        return mw_paths
+
+    def _generate_subgraph_mode_paths(
+        self, call_graph: WorkflowCallGraph, context: GraphBuildingContext
+    ) -> list[MultiWorkflowPath]:
+        """Generate paths for subgraph mode (separate workflow path sets).
+
+        Subgraph mode generates the same paths as reference mode but includes
+        metadata for rendering as Mermaid subgraphs. The actual subgraph rendering
+        happens in MermaidRenderer.
+
+        Args:
+            call_graph: WorkflowCallGraph containing root and child workflows.
+            context: GraphBuildingContext for configuration.
+
+        Returns:
+            List of MultiWorkflowPath objects with workflow metadata for subgraph rendering.
+        """
+        # For now, subgraph mode uses same path generation as reference mode
+        # Rendering differences are handled in MermaidRenderer
+        return self._generate_reference_mode_paths(call_graph, context)

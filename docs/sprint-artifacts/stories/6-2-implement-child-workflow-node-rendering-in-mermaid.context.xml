@@ -1,0 +1,261 @@
+<story-context id="6-2-implement-child-workflow-node-rendering-in-mermaid" v="1.0">
+  <metadata>
+    <epicId>epic-6</epicId>
+    <storyId>6-2</storyId>
+    <title>Implement Child Workflow Node Rendering in Mermaid</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/6-2-implement-child-workflow-node-rendering-in-mermaid.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>temporalio-graphs developer</asA>
+    <iWant>child workflow nodes to render with Mermaid's double-bracket subroutine syntax</iWant>
+    <soThat>child workflow calls are visually distinct from regular activities in generated diagrams</soThat>
+    <tasks>
+      <task>Update `GraphNode.to_mermaid()` for `NodeType.CHILD_WORKFLOW` (AC: 1, 2, 5)
+        <subtask>Modify `src/temporalio_graphs/_internal/graph_models.py` to handle CHILD_WORKFLOW case in `GraphNode.to_mermaid()`</subtask>
+        <subtask>Implement double-bracket syntax: `node_id[[WorkflowName]]` format</subtask>
+        <subtask>Generate deterministic node IDs using format: `child_{workflow_name}_{line}`</subtask>
+        <subtask>Extract workflow name from `ChildWorkflowCall.workflow_name` field</subtask>
+      </task>
+      <task>Integrate child workflow nodes into path generation (AC: 3, 6)
+        <subtask>Ensure `PathPermutationGenerator` treats child workflow nodes like activity nodes</subtask>
+        <subtask>Verify child workflow steps are added to path sequences correctly</subtask>
+        <subtask>Support multiple child workflow calls with unique IDs in same path</subtask>
+      </task>
+      <task>Add Unit Tests for child workflow node rendering (AC: 1, 2, 3, 5, 6)
+        <subtask>Create tests in `tests/test_renderer.py` for child workflow node syntax</subtask>
+        <subtask>Test deterministic node ID generation (same input → same ID)</subtask>
+        <subtask>Test integration with path generator (child nodes in paths)</subtask>
+        <subtask>Test multiple child calls render with unique IDs</subtask>
+        <subtask>Test visual distinction (double brackets vs rectangles)</subtask>
+      </task>
+      <task>Add Integration Test with parent-child workflow (AC: 4)
+        <subtask>Create or update `tests/integration/test_parent_child_workflow.py`</subtask>
+        <subtask>Test parent workflow with child workflow call renders valid Mermaid</subtask>
+        <subtask>Validate Mermaid syntax (automated check or documented manual validation)</subtask>
+        <subtask>Verify output matches expected structure from tech spec</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion>Child workflow nodes render with double-bracket syntax: `[[ChildWorkflow]]` (Mermaid subroutine notation)</criterion>
+    <criterion>Node IDs are deterministic based on workflow name and call site line number</criterion>
+    <criterion>Child workflow nodes integrate into path generation seamlessly like activities</criterion>
+    <criterion>Generated Mermaid validates successfully in Mermaid Live Editor</criterion>
+    <criterion>Visual distinction is clear between activities (rectangles) and child workflows (subroutines)</criterion>
+    <criterion>Multiple child workflow calls in the same parent render with unique node IDs</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+        <title>Epic Technical Specification: Cross-Workflow Visualization</title>
+        <section>AC-Epic6-2: Child Workflow Node Rendering</section>
+        <snippet>
+          Child workflow nodes render with double-bracket syntax: [[ChildWorkflow]]. Node IDs are deterministic (based on workflow name + call site). Child workflow nodes integrate into path generation like activities. Generated Mermaid validates in Mermaid Live Editor. Visual distinction clear between activities (rectangles) and child workflows (subroutines).
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+        <title>Epic Technical Specification: Cross-Workflow Visualization</title>
+        <section>Data Models and Contracts</section>
+        <snippet>
+          GraphNode.to_mermaid() returns Mermaid node syntax. NodeType.CHILD_WORKFLOW renders with double brackets: node_id[[WorkflowName]]. ChildWorkflowCall has workflow_name, call_site_line, call_id fields for deterministic rendering.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+        <title>Epic Technical Specification: Cross-Workflow Visualization</title>
+        <section>Services and Modules - MermaidRenderer</section>
+        <snippet>
+          Module renderer.py: Mermaid rendering with child workflow nodes. Method MermaidRenderer._render_child_workflow_node() (new method). Dependencies: context.py, path.py.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Implementation Patterns - Mermaid Syntax Conventions</section>
+        <snippet>
+          Start/End: s((Start)), e((End)). Activity: 1[ActivityName]. Decision: 0{DecisionName}. Signal: 2{{SignalName}}. Child Workflow: [[ChildWorkflow]]. Edge labels: -- yes -->, -- no -->, -- Signaled -->, -- Timeout -->.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/6-1-detect-child-workflow-calls-in-ast.md</path>
+        <title>Story 6.1: Detect Child Workflow Calls in AST</title>
+        <section>Dev Agent Record - Learnings</section>
+        <snippet>
+          ChildWorkflowCall dataclass available at src/temporalio_graphs/_internal/graph_models.py with fields: workflow_name, call_site_line, call_id, parent_workflow. NodeType.CHILD_WORKFLOW enum value added to graph_models.py. Node ID format established: child_{workflow_name}_{line} for traceability. GraphNode.to_mermaid() stub exists but needs implementation for CHILD_WORKFLOW case.
+        </snippet>
+      </doc>
+    </docs>
+    <code>
+      <codeItem>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>class</kind>
+        <symbol>GraphNode</symbol>
+        <lines>36-116</lines>
+        <reason>Contains to_mermaid() method that needs CHILD_WORKFLOW case implementation. Currently has stub at line 113-115 returning placeholder syntax.</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>ChildWorkflowCall</symbol>
+        <lines>334-372</lines>
+        <reason>Data model for child workflow calls. Contains workflow_name (for display), call_site_line (for node ID), call_id (unique identifier format: child_{workflow_name}_{line}).</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>enum</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-33</lines>
+        <reason>Enum with CHILD_WORKFLOW value at line 33. Used in GraphNode.to_mermaid() match statement to determine rendering syntax.</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>class</kind>
+        <symbol>MermaidRenderer</symbol>
+        <lines>14-359</lines>
+        <reason>Main rendering class that converts GraphPath objects to Mermaid syntax. May need updates to handle child workflow nodes in path sequences.</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>class</kind>
+        <symbol>PathPermutationGenerator</symbol>
+        <lines>27-423</lines>
+        <reason>Generates execution paths from workflow metadata. Needs to treat child workflow calls like activities for path generation (no branching).</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>374-485</lines>
+        <reason>Contains child_workflow_calls field (line 436) populated by analyzer. Generator will consume this to add child workflow nodes to paths.</reason>
+      </codeItem>
+    </code>
+    <dependencies>
+      <python>
+        <package>temporalio</package>
+        <version>>=1.7.1</version>
+        <purpose>Temporal SDK for workflow type definitions</purpose>
+      </python>
+      <python>
+        <package>pytest</package>
+        <version>>=8.0.0</version>
+        <purpose>Testing framework</purpose>
+      </python>
+      <python>
+        <package>pytest-asyncio</package>
+        <version>>=0.23.0</version>
+        <purpose>Async test support</purpose>
+      </python>
+      <python>
+        <package>mypy</package>
+        <version>>=1.8.0</version>
+        <purpose>Type checking</purpose>
+      </python>
+      <python>
+        <package>ruff</package>
+        <version>>=0.2.0</version>
+        <purpose>Linting and formatting</purpose>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Follow existing node rendering patterns in GraphNode.to_mermaid() for ACTIVITY, DECISION, SIGNAL types</constraint>
+    <constraint>Use project-relative paths exclusively (no absolute paths, no {project-root} variable)</constraint>
+    <constraint>Ensure deterministic rendering (same workflow → same Mermaid output)</constraint>
+    <constraint>Follow project naming conventions (snake_case for functions/vars, PascalCase for classes)</constraint>
+    <constraint>Ensure strict type hints (mypy strict mode compatible)</constraint>
+    <constraint>Node ID format must match established pattern: child_{workflow_name}_{line}</constraint>
+    <constraint>Do not modify existing NodeType enum values or GraphNode structure</constraint>
+    <constraint>Maintain 100% test coverage for new rendering logic</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GraphNode.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self) -> str</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Converts graph node to Mermaid syntax based on node_type. Needs CHILD_WORKFLOW case to return node_id[[display_name]] format (double brackets for subroutine notation).</description>
+    </interface>
+    <interface>
+      <name>PathPermutationGenerator.generate_paths</name>
+      <kind>method</kind>
+      <signature>def generate_paths(self, metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]</signature>
+      <path>src/temporalio_graphs/generator.py</path>
+      <description>Generates execution paths from workflow metadata. Should consume metadata.child_workflow_calls and add them to paths like activities (no branching).</description>
+    </interface>
+    <interface>
+      <name>MermaidRenderer.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>Converts paths to Mermaid flowchart syntax. Should handle child workflow nodes in paths, generating double-bracket syntax when rendering.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest with fixtures for sample workflows. Ensure 100% coverage for new rendering logic. Integration test validates Mermaid syntax correctness. Follow existing test patterns in test_renderer.py and test_detector.py.
+    </standards>
+    <locations>
+      <location>tests/test_renderer.py - Unit tests for child workflow node rendering</location>
+      <location>tests/integration/test_parent_child_workflow.py - Integration test for end-to-end workflow</location>
+    </locations>
+    <ideas>
+      <idea>Test GraphNode.to_mermaid() with NodeType.CHILD_WORKFLOW returns double-bracket syntax</idea>
+      <idea>Test deterministic node ID generation (same workflow name + line → same node ID)</idea>
+      <idea>Test MermaidRenderer handles child workflow nodes in paths correctly</idea>
+      <idea>Test multiple child workflow calls render with unique node IDs (child_X_10, child_X_20)</idea>
+      <idea>Test visual distinction: activities use [brackets], child workflows use [[double brackets]]</idea>
+      <idea>Test integration: parent workflow with child call generates valid Mermaid (parseable, renders correctly)</idea>
+      <idea>Test path generation: child workflows integrate like activities (linear, no branching)</idea>
+    </ideas>
+  </tests>
+
+  <implementation_notes>
+    <note>
+      <title>Reuse Existing Data Models</title>
+      <content>
+        Story 6.1 already created ChildWorkflowCall dataclass with fields: workflow_name, call_site_line, call_id, parent_workflow. DO NOT recreate these models. Node ID format already established: child_{workflow_name}_{line}.
+      </content>
+    </note>
+    <note>
+      <title>GraphNode.to_mermaid() Implementation</title>
+      <content>
+        Currently has stub at lines 113-115 returning placeholder f"{self.node_id}[{self.display_name}]". Replace with correct double-bracket syntax: f"{self.node_id}[[{self.display_name}]]" for CHILD_WORKFLOW case. Follow existing pattern using match statement.
+      </content>
+    </note>
+    <note>
+      <title>Path Generation Integration</title>
+      <content>
+        PathPermutationGenerator should consume metadata.child_workflow_calls field (populated by analyzer in Story 6.1). Child workflow calls should be treated like activities (linear nodes, no branching). Add them to path sequences using path.add_activity() or equivalent mechanism.
+      </content>
+    </note>
+    <note>
+      <title>Mermaid Syntax Reference</title>
+      <content>
+        Mermaid subroutine notation uses double brackets: [[NodeName]]. This visually distinguishes child workflows from regular activities ([ActivityName]). Example: s((Start)) --> Activity1 --> child_payment_45[[PaymentWorkflow]] --> Activity2 --> e((End)).
+      </content>
+    </note>
+    <note>
+      <title>Testing Strategy</title>
+      <content>
+        Follow testing patterns from Story 6.1 which added 28 comprehensive tests to test_detector.py. Create similar coverage for rendering: unit tests for GraphNode.to_mermaid(), MermaidRenderer integration, PathPermutationGenerator child workflow support, and end-to-end integration test with valid Mermaid output.
+      </content>
+    </note>
+    <note>
+      <title>Architecture Pattern</title>
+      <content>
+        Story uses Strategy Pattern (extends MermaidRenderer for new node type) consistent with existing architecture. Visitor Pattern established for detectors in Story 6.1. Rendering continues Builder Pattern for graph construction from execution paths.
+      </content>
+    </note>
+  </implementation_notes>
+</story-context>

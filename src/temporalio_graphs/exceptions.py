@@ -4,6 +4,7 @@ This module defines all custom exceptions raised by the library.
 """
 
 from pathlib import Path
+from typing import Any
 
 
 class TemporalioGraphsError(Exception):
@@ -147,7 +148,7 @@ class GraphGenerationError(TemporalioGraphsError):
         ... )
     """
 
-    def __init__(self, reason: str, context: dict[str, int] | None = None) -> None:
+    def __init__(self, reason: str, context: dict[str, Any] | None = None) -> None:
         """Initialize GraphGenerationError with reason and optional context.
 
         Args:
@@ -233,3 +234,96 @@ class InvalidSignalError(TemporalioGraphsError):
         super().__init__(full_message)
         self.file_path = file_path
         self.line = line
+
+
+class ChildWorkflowNotFoundError(TemporalioGraphsError):
+    """Raised when child workflow file cannot be resolved.
+
+    This exception is raised during multi-workflow analysis when a child workflow
+    referenced in execute_child_workflow() cannot be located:
+    - Child workflow class not found in parent file
+    - Child workflow not found in any imported modules
+    - Child workflow not found in any search paths
+    - Import tracking failed to resolve module path
+
+    Args:
+        workflow_name: Name of the child workflow class that could not be found.
+        search_paths: List of paths that were searched for the workflow file.
+        parent_workflow: Optional name of parent workflow containing the call.
+
+    Attributes:
+        workflow_name: Name of the child workflow class that could not be found.
+        search_paths: List of paths that were searched for the workflow file.
+        parent_workflow: Optional name of parent workflow containing the call.
+
+    Example:
+        >>> raise ChildWorkflowNotFoundError(
+        ...     workflow_name="ProcessOrderWorkflow",
+        ...     search_paths=[Path("workflows"), Path(".")],
+        ...     parent_workflow="CheckoutWorkflow"
+        ... )
+    """
+
+    def __init__(
+        self,
+        workflow_name: str,
+        search_paths: list[Path],
+        parent_workflow: str | None = None,
+    ) -> None:
+        """Initialize ChildWorkflowNotFoundError with workflow name and search paths.
+
+        Args:
+            workflow_name: Name of the child workflow class that could not be found.
+            search_paths: List of paths that were searched for the workflow file.
+            parent_workflow: Optional name of parent workflow containing the call.
+        """
+        parent_info = f" (called from {parent_workflow})" if parent_workflow else ""
+        search_paths_str = ", ".join(str(p) for p in search_paths)
+        formatted_message = (
+            f"Child workflow '{workflow_name}'{parent_info} could not be found.\n"
+            f"Searched in: {search_paths_str}\n"
+            f"Suggestion: Ensure the workflow class is defined in a .py file within "
+            f"the search paths, or import it explicitly in the parent workflow file."
+        )
+        super().__init__(formatted_message)
+        self.workflow_name = workflow_name
+        self.search_paths = search_paths
+        self.parent_workflow = parent_workflow
+
+
+class CircularWorkflowError(TemporalioGraphsError):
+    """Raised when circular workflow reference is detected.
+
+    This exception is raised during multi-workflow analysis when a workflow
+    calls itself (directly or indirectly), creating a circular dependency:
+    - Direct recursion: WorkflowA → WorkflowA
+    - Indirect cycle: WorkflowA → WorkflowB → WorkflowA
+    - Complex cycle: WorkflowA → WorkflowB → WorkflowC → WorkflowA
+
+    Args:
+        workflow_chain: List of workflow class names forming the circular chain.
+            Last element is the workflow that creates the cycle.
+
+    Attributes:
+        workflow_chain: List of workflow class names forming the circular chain.
+
+    Example:
+        >>> raise CircularWorkflowError(
+        ...     workflow_chain=["CheckoutWorkflow", "PaymentWorkflow", "CheckoutWorkflow"]
+        ... )
+    """
+
+    def __init__(self, workflow_chain: list[str]) -> None:
+        """Initialize CircularWorkflowError with the workflow chain.
+
+        Args:
+            workflow_chain: List of workflow class names forming the circular chain.
+        """
+        chain_str = " → ".join(workflow_chain)
+        formatted_message = (
+            f"Circular workflow reference detected: {chain_str}\n"
+            f"Suggestion: Refactor workflows to eliminate circular dependencies. "
+            f"Consider using signals or activities to break the cycle."
+        )
+        super().__init__(formatted_message)
+        self.workflow_chain = workflow_chain

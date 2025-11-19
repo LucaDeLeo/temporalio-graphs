@@ -1,0 +1,132 @@
+run_id: continuous-run-20251119-134926
+run_started: 2025-11-19T13:49:26Z
+branch: overnight
+initial_commit: 84ff385bc12c19f363b2a0ef34d4c68874a29f10
+
+configuration:
+  auto_context_epics: true
+  max_epic_validation_attempts: 3
+  halt_on_missing_docs: true
+  allow_medium_issues: true
+  max_stories: null
+  epic_filter: null
+  status_filter:
+    - ready-for-dev
+    - in-progress
+    - review
+    - drafted
+    - backlog
+  max_validation_attempts: 3
+  max_review_cycles: 3
+  max_consecutive_failures: 5
+  auto_commit: true
+  auto_push: true
+  dry_run: false
+  skip_validation_failures: true
+  skip_review_failures: true
+  skip_blocked_stories: true
+  stop_on_git_failure: false
+  verbose_logging: true
+
+epics_contexting:
+  total_backlog_epics: 0
+  contexted_successfully: 0
+  blocked_validation: 0
+  skipped_already_contexted: 0
+
+epics_processed: []
+stories_pending:
+  - 5-5-create-production-grade-documentation
+  - 6-1-detect-child-workflow-calls-in-ast
+  - 6-2-implement-child-workflow-node-rendering-in-mermaid
+  - 6-3-implement-multi-workflow-analysis-pipeline
+  - 6-4-implement-end-to-end-path-generation-across-workflows
+  - 6-5-add-integration-test-with-parent-child-workflow-example
+
+stories_processed:
+  - story_key: 5-5-create-production-grade-documentation
+    status: success
+    start_time: 2025-11-19T13:49:26Z
+    end_time: 2025-11-19T13:52:00Z
+    duration_seconds: 154
+    phases_completed: [load, implement, review-cycle-1]
+    validation_attempts: 0
+    review_cycles: 1
+    git_commit_sha: 7f14260
+    git_push_status: success
+    files_changed: 7
+    test_results: "81/81 passing (100%), 82% coverage"
+  - story_key: 6-1-detect-child-workflow-calls-in-ast
+    status: success
+    start_time: 2025-11-19T13:52:00Z
+    end_time: 2025-11-19T13:55:30Z
+    duration_seconds: 210
+    phases_completed: [load, implement, review-cycle-1]
+    validation_attempts: 0
+    review_cycles: 1
+    git_commit_sha: ad3774c
+    git_push_status: success
+    files_changed: 6
+    test_results: "144/144 passing (28 new tests, 100% coverage of new logic)"
+  - story_key: 6-2-implement-child-workflow-node-rendering-in-mermaid
+    status: success
+    start_time: 2025-11-19T13:55:30Z
+    end_time: 2025-11-19T14:03:45Z
+    duration_seconds: 495
+    phases_completed: [create, context, validate, implement, review-cycle-1, implement-cycle-2, review-cycle-2]
+    validation_attempts: 2
+    review_cycles: 2
+    git_commit_sha: e27d8fd
+    git_push_status: success
+    files_changed: 8
+    test_results: "496/496 passing (29 new tests: 26 rendering + 3 formatter), 94% coverage"
+  - story_key: 6-3-implement-multi-workflow-analysis-pipeline
+    status: success
+    start_time: 2025-11-19T14:03:45Z
+    end_time: 2025-11-19T14:18:30Z
+    duration_seconds: 885
+    phases_completed: [create, context, validate, implement, review-cycle-1, implement-cycle-2, review-cycle-2]
+    validation_attempts: 1
+    review_cycles: 2
+    git_commit_sha: 55cec29
+    git_push_status: success
+    files_changed: 13
+    test_results: "517/517 passing (21 new tests, 100% pass rate), 92% coverage"
+  - story_key: 6-4-implement-end-to-end-path-generation-across-workflows
+    status: success
+    start_time: 2025-11-19T14:18:30Z
+    end_time: 2025-11-19T14:28:45Z
+    duration_seconds: 615
+    phases_completed: [create, context, validate-retry-2, implement, review-cycle-1]
+    validation_attempts: 2
+    review_cycles: 1
+    git_commit_sha: 14880ef
+    git_push_status: success
+    files_changed: 6
+    test_results: "14/14 passing (100%), three expansion modes implemented"
+  - story_key: 6-5-add-integration-test-with-parent-child-workflow-example
+    status: success
+    start_time: 2025-11-19T14:28:45Z
+    end_time: 2025-11-19T14:41:00Z
+    duration_seconds: 735
+    phases_completed: [create, context, validate, implement, review-cycle-1]
+    validation_attempts: 1
+    review_cycles: 1
+    git_commit_sha: 28b1a35
+    git_push_status: success
+    files_changed: 13
+    test_results: "21/21 passing (6 existing + 15 new), 100% pass rate"
+
+statistics:
+  epics_contexted: 0
+  epics_blocked: 0
+  total_stories: 6
+  success_count: 6
+  blocked_validation_count: 0
+  blocked_review_count: 0
+  blocked_external_count: 0
+  blocked_git_count: 0
+  consecutive_failures: 0
+  run_completed: 2025-11-19T14:41:00Z
+  total_duration_seconds: 3094
+  avg_duration_per_story: 516

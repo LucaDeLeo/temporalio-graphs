@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <story-reference>
+    <story-key>6-4-implement-end-to-end-path-generation-across-workflows</story-key>
+    <story-file>docs/sprint-artifacts/stories/6-4-implement-end-to-end-path-generation-across-workflows.md</story-file>
+    <epic-reference>epic-6</epic-reference>
+    <status>backlog</status>
+    <story-summary>
+      Implement end-to-end cross-workflow path generation with three expansion modes:
+      reference (default, child workflows as atomic nodes), inline (full path permutations
+      across workflow boundaries), and subgraph (Mermaid subgraph rendering). Adds
+      MultiWorkflowPath data model and child_workflow_expansion configuration field.
+    </story-summary>
+  </story-reference>
+
+  <epic-context>
+    <epic-id>epic-6</epic-id>
+    <epic-name>Cross-Workflow Visualization (MVP Extension)</epic-name>
+    <tech-spec-file>docs/sprint-artifacts/tech-spec-epic-6.md</tech-spec-file>
+    <epic-objective>
+      Enable deep cross-workflow analysis and visualization for parent-child workflow
+      relationships in Temporal. Detect child workflow calls, resolve and analyze child
+      workflow files, and generate Mermaid diagrams showing complete end-to-end execution
+      paths across workflow boundaries with configurable expansion modes.
+    </epic-objective>
+    <related-stories>
+      <story id="6-1" status="done">Detect child workflow calls in AST</story>
+      <story id="6-2" status="done">Implement child workflow node rendering in Mermaid</story>
+      <story id="6-3" status="done">Implement multi-workflow analysis pipeline</story>
+      <story id="6-4" status="backlog">Implement end-to-end path generation (THIS STORY)</story>
+      <story id="6-5" status="backlog">Add integration test with parent-child example</story>
+    </related-stories>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+      <description>
+        Authoritative technical specification for Epic 6. Contains:
+        - Data models: MultiWorkflowPath, WorkflowCallGraph, ChildWorkflowCall
+        - Path generation modes: reference, inline, subgraph (lines 323-348)
+        - Path explosion safeguards and max_paths enforcement (lines 350-385)
+        - Cross-workflow path generation algorithm (lines 283-320)
+        - NFR-PERF-Epic6-2: Performance targets for inline mode (16 paths in &lt;1s)
+        - Acceptance criteria AC-Epic6-4 for end-to-end path generation (lines 469-476)
+      </description>
+      <relevant-sections>
+        <section>Data Models and Contracts (lines 149-197)</section>
+        <section>Workflows and Sequencing - Path Generation Modes (lines 322-348)</section>
+        <section>Non-Functional Requirements - Performance (lines 350-385)</section>
+        <section>Acceptance Criteria AC-Epic6-4 (lines 469-476)</section>
+      </relevant-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/prd.md</path>
+      <description>
+        Product Requirements Document. Epic 6 implements FR67-FR74 (8 functional requirements)
+        for cross-workflow visualization. FR73 specifically covers end-to-end path generation
+        with inline mode producing parent_paths × child_paths permutations.
+      </description>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <description>
+        System architecture documentation. Confirms static analysis approach (ADR-001)
+        extends to cross-workflow analysis. Path permutation logic follows existing 2^n
+        generation pattern with explosion safeguards.
+      </description>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/6-1-detect-child-workflow-calls-in-ast.md</path>
+      <description>
+        Story 6.1 (done) - Implemented ChildWorkflowCall detection in AST. Provides
+        ChildWorkflowCall data model with workflow_name, call_site_line, call_id, and
+        parent_workflow fields. This story consumes that data for path generation.
+      </description>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/6-2-implement-child-workflow-node-rendering-in-mermaid.md</path>
+      <description>
+        Story 6.2 (done) - Implemented child workflow node rendering with [[ChildWorkflow]]
+        syntax. Extended PathStep with line_number field and GraphPath with
+        add_child_workflow(name, line_number) method. PathPermutationGenerator already
+        handles child workflows in execution_order (lines 352-355 in generator.py).
+      </description>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/6-3-implement-multi-workflow-analysis-pipeline.md</path>
+      <description>
+        Story 6.3 (done) - Implemented WorkflowCallGraphAnalyzer with recursive child
+        workflow discovery, file resolution (import tracking + filesystem search),
+        circular detection, and WorkflowCallGraph data model. Lines 143-167 document
+        key implementation decisions including multi-file workflow handling and
+        three-tier resolution strategy. This story uses WorkflowCallGraph as input.
+      </description>
+      <learnings>
+        <learning>WorkflowCallGraph provides all child workflow metadata - no need to re-analyze files</learning>
+        <learning>Reference mode is simplest: use existing generate() for parent, ignore children</learning>
+        <learning>Inline mode requires recursive path expansion and cross-product calculations</learning>
+        <learning>Path explosion formula: 2^D1 × 2^D2 for parent with D1 decisions, child with D2 decisions</learning>
+        <learning>Test fixtures in tests/fixtures/parent_child_workflows/ ready for reuse</learning>
+      </learnings>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/generator.py</file>
+      <description>
+        PathPermutationGenerator class - core path generation logic. Currently generates
+        paths for single workflows. Story 6.4 extends with generate_cross_workflow_paths()
+        method for multi-workflow path expansion.
+      </description>
+      <key-methods>
+        <method>generate_paths(metadata, context) -> list[GraphPath]</method>
+        <method>_create_linear_path(activities, child_workflows) -> GraphPath</method>
+        <method>_generate_paths_with_branches(decisions, signals, activities, child_workflows, context) -> list[GraphPath]</method>
+      </key-methods>
+      <notes>
+        Lines 224-276: _create_linear_path() already merges activities and child_workflows
+        by line number. Lines 278-496: _generate_paths_with_branches() handles branch
+        points with itertools.product for efficient 2^n generation. Reference mode will
+        reuse these existing methods for parent-only paths.
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <description>
+        GraphBuildingContext dataclass - immutable configuration for graph generation.
+        Story 6.4 adds child_workflow_expansion field with three modes: reference, inline, subgraph.
+      </description>
+      <existing-fields>
+        <field>max_expansion_depth: int = 2 (added in Story 6.3)</field>
+        <field>max_decision_points: int = 10 (used for explosion safeguard)</field>
+        <field>max_paths: int = 1024 (enforced for cross-workflow paths)</field>
+        <field>decision_true_label: str = "yes"</field>
+        <field>decision_false_label: str = "no"</field>
+      </existing-fields>
+      <notes>
+        Frozen dataclass (line 12) - immutable after creation. All fields have sensible
+        defaults. Story 6.4 adds child_workflow_expansion field with default "reference".
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <description>
+        Internal graph data models. Contains WorkflowMetadata, DecisionPoint, SignalPoint,
+        Activity, ChildWorkflowCall, and WorkflowCallGraph. Story 6.4 adds MultiWorkflowPath
+        data model.
+      </description>
+      <existing-models>
+        <model>WorkflowCallGraph (lines 487-531) - Contains root_workflow, child_workflows dict, call_relationships, all_child_calls</model>
+        <model>ChildWorkflowCall (lines 334-372) - Contains workflow_name, call_site_line, call_id, parent_workflow</model>
+        <model>WorkflowMetadata (lines 374-485) - Contains activities, decision_points, signal_points, child_workflow_calls</model>
+      </existing-models>
+      <notes>
+        All models use frozen=True for immutability. Follow same pattern for MultiWorkflowPath.
+        WorkflowCallGraph.all_child_calls provides complete list of child workflow calls for
+        path generation.
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/renderer.py</file>
+      <description>
+        MermaidRenderer class - converts GraphPath objects to Mermaid flowchart syntax.
+        Story 6.4 extends with subgraph mode rendering support via _render_with_subgraphs() method.
+      </description>
+      <key-methods>
+        <method>to_mermaid(paths, context) -> str (lines 39-408)</method>
+      </key-methods>
+      <notes>
+        Lines 259-305: Already handles child_workflow node type with [[ChildWorkflow]] syntax.
+        Subgraph mode requires new _render_with_subgraphs() method that wraps workflow paths
+        in Mermaid subgraph blocks with proper transition edges.
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/path.py</file>
+      <description>
+        GraphPath and PathStep dataclasses for tracking execution paths. PathStep already
+        supports 'child_workflow' node type (line 42). GraphPath provides add_child_workflow()
+        method (implemented in Story 6.2).
+      </description>
+      <existing-methods>
+        <method>add_activity(name) -> str</method>
+        <method>add_decision(decision_id, value, name) -> str</method>
+        <method>add_signal(name, outcome) -> str</method>
+        <method>add_child_workflow(name, line_number) -> str (Epic 6)</method>
+      </existing-methods>
+      <notes>
+        PathStep supports node_type='child_workflow' with line_number field (lines 42, 47).
+        MultiWorkflowPath will track multiple workflows in single end-to-end path.
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/call_graph_analyzer.py</file>
+      <description>
+        WorkflowCallGraphAnalyzer class - recursively analyzes parent and child workflows.
+        Output is WorkflowCallGraph with complete workflow hierarchy. Story 6.4 uses this
+        as input for cross-workflow path generation.
+      </description>
+      <key-methods>
+        <method>analyze(entry_workflow, search_paths) -> WorkflowCallGraph (lines 82-144)</method>
+      </key-methods>
+      <notes>
+        Lines 143-149 (from Story 6.3): Handles multi-file workflows by creating temporary
+        files. Circular detection complete. Depth limiting enforced. All child workflows
+        resolved and analyzed.
+      </notes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <description>
+        Exception hierarchy for temporalio-graphs. Story 6.4 raises GraphGenerationError
+        for path explosion when inline mode exceeds max_paths limit.
+      </description>
+      <existing-exceptions>
+        <exception>TemporalioGraphsError (base class)</exception>
+        <exception>WorkflowParseError (Epic 2)</exception>
+        <exception>GraphGenerationError (Epic 3) - Used for path explosion</exception>
+        <exception>ChildWorkflowNotFoundError (Story 6.3)</exception>
+        <exception>CircularWorkflowError (Story 6.3)</exception>
+      </existing-exceptions>
+      <notes>
+        GraphGenerationError already exists for decision point explosions. Reuse for
+        cross-workflow path explosion with clear message format.
+      </notes>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <category>Architecture</category>
+      <description>
+        Follow Strategy Pattern for expansion modes. PathPermutationGenerator.generate_cross_workflow_paths()
+        should switch on context.child_workflow_expansion to call mode-specific logic.
+        Reference mode delegates to existing generate_paths(), inline mode implements
+        cross-product permutations, subgraph mode generates separate path sets.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Data Model</category>
+      <description>
+        MultiWorkflowPath must be frozen dataclass with complete type hints matching
+        existing patterns. Fields: path_id (str), workflows (list[str]), steps (list[str]),
+        workflow_transitions (list[tuple[int, str, str]]), total_decisions (int). Export
+        from __init__.py for public API.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Performance</category>
+      <description>
+        Path explosion safeguards CRITICAL. Before inline mode generation, calculate
+        total_paths = parent_paths × child_paths × ... for all children. Check against
+        context.max_paths (default 1024). Raise GraphGenerationError if exceeded with
+        actionable message including calculation breakdown.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Backward Compatibility</category>
+      <description>
+        Reference mode MUST be default (child_workflow_expansion="reference") to ensure
+        existing single-workflow code works unchanged. No breaking changes to existing
+        API. PathPermutationGenerator.generate_paths() continues to work for single workflows.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Mermaid Syntax</category>
+      <description>
+        Subgraph mode requires valid Mermaid subgraph syntax: "subgraph WorkflowName ... end".
+        Subgraph IDs must be unique and deterministic (use workflow class name). Transition
+        edges between subgraphs use qualified node IDs. Validate output in Mermaid Live Editor.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Testing Standards</category>
+      <description>
+        Target 100% coverage for new cross-workflow path logic. Use pytest with fixtures
+        from tests/fixtures/parent_child_workflows/ (created in Story 6.3). Test all three
+        expansion modes with decision points. Test path explosion safeguards with high-decision
+        workflows. Ensure Mermaid output validates in Live Editor for subgraph mode.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Type Safety</category>
+      <description>
+        All new code MUST pass mypy strict mode. Complete type hints on all functions,
+        including return types. Use Literal["reference", "inline", "subgraph"] for
+        child_workflow_expansion type. No type: ignore comments without justification.
+      </description>
+    </constraint>
+
+    <constraint>
+      <category>Documentation</category>
+      <description>
+        Google-style docstrings for all new functions and classes. Include Args, Returns,
+        Raises sections. Add Example blocks showing typical usage. Document inline mode
+        complexity and path explosion risk clearly in docstrings.
+      </description>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <type>Internal Module</type>
+      <name>itertools.product</name>
+      <usage>
+        Cross-product permutation generation for inline mode. When parent has P paths and
+        child has C paths, use itertools.product to generate P × C end-to-end paths efficiently.
+      </usage>
+    </dependency>
+
+    <dependency>
+      <type>Internal Module</type>
+      <name>WorkflowCallGraph</name>
+      <usage>
+        Input to generate_cross_workflow_paths(). Provides root_workflow, child_workflows
+        dict, and all_child_calls list. All child workflows already analyzed - no need
+        to re-parse files.
+      </usage>
+    </dependency>
+
+    <dependency>
+      <type>External Package</type>
+      <name>temporalio</name>
+      <usage>
+        No direct usage in path generation. Child workflow detection and analysis already
+        complete in Stories 6.1-6.3.
+      </usage>
+    </dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-framework>pytest</test-framework>
+    <coverage-tool>pytest-cov</coverage-tool>
+    <target-coverage>100% for new cross-workflow path logic in generator.py</target-coverage>
+
+    <test-patterns>
+      <pattern>
+        <name>Reference Mode Tests</name>
+        <description>
+          Verify reference mode generates parent paths only. Parent with 2 decisions + child
+          with 2 decisions should generate 4 parent paths (2^2), NOT 16 paths. Child workflows
+          appear as atomic nodes in paths.
+        </description>
+      </pattern>
+
+      <pattern>
+        <name>Inline Mode Tests</name>
+        <description>
+          Verify inline mode generates cross-product permutations. Parent with 1 decision (2 paths)
+          + child with 1 decision (2 paths) = 4 end-to-end paths (2 × 2). Test workflow transitions
+          recorded correctly. Test multiple children compound properly.
+        </description>
+      </pattern>
+
+      <pattern>
+        <name>Subgraph Mode Tests</name>
+        <description>
+          Verify subgraph mode generates Mermaid with "subgraph WorkflowName ... end" syntax.
+          Validate workflow boundaries preserved, transition edges connect subgraphs correctly.
+          Test output in Mermaid Live Editor.
+        </description>
+      </pattern>
+
+      <pattern>
+        <name>Path Explosion Tests</name>
+        <description>
+          Test path explosion safeguard with parent (5 decisions, 32 paths) + child (5 decisions,
+          32 paths) = 1024 total paths in inline mode. Should hit max_paths limit and raise
+          GraphGenerationError with clear message.
+        </description>
+      </pattern>
+
+      <pattern>
+        <name>Nested Workflow Tests</name>
+        <description>
+          Test parent → child → grandchild (depth=2) generates correct end-to-end paths in
+          inline mode. Verify workflow_transitions track all transitions correctly.
+        </description>
+      </pattern>
+    </test-patterns>
+
+    <existing-fixtures>
+      <fixture>
+        <path>tests/fixtures/parent_child_workflows/simple_parent.py</path>
+        <description>Linear parent workflow that calls simple_child</description>
+      </fixture>
+      <fixture>
+        <path>tests/fixtures/parent_child_workflows/simple_child.py</path>
+        <description>Linear child workflow with no decisions</description>
+      </fixture>
+      <fixture>
+        <path>tests/fixtures/parent_child_workflows/multi_child_parent.py</path>
+        <description>Parent that calls 2 different child workflows</description>
+      </fixture>
+      <fixture>
+        <path>tests/fixtures/parent_child_workflows/nested_grandchild.py</path>
+        <description>Three-level hierarchy for depth=2 testing</description>
+      </fixture>
+    </existing-fixtures>
+
+    <test-file-to-create>
+      <path>tests/test_cross_workflow_paths.py</path>
+      <description>
+        Comprehensive unit tests for cross-workflow path generation covering all three
+        expansion modes, path explosion safeguards, workflow transitions tracking,
+        multiple children, and nested workflows.
+      </description>
+    </test-file-to-create>
+  </testing-context>
+
+  <implementation-notes>
+    <note priority="CRITICAL">
+      <title>Inline Mode Path Injection Strategy</title>
+      <content>
+        When expanding child workflow in inline mode, split parent path at child call site:
+        [steps_before_child] + [all_child_paths] + [steps_after_child]. Use itertools.product
+        to generate all combinations if multiple decision points exist. For multiple children,
+        expansion compounds exponentially - ALWAYS check max_paths before generation.
+      </content>
+    </note>
+
+    <note priority="CRITICAL">
+      <title>Path Explosion Calculation</title>
+      <content>
+        Formula: For parent with D1 decisions and child with D2 decisions, inline generates
+        2^D1 × 2^D2 paths. With multiple children (C1, C2), this becomes 2^D1 × 2^C1 × 2^C2.
+        Calculate total BEFORE generation. If total &gt; context.max_paths, raise
+        GraphGenerationError with breakdown: "Parent (X paths) × Child1 (Y paths) × Child2 (Z paths) = Total (N paths) exceeds limit M".
+      </content>
+    </note>
+
+    <note priority="HIGH">
+      <title>Reference Mode Default Rationale</title>
+      <content>
+        Reference mode is safest default - no path explosion, shows structure without
+        overwhelming detail. Users opt-in to inline/subgraph modes for deeper analysis.
+        This ensures backward compatibility and prevents accidental performance issues.
+      </content>
+    </note>
+
+    <note priority="HIGH">
+      <title>Subgraph Rendering Requirements</title>
+      <content>
+        Mermaid subgraph syntax: "subgraph UniqueID ... end". Use workflow class name as ID,
+        ensure no spaces or special characters. Transition edges between subgraphs use qualified
+        node IDs: "ParentNode --> ChildSubgraph.ChildStartNode". Test extensively in Mermaid
+        Live Editor to ensure valid syntax.
+      </content>
+    </note>
+
+    <note priority="MEDIUM">
+      <title>Workflow Transitions Tracking</title>
+      <content>
+        Record each transition as (step_index, from_workflow, to_workflow) tuple in
+        MultiWorkflowPath.workflow_transitions. Step_index is 0-based position in steps list.
+        Enables future features like workflow-level metrics, transition visualization,
+        or cross-workflow data flow analysis.
+      </content>
+    </note>
+
+    <note priority="MEDIUM">
+      <title>Reuse Existing Path Generation</title>
+      <content>
+        Reference mode: Call existing generate_paths() for parent workflow, ignore child
+        workflows (treat as activities). Inline mode: Call generate_paths() for both parent
+        and children, then cross-product. Subgraph mode: Call generate_paths() for each
+        workflow separately, then render with subgraph blocks. Maximize code reuse.
+      </content>
+    </note>
+  </implementation-notes>
+
+  <validation-checklist>
+    <item>Reference mode generates parent paths only (child workflows as atomic nodes)</item>
+    <item>Inline mode generates parent_paths × child_paths permutations correctly</item>
+    <item>Subgraph mode renders valid Mermaid with subgraph syntax</item>
+    <item>Cross-workflow paths show workflow transitions clearly</item>
+    <item>Path explosion safeguards enforced (check before generation, not after)</item>
+    <item>GraphBuildingContext.child_workflow_expansion field added with Literal type</item>
+    <item>MultiWorkflowPath data model created with frozen=True</item>
+    <item>End-to-end path generation integrates with WorkflowCallGraph from Story 6.3</item>
+    <item>All new code passes mypy strict mode</item>
+    <item>All new functions have Google-style docstrings with examples</item>
+    <item>Test coverage 100% for new cross-workflow path logic</item>
+    <item>Mermaid output validates in Live Editor for subgraph mode</item>
+    <item>No breaking changes to existing API (reference mode is default)</item>
+  </validation-checklist>
+
+  <next-steps>
+    <step>Story moves from 'drafted' to 'ready-for-dev' in sprint-status.yaml</step>
+    <step>Dev agent executes story using dev-story workflow</step>
+    <step>Implementation creates tests/test_cross_workflow_paths.py with 100% coverage</step>
+    <step>Implementation extends PathPermutationGenerator with generate_cross_workflow_paths()</step>
+    <step>Implementation adds MultiWorkflowPath to graph_models.py</step>
+    <step>Implementation extends GraphBuildingContext with child_workflow_expansion field</step>
+    <step>Implementation extends MermaidRenderer with subgraph mode support</step>
+    <step>Code review validates against acceptance criteria and quality standards</step>
+    <step>Story moves to 'done' after successful review</step>
+  </next-steps>
+
+  <warnings>
+    <warning severity="HIGH">
+      <message>
+        Inline mode path explosion risk: Parent with 5 decisions (32 paths) + child with
+        5 decisions (32 paths) = 1024 total paths. With multiple children, this compounds
+        exponentially. MUST enforce max_paths limit BEFORE generation, not after.
+      </message>
+    </warning>
+
+    <warning severity="MEDIUM">
+      <message>
+        Subgraph mode Mermaid syntax validation required. Mermaid subgraph syntax has
+        specific requirements for IDs and structure. Test all generated output in Mermaid
+        Live Editor to ensure valid rendering.
+      </message>
+    </warning>
+
+    <warning severity="LOW">
+      <message>
+        No existing integration tests for cross-workflow path generation. Story 6.5 will
+        create comprehensive integration test, but this story should include unit tests
+        covering all three expansion modes.
+      </message>
+    </warning>
+  </warnings>
+
+  <metadata>
+    <context-created>2025-11-19</context-created>
+    <story-points>8</story-points>
+    <estimated-hours>8-10</estimated-hours>
+    <complexity>HIGH</complexity>
+    <risk-level>MEDIUM</risk-level>
+    <prerequisites>
+      <prerequisite>Story 6.1 (done) - ChildWorkflowCall detection</prerequisite>
+      <prerequisite>Story 6.2 (done) - Child workflow node rendering</prerequisite>
+      <prerequisite>Story 6.3 (done) - WorkflowCallGraph analysis pipeline</prerequisite>
+    </prerequisites>
+  </metadata>
+</story-context>

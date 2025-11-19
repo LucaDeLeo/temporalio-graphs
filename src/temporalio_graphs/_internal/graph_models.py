@@ -5,7 +5,7 @@ workflow graphs. These models are not part of the public API and should not be
 imported directly by library users.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -22,6 +22,7 @@ class NodeType(Enum):
         ACTIVITY: Temporal activity invocation (rectangular node).
         DECISION: Conditional branching point (diamond node).
         SIGNAL: Signal wait or condition check (hexagonal node).
+        CHILD_WORKFLOW: Child workflow execution (subroutine node).
     """
 
     START = "start"
@@ -29,6 +30,7 @@ class NodeType(Enum):
     ACTIVITY = "activity"
     DECISION = "decision"
     SIGNAL = "signal"
+    CHILD_WORKFLOW = "child_workflow"
 
 
 @dataclass
@@ -108,6 +110,9 @@ class GraphNode:
                 return f"{self.node_id}{{{self.display_name}}}"
             case NodeType.SIGNAL:
                 return f"{self.node_id}{{{{{self.display_name}}}}}"
+            case NodeType.CHILD_WORKFLOW:
+                # Child workflow nodes render with double brackets (subroutine notation)
+                return f"{self.node_id}[[{self.display_name}]]"
 
 
 @dataclass
@@ -326,6 +331,46 @@ class SignalPoint:
     timeout_branch_activities: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class ChildWorkflowCall:
+    """Represents a child workflow execution call in a parent workflow.
+
+    A child workflow call is a location where the parent workflow invokes another workflow
+    via workflow.execute_child_workflow(). This is detected for cross-workflow visualization
+    to show dependencies between parent and child workflows.
+
+    The frozen=True attribute ensures ChildWorkflowCall instances are immutable,
+    preventing accidental modifications to call metadata once created.
+
+    Args:
+        workflow_name: Name of the child workflow class or string identifier.
+            Can be extracted from either a class reference (MyWorkflow) or
+            string literal ("MyWorkflow").
+        call_site_line: Line number in parent workflow source code where the
+            execute_child_workflow() call is made.
+        call_id: Unique identifier for this child workflow call within the parent.
+            Format: child_{workflow_name}_{line}
+        parent_workflow: Name of the parent workflow class containing this call.
+
+    Example:
+        >>> child_call = ChildWorkflowCall(
+        ...     workflow_name="ProcessOrderWorkflow",
+        ...     call_site_line=45,
+        ...     call_id="child_processorderworkflow_45",
+        ...     parent_workflow="CheckoutWorkflow"
+        ... )
+        >>> child_call.workflow_name
+        'ProcessOrderWorkflow'
+        >>> child_call.call_site_line
+        45
+    """
+
+    workflow_name: str
+    call_site_line: int
+    call_id: str
+    parent_workflow: str
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.
@@ -390,6 +435,7 @@ class WorkflowMetadata:
     signal_points: list[SignalPoint]
     source_file: Path
     total_paths: int
+    child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
 
     @staticmethod
     def calculate_total_paths(num_decisions: int, num_signals: int) -> int:
@@ -434,5 +480,111 @@ class WorkflowMetadata:
         Returns:
             2^(total_branch_points) representing all path permutations.
         """
-        result: int = 2 ** self.total_branch_points
+        result: int = 2**self.total_branch_points
         return result
+
+
+@dataclass(frozen=True)
+class MultiWorkflowPath:
+    """Represents a complete end-to-end execution path across multiple workflows.
+
+    A multi-workflow path captures a single execution sequence that spans parent and
+    child workflows, showing complete end-to-end flow across workflow boundaries. This
+    is used for inline mode cross-workflow visualization where parent paths are expanded
+    to include all child workflow steps.
+
+    The frozen=True attribute ensures MultiWorkflowPath instances are immutable,
+    preventing accidental modifications to path structure once created.
+
+    Args:
+        path_id: Unique identifier for this end-to-end path (e.g., "mwpath_0", "mwpath_1").
+        workflows: Ordered list of workflow class names traversed in this path, starting
+            with root workflow and including all child workflows encountered.
+        steps: Ordered list of all step names (activities, decisions, signals, child workflows)
+            encountered in this end-to-end path across all workflows.
+        workflow_transitions: List of workflow boundary crossings in this path. Each tuple
+            is (step_index, from_workflow, to_workflow) where step_index is 0-based position
+            in steps list where transition occurs.
+        total_decisions: Total number of decision points across all workflows in this path.
+            Used for path explosion calculations and validation.
+
+    Example:
+        >>> # Parent workflow calling child workflow
+        >>> mw_path = MultiWorkflowPath(
+        ...     path_id="mwpath_0",
+        ...     workflows=["ParentWorkflow", "ChildWorkflow"],
+        ...     steps=[
+        ...         "ParentActivity1",
+        ...         "ParentDecision",
+        ...         "ChildActivity1",
+        ...         "ChildDecision",
+        ...         "ParentActivity2",
+        ...     ],
+        ...     workflow_transitions=[
+        ...         (2, "ParentWorkflow", "ChildWorkflow"),
+        ...         (4, "ChildWorkflow", "ParentWorkflow"),
+        ...     ],
+        ...     total_decisions=2
+        ... )
+        >>> mw_path.workflows
+        ['ParentWorkflow', 'ChildWorkflow']
+        >>> len(mw_path.workflow_transitions)
+        2
+    """
+
+    path_id: str
+    workflows: list[str]
+    steps: list[str]
+    workflow_transitions: list[tuple[int, str, str]]
+    total_decisions: int
+
+
+@dataclass(frozen=True)
+class WorkflowCallGraph:
+    """Represents a complete workflow call graph for multi-workflow analysis.
+
+    A workflow call graph captures all workflows (parent and children) discovered during
+    recursive analysis, their relationships, and call metadata. This is the primary output
+    of WorkflowCallGraphAnalyzer and serves as input for cross-workflow visualization.
+
+    The frozen=True attribute ensures WorkflowCallGraph instances are immutable,
+    preventing accidental modifications to call graph structure once created.
+
+    Args:
+        root_workflow: WorkflowMetadata for the entry point workflow.
+        child_workflows: Dictionary mapping child workflow class names to their
+            WorkflowMetadata. Contains all discovered child workflows recursively.
+        call_relationships: List of (parent_name, child_name) tuples representing
+            parent-child relationships in the call graph. Forms a directed graph.
+        all_child_calls: Complete list of ChildWorkflowCall objects from all workflows.
+            Used for cross-workflow path generation and visualization.
+        total_workflows: Total number of workflows in the graph (root + children).
+
+    Example:
+        >>> root = WorkflowMetadata(...)  # Parent workflow
+        >>> child1 = WorkflowMetadata(...)  # Child workflow
+        >>> call_graph = WorkflowCallGraph(
+        ...     root_workflow=root,
+        ...     child_workflows={"ChildWorkflow": child1},
+        ...     call_relationships=[("ParentWorkflow", "ChildWorkflow")],
+        ...     all_child_calls=[
+        ...         ChildWorkflowCall(
+        ...             "ChildWorkflow",
+        ...             45,
+        ...             "child_childworkflow_45",
+        ...             "ParentWorkflow",
+        ...         )
+        ...     ],
+        ...     total_workflows=2
+        ... )
+        >>> call_graph.total_workflows
+        2
+        >>> len(call_graph.child_workflows)
+        1
+    """
+
+    root_workflow: WorkflowMetadata
+    child_workflows: dict[str, WorkflowMetadata]
+    call_relationships: list[tuple[str, str]]
+    all_child_calls: list[ChildWorkflowCall]
+    total_workflows: int

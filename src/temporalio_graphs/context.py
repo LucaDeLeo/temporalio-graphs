@@ -61,6 +61,21 @@ class GraphBuildingContext:
             - "paths": Path list only (no diagram, no validation)
             - "full": Mermaid + path list + validation report (default)
             Default: "full".
+        max_expansion_depth: Maximum recursion depth for multi-workflow analysis.
+            Controls how deep WorkflowCallGraphAnalyzer will traverse child workflow
+            hierarchies. Depth 0 = root only, depth 1 = root + direct children,
+            depth 2 = root + children + grandchildren (default). Prevents infinite
+            recursion and excessive memory usage. Default: 2.
+        child_workflow_expansion: Controls how child workflows are rendered in
+            cross-workflow visualization. Three modes:
+            - "reference" (default, safest): Child workflows appear as atomic nodes
+              [[ChildWorkflow]] with no path expansion. Prevents path explosion.
+            - "inline": Generates parent_paths × child_paths permutations, showing
+              complete end-to-end execution flow across workflow boundaries. Can
+              cause exponential path growth - use with caution.
+            - "subgraph": Renders workflows as Mermaid subgraphs with clear workflow
+              boundaries and transitions between parent and child workflows.
+            Default: "reference".
 
     Example:
         >>> # Basic usage with defaults
@@ -100,3 +115,5 @@ class GraphBuildingContext:
     signal_timeout_label: str = "Timeout"
     include_path_list: bool = True
     output_format: Literal["mermaid", "paths", "full"] = "full"
+    max_expansion_depth: int = 2
+    child_workflow_expansion: Literal["reference", "inline", "subgraph"] = "reference"

@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StoryContext>
+  <StoryReference>
+    <StoryFile>docs/sprint-artifacts/stories/6-3-implement-multi-workflow-analysis-pipeline.md</StoryFile>
+    <StoryKey>6-3-implement-multi-workflow-analysis-pipeline</StoryKey>
+    <StoryTitle>Implement Multi-Workflow Analysis Pipeline</StoryTitle>
+    <EpicReference>docs/sprint-artifacts/tech-spec-epic-6.md</EpicReference>
+    <Status>drafted</Status>
+  </StoryReference>
+
+  <AcceptanceCriteria>
+    <Criterion id="AC1">WorkflowCallGraphAnalyzer accepts entry workflow path and discovers all child workflows recursively</Criterion>
+    <Criterion id="AC2">Child workflow files are resolved via import tracking and filesystem search paths</Criterion>
+    <Criterion id="AC3">Circular workflow references are detected and raise CircularWorkflowError with the workflow chain</Criterion>
+    <Criterion id="AC4">max_expansion_depth limit is enforced (default: 2) to prevent deep recursion</Criterion>
+    <Criterion id="AC5">WorkflowCallGraph data model contains all workflows, parent-child relationships, and call metadata</Criterion>
+    <Criterion id="AC6">Separate WorkflowMetadata is created for each discovered workflow (parent and children)</Criterion>
+    <Criterion id="AC7">Search paths default to the same directory as the entry workflow if not specified</Criterion>
+    <Criterion id="AC8">ChildWorkflowNotFoundError is raised with clear message listing search paths when child not found</Criterion>
+  </AcceptanceCriteria>
+
+  <DocumentationArtifacts>
+    <Artifact path="docs/prd.md" relevance="high">
+      <Description>Product Requirements Document defining FR71-FR73 for multi-workflow analysis, workflow call graphs, and end-to-end path generation</Description>
+      <KeySections>
+        <Section>FR71: Library can analyze multiple related workflows in a single operation</Section>
+        <Section>FR72: Library can build workflow call graphs showing parent-child relationships</Section>
+        <Section>FR73: Library can generate end-to-end execution paths spanning multiple workflows</Section>
+        <Section>NFR-PERF-Epic6-1: Multi-workflow analysis speed targets</Section>
+        <Section>NFR-SEC-Epic6-2: Circular reference protection</Section>
+      </KeySections>
+    </Artifact>
+
+    <Artifact path="docs/architecture.md" relevance="high">
+      <Description>Architecture document defining static analysis approach, design patterns, and Epic 6 cross-workflow visualization strategy</Description>
+      <KeySections>
+        <Section>ADR-001: Static Analysis vs Runtime Interceptors (AST-based approach)</Section>
+        <Section>ADR-011: Cross-Workflow Visualization Strategy (three modes: reference/inline/subgraph)</Section>
+        <Section>Data Architecture: WorkflowCallGraph, ChildWorkflowCall, MultiWorkflowPath models</Section>
+        <Section>Implementation Patterns: Visitor Pattern for AST traversal, Builder Pattern for graph construction</Section>
+        <Section>Deep Analysis Challenges: File resolution via imports and filesystem search</Section>
+      </KeySections>
+    </Artifact>
+
+    <Artifact path="docs/sprint-artifacts/tech-spec-epic-6.md" relevance="critical">
+      <Description>Epic 6 Technical Specification detailing deep cross-workflow analysis, multi-workflow pipeline design, and acceptance criteria</Description>
+      <KeySections>
+        <Section>AC-Epic6-3: Multi-Workflow Analysis Pipeline (authoritative requirements for this story)</Section>
+        <Section>Deep Analysis Challenges &amp; Strategy: File Resolution (Imports) and Recursion Detection (Cycle Prevention)</Section>
+        <Section>Services and Modules: WorkflowCallGraphAnalyzer orchestration flow</Section>
+        <Section>Data Models and Contracts: WorkflowCallGraph, ChildWorkflowCall data structures</Section>
+        <Section>Workflows and Sequencing: Child Workflow Discovery Sequence (10-step flow)</Section>
+        <Section>NFR-PERF-Epic6-1/2/3: Performance targets for multi-workflow analysis and file resolution</Section>
+        <Section>Risks: Path explosion in inline mode, file resolution ambiguity, circular reference detection</Section>
+      </KeySections>
+    </Artifact>
+
+    <Artifact path="docs/sprint-artifacts/stories/6-1-detect-child-workflow-calls-in-ast.md" relevance="high">
+      <Description>Completed Story 6.1 defining ChildWorkflowCall detection in AST, provides foundation for this story</Description>
+      <KeySections>
+        <Section>ChildWorkflowCall data model already defined in graph_models.py</Section>
+        <Section>ChildWorkflowDetector implemented in detector.py for detecting execute_child_workflow() calls</Section>
+        <Section>WorkflowMetadata extended with child_workflow_calls field (default_factory=list for backward compatibility)</Section>
+      </KeySections>
+    </Artifact>
+
+    <Artifact path="docs/sprint-artifacts/stories/6-2-implement-child-workflow-node-rendering-in-mermaid.md" relevance="medium">
+      <Description>Completed Story 6.2 defining child workflow node rendering, provides context for graph integration</Description>
+      <KeySections>
+        <Section>Child workflow nodes render as [[WorkflowName]] in Mermaid (double-bracket subroutine notation)</Section>
+        <Section>Node IDs use child_{workflow_name}_{line} format (lowercase, deterministic)</Section>
+        <Section>PathPermutationGenerator treats child workflows like activities (linear, no branching yet)</Section>
+      </KeySections>
+    </Artifact>
+  </DocumentationArtifacts>
+
+  <ExistingCodeInterfaces>
+    <Interface path="src/temporalio_graphs/_internal/graph_models.py">
+      <Description>Core data models for workflow graph representation, includes ChildWorkflowCall (Story 6.1)</Description>
+      <RelevantClasses>
+        <Class name="ChildWorkflowCall">Frozen dataclass with workflow_name, call_site_line, call_id, parent_workflow fields (already implemented)</Class>
+        <Class name="WorkflowMetadata">Contains child_workflow_calls field (list[ChildWorkflowCall]) for storing detected child calls</Class>
+        <Class name="Activity">Frozen dataclass with name and line_num fields, pattern to follow for new models</Class>
+        <Class name="DecisionPoint">Example of frozen dataclass pattern with id, name, line_number fields</Class>
+      </RelevantClasses>
+      <Note>WorkflowCallGraph data model needs to be added to this file (AC5)</Note>
+    </Interface>
+
+    <Interface path="src/temporalio_graphs/analyzer.py">
+      <Description>WorkflowAnalyzer class for AST-based workflow analysis, already detects child workflow calls via ChildWorkflowDetector</Description>
+      <RelevantMethods>
+        <Method name="analyze">Main entry point, parses workflow file and returns WorkflowMetadata with child_workflow_calls populated</Method>
+        <Method name="visit_Call">AST visitor for Call nodes, can be extended or referenced for import tracking</Method>
+      </RelevantMethods>
+      <Note>WorkflowCallGraphAnalyzer will use WorkflowAnalyzer internally to analyze each workflow file</Note>
+    </Interface>
+
+    <Interface path="src/temporalio_graphs/detector.py">
+      <Description>ChildWorkflowDetector class for detecting execute_child_workflow() calls (Story 6.1)</Description>
+      <RelevantClasses>
+        <Class name="ChildWorkflowDetector">AST visitor that detects child workflow calls and populates child_calls list</Class>
+      </RelevantClasses>
+      <RelevantMethods>
+        <Method name="visit_Call">Identifies execute_child_workflow() patterns in AST</Method>
+        <Method name="set_parent_workflow">Sets parent workflow name for call ID generation</Method>
+      </RelevantMethods>
+      <Note>Provides child workflow calls that WorkflowCallGraphAnalyzer needs to resolve and recursively analyze</Note>
+    </Interface>
+
+    <Interface path="src/temporalio_graphs/context.py">
+      <Description>GraphBuildingContext configuration dataclass</Description>
+      <RelevantFields>
+        <Field name="max_decision_points">Pattern for validation limits (int field with default)</Field>
+        <Field name="max_paths">Example of resource limit enforcement</Field>
+        <Field name="suppress_validation">Pattern for controlling validation behavior</Field>
+      </RelevantFields>
+      <Note>Need to add max_expansion_depth field (AC4) for controlling recursion depth in multi-workflow analysis</Note>
+    </Interface>
+
+    <Interface path="src/temporalio_graphs/exceptions.py">
+      <Description>Custom exception hierarchy for library errors</Description>
+      <RelevantClasses>
+        <Class name="TemporalioGraphsError">Base exception class that new exceptions must inherit from</Class>
+        <Class name="WorkflowParseError">Pattern for exceptions with file_path, line, message, suggestion fields</Class>
+        <Class name="UnsupportedPatternError">Pattern for validation-related exceptions</Class>
+      </RelevantClasses>
+      <Note>Need to add ChildWorkflowNotFoundError and CircularWorkflowError (AC3, AC8)</Note>
+    </Interface>
+  </ExistingCodeInterfaces>
+
+  <DevelopmentConstraints>
+    <Constraint type="architecture">
+      <Name>Static Analysis Only</Name>
+      <Description>No workflow execution - analyze source code using Python AST module exclusively (ADR-001)</Description>
+      <Impact>File resolution must use import parsing and filesystem search, not runtime introspection</Impact>
+    </Constraint>
+
+    <Constraint type="architecture">
+      <Name>Visitor Pattern for AST Traversal</Name>
+      <Description>All AST analysis uses ast.NodeVisitor pattern (established in Epic 2)</Description>
+      <Impact>WorkflowCallGraphAnalyzer should use WorkflowAnalyzer internally rather than reimplementing AST traversal</Impact>
+    </Constraint>
+
+    <Constraint type="architecture">
+      <Name>Frozen Dataclass Pattern</Name>
+      <Description>All data models use @dataclass(frozen=True) for immutability (see Activity, DecisionPoint, ChildWorkflowCall)</Description>
+      <Impact>WorkflowCallGraph must be frozen dataclass with complete type hints</Impact>
+    </Constraint>
+
+    <Constraint type="performance">
+      <Name>Multi-Workflow Analysis Speed</Name>
+      <Description>NFR-PERF-Epic6-1: Parent + 1 child must analyze in under 2 seconds</Description>
+      <Impact>File resolution must be efficient - avoid exhaustive filesystem scans where possible</Impact>
+    </Constraint>
+
+    <Constraint type="performance">
+      <Name>File Resolution Performance</Name>
+      <Description>NFR-PERF-Epic6-3: Child workflow file search completes in under 100ms per child</Description>
+      <Impact>Implement import tracking as first priority, filesystem search as fallback</Impact>
+    </Constraint>
+
+    <Constraint type="security">
+      <Name>Path Traversal Prevention</Name>
+      <Description>NFR-SEC-Epic6-1: All file paths resolved using Path.resolve() to prevent directory traversal</Description>
+      <Impact>Validate all search paths and resolved workflow files before reading</Impact>
+    </Constraint>
+
+    <Constraint type="security">
+      <Name>Circular Reference Protection</Name>
+      <Description>NFR-SEC-Epic6-2: Circular workflow detection prevents infinite recursion DoS</Description>
+      <Impact>Must track visited workflows in set and check before recursive analysis</Impact>
+    </Constraint>
+
+    <Constraint type="security">
+      <Name>Depth Limit Protection</Name>
+      <Description>NFR-SEC-Epic6-3: max_expansion_depth=2 enforced to prevent excessive recursion</Description>
+      <Impact>Track current depth in analyzer, raise error when limit exceeded</Impact>
+    </Constraint>
+
+    <Constraint type="design">
+      <Name>File Resolution Strategy</Name>
+      <Description>Tech Spec Deep Analysis Challenges: Three-tier resolution (local file → imports → search paths)</Description>
+      <Impact>Implement resolution priority: (1) Same file as parent, (2) Imported modules, (3) Search paths scan</Impact>
+    </Constraint>
+
+    <Constraint type="design">
+      <Name>Import Tracking Strategy</Name>
+      <Description>Parse parent file's Import and ImportFrom AST nodes to map class names to modules</Description>
+      <Impact>Build {class_name: module_path} mapping during analysis, use for child resolution</Impact>
+    </Constraint>
+
+    <Constraint type="design">
+      <Name>Backtracking for Visited Set</Name>
+      <Description>Remove workflow from visited set after analysis completes to allow DAG structures (not strictly a tree)</Description>
+      <Impact>Visited set tracks current chain only, not all analyzed workflows globally</Impact>
+    </Constraint>
+
+    <Constraint type="quality">
+      <Name>Type Safety - Mypy Strict Mode</Name>
+      <Description>NFR-QUAL-1: All public APIs require complete type hints, mypy --strict must pass</Description>
+      <Impact>WorkflowCallGraphAnalyzer, new exceptions, and WorkflowCallGraph must have full type annotations</Impact>
+    </Constraint>
+
+    <Constraint type="quality">
+      <Name>100% Test Coverage for New Code</Name>
+      <Description>Epic 6 test strategy requires 100% coverage for new modules (call_graph_analyzer.py)</Description>
+      <Impact>Comprehensive unit tests for resolution, circular detection, depth limits, error cases</Impact>
+    </Constraint>
+
+    <Constraint type="quality">
+      <Name>Google-Style Docstrings</Name>
+      <Description>ADR-009: All public functions require Google-style docstrings with Args/Returns/Raises/Example sections</Description>
+      <Impact>WorkflowCallGraphAnalyzer.analyze() needs complete docstring with all sections</Impact>
+    </Constraint>
+
+    <Constraint type="compatibility">
+      <Name>Backward Compatibility</Name>
+      <Description>v0.2.0 (Epic 6) must not break existing v0.1.0 API (Epics 1-5)</Description>
+      <Impact>WorkflowMetadata.child_workflow_calls already has default_factory=list for compatibility (Story 6.1)</Impact>
+    </Constraint>
+  </DevelopmentConstraints>
+
+  <Dependencies>
+    <InternalDependency>
+      <Module>src/temporalio_graphs/analyzer.py</Module>
+      <Usage>WorkflowCallGraphAnalyzer uses WorkflowAnalyzer.analyze() to process each workflow file</Usage>
+    </InternalDependency>
+
+    <InternalDependency>
+      <Module>src/temporalio_graphs/detector.py</Module>
+      <Usage>ChildWorkflowDetector provides child_workflow_calls list that drives recursive analysis</Usage>
+    </InternalDependency>
+
+    <InternalDependency>
+      <Module>src/temporalio_graphs/_internal/graph_models.py</Module>
+      <Usage>ChildWorkflowCall provides input, WorkflowCallGraph is new output data model to add</Usage>
+    </InternalDependency>
+
+    <InternalDependency>
+      <Module>src/temporalio_graphs/context.py</Module>
+      <Usage>GraphBuildingContext needs max_expansion_depth field added</Usage>
+    </InternalDependency>
+
+    <InternalDependency>
+      <Module>src/temporalio_graphs/exceptions.py</Module>
+      <Usage>Base TemporalioGraphsError for new exceptions, pattern reference for error messages</Usage>
+    </InternalDependency>
+
+    <ExternalDependency>
+      <Package>ast (Python stdlib)</Package>
+      <Usage>Parse parent file AST for Import/ImportFrom nodes to track imports for child resolution</Usage>
+    </ExternalDependency>
+
+    <ExternalDependency>
+      <Package>pathlib (Python stdlib)</Package>
+      <Usage>Path.resolve() for security, Path.rglob() for filesystem search, cross-platform path handling</Usage>
+    </ExternalDependency>
+  </Dependencies>
+
+  <TestingContext>
+    <TestingFramework>pytest with pytest-asyncio (Epic 1 foundation)</TestingFramework>
+    <CoverageTarget>100% for call_graph_analyzer.py module (Epic 6 test strategy)</CoverageTarget>
+
+    <TestFile>tests/test_call_graph_analyzer.py</TestFile>
+    <TestScenarios>
+      <Scenario>Simple parent-child analysis (1 parent, 1 linear child) - validates basic recursive analysis</Scenario>
+      <Scenario>Multiple children (1 parent, 2 different children) - validates parallel child handling</Scenario>
+      <Scenario>Nested children (parent → child → grandchild, depth=2) - validates depth tracking</Scenario>
+      <Scenario>Circular reference detection (parent → child → parent) - validates CircularWorkflowError</Scenario>
+      <Scenario>Depth limit enforcement (reject workflows at depth 3) - validates max_expansion_depth</Scenario>
+      <Scenario>Child workflow not found error - validates ChildWorkflowNotFoundError with clear message</Scenario>
+      <Scenario>Import tracking resolution (child imported from another module) - validates import-based resolution</Scenario>
+      <Scenario>Filesystem search resolution (child in different directory) - validates search path scanning</Scenario>
+      <Scenario>Search paths defaulting to parent directory - validates AC7</Scenario>
+    </TestScenarios>
+
+    <TestFixtures>
+      <Fixture path="tests/fixtures/parent_child_workflows/">Sample workflow files for testing (create as needed)</Fixture>
+    </TestFixtures>
+
+    <ValidationStandards>
+      <Standard>All exceptions must include file_path, line number, and actionable suggestions</Standard>
+      <Standard>Error messages must list search paths when child workflow not found</Standard>
+      <Standard>Circular reference errors must show complete workflow chain</Standard>
+      <Standard>Depth limit errors must indicate current depth and configured limit</Standard>
+    </ValidationStandards>
+  </TestingContext>
+
+  <ImplementationNotes>
+    <Note priority="critical">
+      <Title>WorkflowCallGraph Data Model Must Be Created</Title>
+      <Description>Story references WorkflowCallGraph in tasks but it doesn't exist yet. Add to graph_models.py with fields: root_workflow (WorkflowMetadata), child_workflows (dict[str, WorkflowMetadata]), call_relationships (list[tuple[str, str]]), all_child_calls (list[ChildWorkflowCall]), total_workflows (int). Use frozen=True dataclass pattern.</Description>
+    </Note>
+
+    <Note priority="critical">
+      <Title>Import Tracking Implementation Strategy</Title>
+      <Description>Parse parent file's AST for Import and ImportFrom nodes BEFORE analyzing children. Build mapping {class_name: module_path}. When resolving child workflow "PaymentWorkflow", check if it's in import map. If found, resolve module path to file path (handle relative imports, package imports). This is PRIORITY 1 resolution method per tech spec.</Description>
+    </Note>
+
+    <Note priority="critical">
+      <Title>Filesystem Search Implementation Strategy</Title>
+      <Description>If import tracking fails, scan search_paths for .py files. For each file, parse AST and look for ClassDef nodes matching workflow_name with @workflow.defn decorator. Use Path.rglob("*.py") for recursive search. Return first match. This is FALLBACK resolution method per tech spec.</Description>
+    </Note>
+
+    <Note priority="high">
+      <Title>Circular Detection Uses Workflow Names Not Paths</Title>
+      <Description>Tech spec explicitly states: "Track workflow names, not file paths (same workflow might be at different paths)". Use workflow_class name from WorkflowMetadata, not source_file path.</Description>
+    </Note>
+
+    <Note priority="high">
+      <Title>Backtracking After Analysis</Title>
+      <Description>Remove workflow from visited set after recursive analysis completes to allow analyzing same workflow from different branches (DAG structure). This enables shared child workflows called by multiple parents.</Description>
+    </Note>
+
+    <Note priority="high">
+      <Title>Default Search Paths to Parent Directory</Title>
+      <Description>AC7 requires: "Search paths default to the same directory as the entry workflow if not specified". If search_paths parameter is None or empty, use [parent_file.parent].</Description>
+    </Note>
+
+    <Note priority="medium">
+      <Title>max_expansion_depth Field Addition to GraphBuildingContext</Title>
+      <Description>Add max_expansion_depth: int = 2 field to context.py. Document with docstring explaining it prevents infinite recursion in multi-workflow analysis. Update test_context.py to validate new field.</Description>
+    </Note>
+
+    <Note priority="medium">
+      <Title>Call ID Format Consistency</Title>
+      <Description>Story 6.2 established child_{workflow_name}_{line} format (lowercase). Ensure call IDs match this pattern for consistency with rendering.</Description>
+    </Note>
+
+    <Note priority="medium">
+      <Title>Depth Tracking Implementation</Title>
+      <Description>Maintain _current_depth instance variable in analyzer. Increment before recursive calls, decrement after. Check against context.max_expansion_depth before analyzing children. Entry workflow is depth 0, first child is depth 1, grandchild is depth 2 (default limit).</Description>
+    </Note>
+
+    <Note priority="low">
+      <Title>Logging for Observability</Title>
+      <Description>NFR-OBS-Epic6-1 requires DEBUG logging for each workflow loaded, child detected, recursion depth. INFO for call graph structure. WARNING when max_expansion_depth reached. ERROR for circular references and missing workflows.</Description>
+    </Note>
+  </ImplementationNotes>
+
+  <ValidationChecklist>
+    <Item>WorkflowCallGraphAnalyzer class created in call_graph_analyzer.py with __init__ and analyze methods</Item>
+    <Item>WorkflowCallGraph data model added to graph_models.py as frozen dataclass with all required fields</Item>
+    <Item>Child workflow file resolution implemented with three-tier strategy (local → imports → search paths)</Item>
+    <Item>Import tracking parses parent AST for Import/ImportFrom nodes and builds class-to-module mapping</Item>
+    <Item>Filesystem search scans search_paths for .py files with matching @workflow.defn class</Item>
+    <Item>Circular workflow detection checks visited_workflows set before recursive analysis</Item>
+    <Item>CircularWorkflowError raised with complete workflow chain when cycle detected</Item>
+    <Item>Depth limit enforcement checks _current_depth against context.max_expansion_depth</Item>
+    <Item>max_expansion_depth field added to GraphBuildingContext with default=2</Item>
+    <Item>ChildWorkflowNotFoundError raised with workflow_name and search_paths when child not found</Item>
+    <Item>Search paths default to [parent_file.parent] if not specified</Item>
+    <Item>Backtracking removes workflow from visited set after analysis completes</Item>
+    <Item>All new code has complete type hints and passes mypy --strict</Item>
+    <Item>All new functions have Google-style docstrings with Args/Returns/Raises/Example</Item>
+    <Item>Unit tests achieve 100% coverage for call_graph_analyzer.py</Item>
+    <Item>Integration tests validate all 9 test scenarios from testing context</Item>
+    <Item>No breaking changes to existing v0.1.0 API</Item>
+  </ValidationChecklist>
+</StoryContext>
