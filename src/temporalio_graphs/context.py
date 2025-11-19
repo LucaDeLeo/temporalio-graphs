@@ -33,7 +33,9 @@ class GraphBuildingContext:
             "Pascal Case" / "Snake Case" in graph labels for readability.
             Default: True.
         suppress_validation: Disable graph validation warnings (e.g., excessive
-            decision points, path explosion). Default: False.
+            decision points, path explosion, unreachable activities). Default: False.
+        include_validation_report: Include validation report in output when warnings
+            exist. Has no effect if suppress_validation is True. Default: True.
         start_node_label: Display label for the workflow start node.
             Default: "Start".
         end_node_label: Display label for the workflow end node.
@@ -79,6 +81,7 @@ class GraphBuildingContext:
     graph_output_file: Path | None = None
     split_names_by_words: bool = True
     suppress_validation: bool = False
+    include_validation_report: bool = True
     start_node_label: str = "Start"
     end_node_label: str = "End"
     max_decision_points: int = 10

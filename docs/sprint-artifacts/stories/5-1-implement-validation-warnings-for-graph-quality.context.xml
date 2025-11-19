@@ -1,0 +1,645 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>5-1-implement-validation-warnings-for-graph-quality</story-key>
+    <story-file>docs/sprint-artifacts/stories/5-1-implement-validation-warnings-for-graph-quality.md</story-file>
+    <epic-key>epic-5</epic-key>
+    <epic-tech-spec>docs/sprint-artifacts/tech-spec-epic-5.md</epic-tech-spec>
+    <generated-date>2025-11-19</generated-date>
+    <status>ready-for-dev</status>
+  </metadata>
+
+  <story-summary>
+    <title>Implement Validation Warnings for Graph Quality</title>
+    <description>
+      Add validation logic to detect and warn about workflow quality issues such as unreachable
+      activities (activities defined but never called in any execution path). Implement data models
+      for ValidationWarning and ValidationReport, integrate validation into analyze_workflow() pipeline,
+      and extend GraphBuildingContext with validation control flags.
+    </description>
+    <acceptance-criteria-count>8</acceptance-criteria-count>
+    <task-count>10</task-count>
+  </story-summary>
+
+  <epic-context>
+    <epic-goal>Add validation, error handling, examples, and documentation for production use</epic-goal>
+    <epic-value>Library is production-ready with comprehensive error messages, validation warnings, complete examples, and documentation</epic-value>
+    <related-stories>
+      <story id="5-2">Comprehensive Error Handling Hierarchy (backlog)</story>
+      <story id="5-3">Path List Output Format (backlog)</story>
+      <story id="5-4">Comprehensive Example Gallery (backlog)</story>
+      <story id="5-5">Production-Grade Documentation (backlog)</story>
+    </related-stories>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+      <type>technical-specification</type>
+      <relevance>Primary technical specification for Epic 5</relevance>
+      <sections>
+        <section>Lines 227-289: Validation data models (ValidationWarning, ValidationReport, WarningSeverity)</section>
+        <section>Lines 374-450: Validation API (validate_workflow, detect_unreachable_activities)</section>
+        <section>Lines 612-638: Validation workflow integration into analyze_workflow</section>
+        <section>Lines 327-340: GraphBuildingContext extensions (suppress_validation, include_validation_report)</section>
+        <section>Lines 941-956: AC-5.1 acceptance criteria (authoritative)</section>
+      </sections>
+    </artifact>
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>architecture-documentation</type>
+      <relevance>Architecture patterns and validation integration points</relevance>
+      <sections>
+        <section>Lines 1-150: Architecture overview, static analysis approach, module organization</section>
+        <section>Core modules: analyzer.py, context.py, path.py patterns to follow</section>
+        <section>Visitor Pattern for AST traversal (reference for validation logic)</section>
+      </sections>
+    </artifact>
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>project-guidance</type>
+      <relevance>Project conventions, tool preferences, common commands</relevance>
+      <sections>
+        <section>Use uv for Python package management (user requirement)</section>
+        <section>Testing: pytest -v --cov, mypy strict mode, ruff check/format</section>
+        <section>Code conventions: snake_case, Google/NumPy docstrings, 100% type hints</section>
+      </sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <type>dataclass</type>
+      <name>GraphBuildingContext</name>
+      <description>Configuration context for workflow graph generation (immutable, frozen=True)</description>
+      <existing-fields>
+        <field name="is_building_graph" type="bool" default="True"/>
+        <field name="exit_after_building_graph" type="bool" default="False"/>
+        <field name="graph_output_file" type="Path | None" default="None"/>
+        <field name="split_names_by_words" type="bool" default="True"/>
+        <field name="suppress_validation" type="bool" default="False"/>
+        <field name="start_node_label" type="str" default="Start"/>
+        <field name="end_node_label" type="str" default="End"/>
+        <field name="max_decision_points" type="int" default="10"/>
+        <field name="max_paths" type="int" default="1024"/>
+        <field name="decision_true_label" type="str" default="yes"/>
+        <field name="decision_false_label" type="str" default="no"/>
+        <field name="signal_success_label" type="str" default="Signaled"/>
+        <field name="signal_timeout_label" type="str" default="Timeout"/>
+      </existing-fields>
+      <modifications-needed>
+        <modification>Add include_validation_report: bool = True field</modification>
+        <modification>Update docstring to document new validation fields</modification>
+        <modification>Note: suppress_validation field already exists (line 81)</modification>
+      </modifications-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <type>function</type>
+      <name>analyze_workflow</name>
+      <description>Main entry point for workflow analysis (called by users)</description>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None) -> str</signature>
+      <current-flow>
+        <step>1. Validate workflow_file exists and is readable</step>
+        <step>2. Parse AST from source file</step>
+        <step>3. WorkflowAnalyzer.analyze(tree) -> WorkflowMetadata</step>
+        <step>4. PathPermutationGenerator.generate(metadata) -> list[GraphPath]</step>
+        <step>5. MermaidRenderer.render(paths) -> Mermaid output</step>
+        <step>6. Write to file if context.graph_output_file set</step>
+        <step>7. Return Mermaid string</step>
+      </current-flow>
+      <integration-point>
+        <location>After step 4 (path generation), before step 5 (rendering)</location>
+        <action>Call validate_workflow(metadata, paths, context) -> ValidationReport</action>
+        <action>Append report.format() to output if context.include_validation_report and report.has_warnings()</action>
+      </integration-point>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>dataclass</type>
+      <name>WorkflowMetadata</name>
+      <description>Metadata describing workflow structure from AST analysis</description>
+      <fields>
+        <field name="workflow_class" type="str"/>
+        <field name="workflow_run_method" type="str"/>
+        <field name="activities" type="list[Activity]"/>
+        <field name="decision_points" type="list[DecisionPoint]"/>
+        <field name="signal_points" type="list[SignalPoint]"/>
+        <field name="source_file" type="Path"/>
+        <field name="total_paths" type="int"/>
+      </fields>
+      <usage-in-validation>
+        <detail>metadata.activities contains list of Activity objects with name and line_num</detail>
+        <detail>metadata.source_file provides file path for ValidationWarning</detail>
+        <detail>Use to extract all defined activities for unreachable detection</detail>
+      </usage-in-validation>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>dataclass</type>
+      <name>Activity</name>
+      <description>Represents activity invocation with line number (frozen=True)</description>
+      <fields>
+        <field name="name" type="str"/>
+        <field name="line_num" type="int"/>
+      </fields>
+      <usage-in-validation>
+        <detail>Extract (activity.name, activity.line_num) tuples for defined_activities set</detail>
+      </usage-in-validation>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/path.py</file>
+      <type>dataclass</type>
+      <name>GraphPath</name>
+      <description>Tracks single execution path through workflow</description>
+      <fields>
+        <field name="path_id" type="str"/>
+        <field name="steps" type="list[PathStep]"/>
+        <field name="decisions" type="dict[str, bool]"/>
+      </fields>
+      <usage-in-validation>
+        <detail>Iterate path.steps to find ActivityStep objects (node_type='activity')</detail>
+        <detail>Extract ActivityStep.name to build called_activities set</detail>
+      </usage-in-validation>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/path.py</file>
+      <type>dataclass</type>
+      <name>PathStep</name>
+      <description>Single step in execution path (activity, decision, or signal)</description>
+      <fields>
+        <field name="node_type" type="Literal['activity', 'decision', 'signal']"/>
+        <field name="name" type="str"/>
+        <field name="decision_id" type="str | None"/>
+        <field name="decision_value" type="bool | None"/>
+        <field name="signal_outcome" type="str | None"/>
+      </fields>
+      <usage-in-validation>
+        <detail>Filter steps where node_type == 'activity' to find called activities</detail>
+      </usage-in-validation>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <type>module</type>
+      <name>public-api</name>
+      <description>Public API exports for library users</description>
+      <current-exports>
+        <export>GraphBuildingContext</export>
+        <export>analyze_workflow</export>
+        <export>to_decision</export>
+        <export>wait_condition</export>
+        <export>TemporalioGraphsError (from exceptions.py)</export>
+      </current-exports>
+      <modifications-needed>
+        <modification>Import ValidationWarning, ValidationReport from validator module</modification>
+        <modification>Add ValidationWarning and ValidationReport to __all__ list</modification>
+      </modifications-needed>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint category="type-safety">
+      <description>All code must pass mypy --strict with 100% type coverage</description>
+      <rationale>ADR-006: Mypy strict mode enforces quality and prevents runtime type errors</rationale>
+      <enforcement>CI checks fail if mypy errors exist</enforcement>
+    </constraint>
+
+    <constraint category="code-quality">
+      <description>All code must pass ruff check and ruff format with zero errors</description>
+      <rationale>ADR-007: Ruff enforces consistent code style and catches common errors</rationale>
+      <enforcement>CI checks fail if ruff errors exist</enforcement>
+    </constraint>
+
+    <constraint category="immutability">
+      <description>All dataclasses must use frozen=True for immutability</description>
+      <rationale>Prevent accidental modifications to data models, ensure thread-safety</rationale>
+      <examples>
+        <example>ValidationWarning: frozen=True (new)</example>
+        <example>ValidationReport: frozen=True (new)</example>
+        <example>GraphBuildingContext: frozen=True (existing)</example>
+        <example>Activity: frozen=True (existing)</example>
+      </examples>
+    </constraint>
+
+    <constraint category="performance">
+      <description>Validation must add less than 10ms overhead (NFR-PERF-1)</description>
+      <rationale>Validation should not significantly slow down workflow analysis</rationale>
+      <implementation>Use O(n) set operations for unreachable detection, no file I/O or network calls</implementation>
+      <validation>Performance test must verify duration less than 0.01 seconds for 50 activities</validation>
+    </constraint>
+
+    <constraint category="backward-compatibility">
+      <description>Existing code using analyze_workflow must work unchanged</description>
+      <rationale>Library users should not need to modify their code when upgrading</rationale>
+      <implementation>
+        <detail>Default values for new GraphBuildingContext fields (include_validation_report=True)</detail>
+        <detail>Validation enabled by default, suppressible via suppress_validation=True</detail>
+        <detail>All Epic 2-4 regression tests must pass</detail>
+      </implementation>
+    </constraint>
+
+    <constraint category="error-handling">
+      <description>Validation never throws exceptions (warnings only)</description>
+      <rationale>Validation issues should not prevent graph generation</rationale>
+      <implementation>validate_workflow returns ValidationReport, never raises exceptions</implementation>
+    </constraint>
+
+    <constraint category="documentation">
+      <description>All public functions/classes need Google-style docstrings</description>
+      <rationale>ADR-009: Consistent documentation format for API reference generation</rationale>
+      <format>Google-style with Args, Returns, Raises, Example sections</format>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <runtime-dependencies>
+      <dependency>
+        <name>pathlib.Path</name>
+        <source>Python stdlib</source>
+        <usage>File path handling in ValidationWarning</usage>
+      </dependency>
+      <dependency>
+        <name>dataclasses</name>
+        <source>Python stdlib</source>
+        <usage>ValidationWarning, ValidationReport data models</usage>
+      </dependency>
+      <dependency>
+        <name>enum.Enum</name>
+        <source>Python stdlib</source>
+        <usage>WarningSeverity enum (INFO, WARNING, ERROR)</usage>
+      </dependency>
+    </runtime-dependencies>
+
+    <internal-dependencies>
+      <dependency>
+        <module>temporalio_graphs.context</module>
+        <imports>GraphBuildingContext</imports>
+        <usage>Access suppress_validation and include_validation_report flags</usage>
+      </dependency>
+      <dependency>
+        <module>temporalio_graphs.path</module>
+        <imports>GraphPath, PathStep</imports>
+        <usage>Iterate paths and steps to extract called activities</usage>
+      </dependency>
+      <dependency>
+        <module>temporalio_graphs._internal.graph_models</module>
+        <imports>WorkflowMetadata, Activity</imports>
+        <usage>Access metadata.activities for defined activities list</usage>
+      </dependency>
+    </internal-dependencies>
+
+    <development-dependencies>
+      <dependency>
+        <name>pytest</name>
+        <version>>=8.0.0</version>
+        <usage>Unit and integration testing framework</usage>
+      </dependency>
+      <dependency>
+        <name>pytest-cov</name>
+        <version>>=4.1.0</version>
+        <usage>Code coverage measurement (target >80%)</usage>
+      </dependency>
+      <dependency>
+        <name>mypy</name>
+        <version>>=1.8.0</version>
+        <usage>Type checking in strict mode</usage>
+      </dependency>
+      <dependency>
+        <name>ruff</name>
+        <version>>=0.2.0</version>
+        <usage>Linting and code formatting</usage>
+      </dependency>
+    </development-dependencies>
+  </dependencies>
+
+  <testing-context>
+    <test-patterns>
+      <pattern name="dataclass-testing">
+        <description>Test dataclass instantiation, field values, and methods</description>
+        <example-from>tests/test_graph_models.py (Activity, DecisionPoint, SignalPoint)</example-from>
+        <apply-to>ValidationWarning, ValidationReport</apply-to>
+      </pattern>
+
+      <pattern name="format-method-testing">
+        <description>Test format() method output for human-readable strings</description>
+        <example-from>DecisionPoint, SignalPoint (both have format-like behavior)</example-from>
+        <apply-to>ValidationWarning.format(), ValidationReport.format()</apply-to>
+      </pattern>
+
+      <pattern name="integration-testing">
+        <description>End-to-end workflow analysis with full pipeline</description>
+        <reference>tests/integration/test_signal_workflow.py (Story 4-4 pattern)</reference>
+        <structure>
+          <step>Create test workflow with known characteristics (unreachable activity)</step>
+          <step>Call analyze_workflow() with appropriate context</step>
+          <step>Validate output contains expected warnings</step>
+          <step>Test suppression flag works</step>
+          <step>Verify performance requirements met</step>
+        </structure>
+      </pattern>
+
+      <pattern name="performance-testing">
+        <description>Measure execution time with time.perf_counter()</description>
+        <requirement>Validation must complete in less than 10ms for 50 activities</requirement>
+        <implementation>
+          <step>Create mock WorkflowMetadata with 50 Activity objects</step>
+          <step>Create mock paths with subset of activities called</step>
+          <step>Measure validation time: start = perf_counter(), validate_workflow(...), duration = perf_counter() - start</step>
+          <step>Assert duration less than 0.01 (10ms)</step>
+        </implementation>
+      </pattern>
+    </test-patterns>
+
+    <test-coverage-requirements>
+      <requirement>Overall project coverage must remain above 80%</requirement>
+      <requirement>validator.py module coverage target: 100%</requirement>
+      <requirement>Minimum 8 unit tests in test_validator.py</requirement>
+      <requirement>Minimum 1 integration test in test_validation_warnings.py</requirement>
+      <requirement>1 performance test in test_performance.py</requirement>
+    </test-coverage-requirements>
+
+    <existing-test-examples>
+      <example>
+        <file>tests/integration/test_signal_workflow.py</file>
+        <description>Story 4-4 integration test (95% coverage, comprehensive)</description>
+        <patterns-to-reuse>
+          <pattern>_extract_mermaid_content helper for parsing output</pattern>
+          <pattern>End-to-end workflow analysis with validation</pattern>
+          <pattern>Performance measurement with time.time()</pattern>
+          <pattern>Golden file structural comparison (not exact match)</pattern>
+        </patterns-to-reuse>
+      </example>
+
+      <example>
+        <file>tests/test_graph_models.py</file>
+        <description>Unit tests for Activity, DecisionPoint, SignalPoint dataclasses</description>
+        <patterns-to-reuse>
+          <pattern>Dataclass instantiation testing</pattern>
+          <pattern>Field validation and type checking</pattern>
+          <pattern>Frozen dataclass immutability testing</pattern>
+        </patterns-to-reuse>
+      </example>
+    </existing-test-examples>
+  </testing-context>
+
+  <implementation-guidance>
+    <guidance category="module-creation">
+      <title>Create validator.py module</title>
+      <steps>
+        <step>Create src/temporalio_graphs/validator.py as new module</step>
+        <step>Import required types: dataclass, Enum, Optional, Path</step>
+        <step>Import internal types: GraphBuildingContext, GraphPath, WorkflowMetadata, Activity</step>
+        <step>Define WarningSeverity enum with INFO, WARNING, ERROR levels</step>
+        <step>Define ValidationWarning dataclass (frozen=True) with all required fields</step>
+        <step>Implement ValidationWarning.format() method with icon, category, message formatting</step>
+        <step>Define ValidationReport dataclass (frozen=True) with warnings list and counts</step>
+        <step>Implement ValidationReport.has_warnings() and format() methods</step>
+        <step>Implement detect_unreachable_activities(metadata, paths) helper function</step>
+        <step>Implement validate_workflow(metadata, paths, context) orchestrator function</step>
+        <step>Add complete type hints and Google-style docstrings to all functions/classes</step>
+      </steps>
+    </guidance>
+
+    <guidance category="algorithm">
+      <title>Unreachable activity detection algorithm</title>
+      <description>
+        Detect activities defined in workflow but never called in any execution path.
+        Uses set operations for O(n) performance.
+      </description>
+      <algorithm>
+        <step>1. Extract defined_activities: set of (activity.name, activity.line_num) from metadata.activities</step>
+        <step>2. Extract called_activities: set of activity names from all paths (iterate path.steps, filter node_type=='activity')</step>
+        <step>3. Compute unreachable_activities: {name for (name, line) in defined_activities if name not in called_activities}</step>
+        <step>4. For each unreachable activity: create ValidationWarning with severity=WARNING, category="unreachable"</step>
+        <step>5. Include file_path from metadata.source_file, line number from activity tuple, suggestion text</step>
+        <step>6. Return list[ValidationWarning]</step>
+      </algorithm>
+      <edge-cases>
+        <case>No activities defined: return empty list (no warnings)</case>
+        <case>All activities called: return empty list (no warnings)</case>
+        <case>Multiple unreachable activities: return one warning per unreachable activity</case>
+      </edge-cases>
+    </guidance>
+
+    <guidance category="context-modification">
+      <title>Extend GraphBuildingContext safely</title>
+      <constraints>
+        <constraint>Context is frozen (immutable), cannot be modified after creation</constraint>
+        <constraint>New fields must have default values for backward compatibility</constraint>
+        <constraint>suppress_validation field already exists (line 81 in context.py)</constraint>
+      </constraints>
+      <modifications>
+        <modification>
+          <field>include_validation_report: bool = True</field>
+          <location>After suppress_validation field (around line 82)</location>
+          <docstring-update>Add documentation in Args section of class docstring</docstring-update>
+        </modification>
+      </modifications>
+      <validation>
+        <check>Run existing tests: pytest tests/test_context.py</check>
+        <check>Verify default GraphBuildingContext() still works</check>
+        <check>Verify all Epic 2-4 regression tests pass</check>
+      </validation>
+    </guidance>
+
+    <guidance category="integration">
+      <title>Integrate validation into analyze_workflow</title>
+      <location>src/temporalio_graphs/analyzer.py</location>
+      <modifications>
+        <modification>
+          <step>1. Import validate_workflow from temporalio_graphs.validator</step>
+          <step>2. After PathPermutationGenerator.generate(metadata) returns paths</step>
+          <step>3. Call validation_report = validate_workflow(metadata, paths, context)</step>
+          <step>4. After MermaidRenderer.render(paths) completes</step>
+          <step>5. Check: if context.include_validation_report and validation_report.has_warnings()</step>
+          <step>6. If True: append "\n" + validation_report.format() to output string</step>
+          <step>7. Return complete output (Mermaid + optional validation report)</step>
+        </modification>
+      </modifications>
+      <output-format>
+        <section order="1">Mermaid diagram (existing)</section>
+        <section order="2">Validation report (new, conditional)</section>
+        <separator>Single newline between sections</separator>
+      </output-format>
+    </guidance>
+
+    <guidance category="api-exports">
+      <title>Export validation APIs in __init__.py</title>
+      <location>src/temporalio_graphs/__init__.py</location>
+      <modifications>
+        <modification>
+          <step>1. Add import: from temporalio_graphs.validator import ValidationWarning, ValidationReport</step>
+          <step>2. Add to __all__ list: "ValidationWarning", "ValidationReport"</step>
+          <step>3. Update module docstring to mention validation features</step>
+          <step>4. Verify import works: from temporalio_graphs import ValidationWarning</step>
+        </modification>
+      </modifications>
+    </guidance>
+
+    <guidance category="testing-strategy">
+      <title>Comprehensive testing approach</title>
+      <unit-tests>
+        <file>tests/test_validator.py</file>
+        <tests>
+          <test name="test_unreachable_activity_detection">Single unreachable activity, verify warning created with correct fields</test>
+          <test name="test_no_unreachable_activities">All activities called, verify empty warnings list</test>
+          <test name="test_multiple_unreachable_activities">3 unreachable activities, verify 3 warnings generated</test>
+          <test name="test_validation_warning_format">Verify format() output has icon, category, message, location</test>
+          <test name="test_validation_report_format">Verify report header, counts, warning list formatting</test>
+          <test name="test_validation_report_no_warnings">Empty report has_warnings() returns False, format() returns empty</test>
+          <test name="test_suppress_validation">suppress_validation=True returns empty report</test>
+          <test name="test_validation_warning_severity">INFO vs WARNING icons differ in format()</test>
+        </tests>
+      </unit-tests>
+
+      <integration-tests>
+        <file>tests/integration/test_validation_warnings.py</file>
+        <tests>
+          <test name="test_unreachable_activity_warning_in_output">
+            <description>Create workflow with unreachable activity, verify warning appears in output</description>
+            <steps>
+              <step>Create temporary workflow file with @workflow.defn class</step>
+              <step>Define activity that is never called in workflow</step>
+              <step>Call analyze_workflow(workflow_file)</step>
+              <step>Verify output contains "--- Validation Report ---"</step>
+              <step>Verify output contains "[UNREACHABLE]"</step>
+              <step>Verify output contains activity name and line number</step>
+            </steps>
+          </test>
+          <test name="test_suppress_validation_flag">
+            <description>Verify suppress_validation=True produces no warnings</description>
+            <steps>
+              <step>Same workflow as above (with unreachable activity)</step>
+              <step>Call analyze_workflow with context.suppress_validation=True</step>
+              <step>Verify output does NOT contain "--- Validation Report ---"</step>
+            </steps>
+          </test>
+        </tests>
+      </integration-tests>
+
+      <performance-tests>
+        <file>tests/test_performance.py</file>
+        <tests>
+          <test name="test_validation_performance">
+            <description>Verify validation completes in less than 10ms for 50 activities</description>
+            <implementation>
+              <step>Create mock WorkflowMetadata with 50 Activity objects</step>
+              <step>Create mock paths with 25 activities called (50% unreachable)</step>
+              <step>Measure: start = time.perf_counter()</step>
+              <step>Call validate_workflow(metadata, paths, context)</step>
+              <step>Measure: duration = time.perf_counter() - start</step>
+              <step>Assert duration less than 0.01 (10ms requirement)</step>
+            </implementation>
+          </test>
+        </tests>
+      </performance-tests>
+    </guidance>
+  </implementation-guidance>
+
+  <validation-checklist>
+    <item category="code-quality">All new code passes mypy --strict with zero errors</item>
+    <item category="code-quality">All new code passes ruff check with zero errors</item>
+    <item category="code-quality">All new code formatted with ruff format</item>
+    <item category="testing">Minimum 8 unit tests in test_validator.py, all passing</item>
+    <item category="testing">Integration test in test_validation_warnings.py, passing</item>
+    <item category="testing">Performance test validates less than 10ms requirement</item>
+    <item category="testing">Test coverage for validator.py above 80% (target 100%)</item>
+    <item category="testing">All Epic 2-4 regression tests still pass (backward compatibility)</item>
+    <item category="functionality">ValidationWarning dataclass with all required fields (frozen=True)</item>
+    <item category="functionality">ValidationReport dataclass with has_warnings() and format() methods</item>
+    <item category="functionality">WarningSeverity enum with INFO, WARNING, ERROR levels</item>
+    <item category="functionality">detect_unreachable_activities correctly identifies unreachable activities</item>
+    <item category="functionality">validate_workflow orchestrates validation and returns report</item>
+    <item category="functionality">GraphBuildingContext extended with include_validation_report field</item>
+    <item category="functionality">analyze_workflow integrates validation after path generation</item>
+    <item category="functionality">Validation report appears in output when warnings exist</item>
+    <item category="functionality">suppress_validation flag correctly suppresses warnings</item>
+    <item category="functionality">include_validation_report flag correctly controls output</item>
+    <item category="api">ValidationWarning and ValidationReport exported in __init__.py</item>
+    <item category="api">Public API imports work: from temporalio_graphs import ValidationWarning</item>
+    <item category="documentation">All new functions/classes have Google-style docstrings</item>
+    <item category="documentation">Docstrings include Args, Returns, Example sections</item>
+    <item category="performance">Validation adds less than 10ms overhead (verified by test)</item>
+    <item category="performance">No file I/O or network calls during validation</item>
+  </validation-checklist>
+
+  <warnings-and-gaps>
+    <warning category="missing-documentation">
+      <description>README.md does not yet document validation warnings feature</description>
+      <impact>Medium - Users won't know about validation warnings until Story 5.5 (documentation)</impact>
+      <mitigation>Story 5.5 will add comprehensive documentation including validation examples</mitigation>
+    </warning>
+
+    <warning category="incomplete-validation">
+      <description>Only unreachable activity detection implemented (unused activity detection deferred)</description>
+      <impact>Low - FR26 "unused activity" may overlap with "unreachable", or be distinct feature for post-MVP</impact>
+      <mitigation>Tech spec allows for future extension: detect_unused_activities() stub exists</mitigation>
+    </warning>
+
+    <gap category="error-handling">
+      <description>Story 5.1 creates validator.py but not exceptions.py hierarchy</description>
+      <impact>Low - exceptions.py already exists with TemporalioGraphsError base (created in Epic 2-4)</impact>
+      <resolution>Story 5.2 will extend exceptions.py with WorkflowParseError, UnsupportedPatternError, etc.</resolution>
+    </gap>
+
+    <gap category="output-formats">
+      <description>Story 5.1 does not implement path list output format (FR24)</description>
+      <impact>Low - Path list is Story 5.3 scope, not blocking for validation</impact>
+      <resolution>Story 5.3 will add formatter.py module for path list generation</resolution>
+    </gap>
+  </warnings-and-gaps>
+
+  <reference-implementations>
+    <reference>
+      <name>DecisionPoint and SignalPoint dataclasses</name>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>239-327</lines>
+      <pattern>frozen=True dataclass with complete type hints and field documentation</pattern>
+      <apply-to>ValidationWarning, ValidationReport</apply-to>
+    </reference>
+
+    <reference>
+      <name>GraphBuildingContext dataclass</name>
+      <file>src/temporalio_graphs/context.py</file>
+      <lines>11-90</lines>
+      <pattern>frozen=True configuration object with default values and comprehensive docstring</pattern>
+      <apply-to>Context extension with include_validation_report field</apply-to>
+    </reference>
+
+    <reference>
+      <name>WorkflowAnalyzer.analyze method</name>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <lines>74-238</lines>
+      <pattern>Pipeline orchestration: parse -> analyze -> detect -> return metadata</pattern>
+      <apply-to>validate_workflow orchestrator function structure</apply-to>
+    </reference>
+
+    <reference>
+      <name>Integration test pattern from Story 4-4</name>
+      <file>tests/integration/test_signal_workflow.py</file>
+      <lines>1-100</lines>
+      <pattern>End-to-end workflow analysis with validation, helper functions for parsing output</pattern>
+      <apply-to>test_validation_warnings.py integration test</apply-to>
+    </reference>
+  </reference-implementations>
+
+  <next-steps>
+    <step order="1">Review this Story Context XML to ensure all necessary information is captured</step>
+    <step order="2">Begin implementation with Task 1: Create validator.py module and data models</step>
+    <step order="3">Implement Task 2: Unreachable activity detection algorithm</step>
+    <step order="4">Implement Task 3: validate_workflow orchestrator function</step>
+    <step order="5">Extend GraphBuildingContext (Task 4) and integrate into analyze_workflow (Task 5)</step>
+    <step order="6">Export validation APIs (Task 6)</step>
+    <step order="7">Create comprehensive unit tests (Task 7), performance tests (Task 8), integration tests (Task 9)</step>
+    <step order="8">Final validation and documentation updates (Task 10)</step>
+    <step order="9">Mark story as review after all ACs validated</step>
+    <step order="10">After SM review approval, mark story as done and update sprint-status.yaml</step>
+  </next-steps>
+</story-context>

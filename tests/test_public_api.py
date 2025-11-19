@@ -344,11 +344,14 @@ class TestAnalyzeWorkflowSignature:
         exported = temporalio_graphs.__all__
 
         # Assert
+        # Updated in Story 5.1 to include validation APIs
         assert set(exported) == {
             "GraphBuildingContext",
             "analyze_workflow",
             "to_decision",
             "wait_condition",
+            "ValidationWarning",
+            "ValidationReport",
         }
         # Verify internal components not exported
         assert "WorkflowAnalyzer" not in exported

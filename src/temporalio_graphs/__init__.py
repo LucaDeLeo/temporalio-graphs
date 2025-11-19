@@ -17,10 +17,18 @@ from temporalio_graphs.context import GraphBuildingContext
 from temporalio_graphs.generator import PathPermutationGenerator
 from temporalio_graphs.helpers import to_decision, wait_condition
 from temporalio_graphs.renderer import MermaidRenderer
+from temporalio_graphs.validator import ValidationReport, ValidationWarning, validate_workflow
 
 __version__ = "0.1.0"
 
-__all__ = ["GraphBuildingContext", "analyze_workflow", "to_decision", "wait_condition"]
+__all__ = [
+    "GraphBuildingContext",
+    "analyze_workflow",
+    "to_decision",
+    "wait_condition",
+    "ValidationWarning",
+    "ValidationReport",
+]
 
 
 def _validate_context(context: GraphBuildingContext) -> None:
@@ -143,9 +151,16 @@ def analyze_workflow(
     generator = PathPermutationGenerator()
     paths = generator.generate_paths(metadata, context)
 
+    # Validate workflow quality
+    validation_report = validate_workflow(metadata, paths, context)
+
     # Render to Mermaid
     renderer = MermaidRenderer()
     result = renderer.to_mermaid(paths, context)
+
+    # Append validation report if enabled and warnings exist
+    if context.include_validation_report and validation_report.has_warnings():
+        result += "\n" + validation_report.format()
 
     # Write to file if configured
     if context.graph_output_file is not None:
