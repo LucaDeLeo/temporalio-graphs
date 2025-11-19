@@ -480,8 +480,63 @@ class WorkflowMetadata:
         Returns:
             2^(total_branch_points) representing all path permutations.
         """
-        result: int = 2 ** self.total_branch_points
+        result: int = 2**self.total_branch_points
         return result
+
+
+@dataclass(frozen=True)
+class MultiWorkflowPath:
+    """Represents a complete end-to-end execution path across multiple workflows.
+
+    A multi-workflow path captures a single execution sequence that spans parent and
+    child workflows, showing complete end-to-end flow across workflow boundaries. This
+    is used for inline mode cross-workflow visualization where parent paths are expanded
+    to include all child workflow steps.
+
+    The frozen=True attribute ensures MultiWorkflowPath instances are immutable,
+    preventing accidental modifications to path structure once created.
+
+    Args:
+        path_id: Unique identifier for this end-to-end path (e.g., "mwpath_0", "mwpath_1").
+        workflows: Ordered list of workflow class names traversed in this path, starting
+            with root workflow and including all child workflows encountered.
+        steps: Ordered list of all step names (activities, decisions, signals, child workflows)
+            encountered in this end-to-end path across all workflows.
+        workflow_transitions: List of workflow boundary crossings in this path. Each tuple
+            is (step_index, from_workflow, to_workflow) where step_index is 0-based position
+            in steps list where transition occurs.
+        total_decisions: Total number of decision points across all workflows in this path.
+            Used for path explosion calculations and validation.
+
+    Example:
+        >>> # Parent workflow calling child workflow
+        >>> mw_path = MultiWorkflowPath(
+        ...     path_id="mwpath_0",
+        ...     workflows=["ParentWorkflow", "ChildWorkflow"],
+        ...     steps=[
+        ...         "ParentActivity1",
+        ...         "ParentDecision",
+        ...         "ChildActivity1",
+        ...         "ChildDecision",
+        ...         "ParentActivity2",
+        ...     ],
+        ...     workflow_transitions=[
+        ...         (2, "ParentWorkflow", "ChildWorkflow"),
+        ...         (4, "ChildWorkflow", "ParentWorkflow"),
+        ...     ],
+        ...     total_decisions=2
+        ... )
+        >>> mw_path.workflows
+        ['ParentWorkflow', 'ChildWorkflow']
+        >>> len(mw_path.workflow_transitions)
+        2
+    """
+
+    path_id: str
+    workflows: list[str]
+    steps: list[str]
+    workflow_transitions: list[tuple[int, str, str]]
+    total_decisions: int
 
 
 @dataclass(frozen=True)
@@ -513,7 +568,12 @@ class WorkflowCallGraph:
         ...     child_workflows={"ChildWorkflow": child1},
         ...     call_relationships=[("ParentWorkflow", "ChildWorkflow")],
         ...     all_child_calls=[
-        ...         ChildWorkflowCall("ChildWorkflow", 45, "child_childworkflow_45", "ParentWorkflow")
+        ...         ChildWorkflowCall(
+        ...             "ChildWorkflow",
+        ...             45,
+        ...             "child_childworkflow_45",
+        ...             "ParentWorkflow",
+        ...         )
         ...     ],
         ...     total_workflows=2
         ... )

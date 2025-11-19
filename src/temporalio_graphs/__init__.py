@@ -12,6 +12,7 @@ Quick start:
 from pathlib import Path
 from typing import Literal
 
+from temporalio_graphs._internal.graph_models import MultiWorkflowPath
 from temporalio_graphs.analyzer import WorkflowAnalyzer
 from temporalio_graphs.context import GraphBuildingContext
 from temporalio_graphs.exceptions import (
@@ -31,6 +32,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "GraphBuildingContext",
+    "MultiWorkflowPath",
     "analyze_workflow",
     "to_decision",
     "wait_condition",

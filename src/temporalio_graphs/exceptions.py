@@ -4,6 +4,7 @@ This module defines all custom exceptions raised by the library.
 """
 
 from pathlib import Path
+from typing import Any
 
 
 class TemporalioGraphsError(Exception):
@@ -147,7 +148,7 @@ class GraphGenerationError(TemporalioGraphsError):
         ... )
     """
 
-    def __init__(self, reason: str, context: dict[str, int] | None = None) -> None:
+    def __init__(self, reason: str, context: dict[str, Any] | None = None) -> None:
         """Initialize GraphGenerationError with reason and optional context.
 
         Args:
