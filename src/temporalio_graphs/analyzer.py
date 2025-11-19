@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from temporalio_graphs._internal.graph_models import Activity, WorkflowMetadata
-from temporalio_graphs.detector import DecisionDetector
+from temporalio_graphs.detector import DecisionDetector, SignalDetector
 from temporalio_graphs.exceptions import WorkflowParseError
 
 if TYPE_CHECKING:
@@ -190,6 +190,11 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         decision_detector.visit(tree)
         decision_points = decision_detector.decisions
 
+        # Detect signal points using SignalDetector
+        signal_detector = SignalDetector()
+        signal_detector.visit(tree)
+        signal_points = signal_detector.signals
+
         # Emit validation warnings if not suppressed
         if not context.suppress_validation:
             # Warn about empty workflows (no activity calls)
@@ -217,14 +222,19 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                         stacklevel=2,
                     )
 
+        # Calculate total paths from decisions + signals
+        total_paths = WorkflowMetadata.calculate_total_paths(
+            len(decision_points), len(signal_points)
+        )
+
         return WorkflowMetadata(
             workflow_class=self._workflow_class,
             workflow_run_method=self._workflow_run_method,
             activities=activities,  # Populated in Story 2.3
             decision_points=decision_points,  # Populated in Epic 3 (Story 3.1)
-            signal_points=[],  # Populated in Epic 4
+            signal_points=signal_points,  # Populated in Epic 4 (Story 4.1)
             source_file=path,
-            total_paths=1,  # Linear workflows only in Epic 2
+            total_paths=total_paths,
         )
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:

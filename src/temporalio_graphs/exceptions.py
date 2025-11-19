@@ -33,3 +33,31 @@ class GraphGenerationError(TemporalioGraphsError):
     """
 
     pass
+
+
+class InvalidSignalError(TemporalioGraphsError):
+    """Raised when wait_condition() call is invalid or malformed.
+
+    This exception is raised when:
+    - wait_condition() called with fewer than 3 required arguments
+    - Signal name argument is missing or invalid
+    - Other signal-specific validation failures
+
+    Args:
+        file_path: Path to workflow file where error occurred
+        line: Line number of invalid wait_condition() call
+        message: Detailed error description with actionable suggestion
+    """
+
+    def __init__(self, file_path: str, line: int, message: str) -> None:
+        """Initialize InvalidSignalError with file path, line number, and message.
+
+        Args:
+            file_path: Path to workflow file where error occurred.
+            line: Line number of invalid wait_condition() call.
+            message: Detailed error description with actionable suggestion.
+        """
+        full_message = f"{file_path}:{line}: {message}"
+        super().__init__(full_message)
+        self.file_path = file_path
+        self.line = line

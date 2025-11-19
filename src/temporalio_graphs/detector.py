@@ -26,8 +26,8 @@ Example:
 import ast
 import logging
 
-from temporalio_graphs._internal.graph_models import DecisionPoint
-from temporalio_graphs.exceptions import WorkflowParseError
+from temporalio_graphs._internal.graph_models import DecisionPoint, SignalPoint
+from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +83,8 @@ class DecisionDetector(ast.NodeVisitor):
                 decision_id = self._generate_decision_id()
 
                 # Look up branch activities for this decision
-                true_branch_lines = []
-                false_branch_lines = []
+                true_branch_lines: list[int] = []
+                false_branch_lines: list[int] = []
                 if line_number in self._decision_branches:
                     true_branch_lines, false_branch_lines = self._decision_branches[line_number]
 
@@ -301,3 +301,161 @@ class DecisionDetector(ast.NodeVisitor):
             List of DecisionPoint objects extracted during AST traversal.
         """
         return self._decisions
+
+
+class SignalDetector(ast.NodeVisitor):
+    """Detects wait_condition() helper calls in workflow AST.
+
+    This class extends ast.NodeVisitor to traverse Python workflow source files
+    and extract signal point metadata. It identifies wait_condition() calls,
+    extracts signal names, condition expressions, timeout expressions, and tracks
+    source line numbers.
+
+    The detector handles various patterns:
+    - Direct calls: await wait_condition(condition, timeout, "Name")
+    - Attribute calls: await workflow.wait_condition(condition, timeout, "Name")
+    - Result assignments: result = await wait_condition(...)
+
+    Attributes:
+        _signals: List of detected SignalPoint objects.
+        _signal_counter: Sequential counter for generating unique signal IDs.
+
+    Example:
+        >>> detector = SignalDetector()
+        >>> tree = ast.parse(workflow_source)
+        >>> detector.visit(tree)
+        >>> for signal in detector.signals:
+        ...     print(f"Signal: {signal.name} at line {signal.source_line}")
+    """
+
+    def __init__(self) -> None:
+        """Initialize the signal detector with empty state."""
+        self._signals: list[SignalPoint] = []
+        self._signal_counter: int = 0
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Visit Call nodes to identify wait_condition() function calls.
+
+        This visitor method is called for each function call in the AST. It checks
+        if the call is to the wait_condition() function and extracts signal metadata
+        if found.
+
+        Args:
+            node: AST node representing a function call.
+        """
+        if self._is_wait_condition_call(node):
+            try:
+                signal_point = self._extract_signal_metadata(node)
+                self._signals.append(signal_point)
+                logger.debug(
+                    f"Detected signal '{signal_point.name}' at line {signal_point.source_line} "
+                    f"(id={signal_point.node_id})"
+                )
+            except InvalidSignalError as e:
+                # Re-raise signal errors with full context
+                raise e
+
+        # Continue traversal to find nested calls
+        self.generic_visit(node)
+
+    def _is_wait_condition_call(self, node: ast.Call) -> bool:
+        """Check if a Call node is a wait_condition() function call.
+
+        This helper method identifies calls to the wait_condition() function by matching
+        against the function name. It handles both simple names and attribute access.
+
+        Args:
+            node: AST Call node to check.
+
+        Returns:
+            True if the call is to wait_condition(), False otherwise.
+        """
+        # Check for simple name: wait_condition(...)
+        if isinstance(node.func, ast.Name):
+            return node.func.id == "wait_condition"
+
+        # Check for attribute access: workflow.wait_condition(...)
+        if isinstance(node.func, ast.Attribute):
+            return node.func.attr == "wait_condition"
+
+        return False
+
+    def _extract_signal_metadata(self, node: ast.Call) -> SignalPoint:
+        """Extract signal name and metadata from wait_condition call.
+
+        The wait_condition() call requires 3 arguments:
+        1. condition: Lambda or callable for condition check
+        2. timeout: timedelta for timeout duration
+        3. name: String literal signal name
+
+        Args:
+            node: AST Call node for wait_condition() call.
+
+        Returns:
+            SignalPoint object with extracted metadata.
+
+        Raises:
+            InvalidSignalError: If wait_condition() has fewer than 3 arguments.
+        """
+        if len(node.args) < 3:
+            raise InvalidSignalError(
+                file_path="<unknown>",
+                line=node.lineno,
+                message=(
+                    f"wait_condition() requires 3 arguments "
+                    f"(condition, timeout, name), got {len(node.args)}"
+                ),
+            )
+
+        # Extract signal name (3rd argument)
+        name_arg = node.args[2]
+        if isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str):
+            name = name_arg.value
+        else:
+            logger.warning(
+                f"Signal name at line {node.lineno} is not a string literal - using 'UnnamedSignal'"
+            )
+            name = "UnnamedSignal"
+
+        # Extract condition expression (1st argument)
+        condition_expr = ast.unparse(node.args[0]) if node.args else ""
+
+        # Extract timeout expression (2nd argument)
+        timeout_expr = ast.unparse(node.args[1]) if len(node.args) > 1 else ""
+
+        # Generate node ID
+        node_id = self._generate_signal_id(name, node.lineno)
+
+        return SignalPoint(
+            name=name,
+            condition_expr=condition_expr,
+            timeout_expr=timeout_expr,
+            source_line=node.lineno,
+            node_id=node_id,
+        )
+
+    def _generate_signal_id(self, name: str, line: int) -> str:
+        """Generate deterministic node ID for signal.
+
+        Creates a unique identifier using signal name and source line number.
+        This ensures deterministic IDs for regression testing.
+
+        Args:
+            name: Signal name from wait_condition() call.
+            line: Source line number where signal is defined.
+
+        Returns:
+            Deterministic signal node ID in format: sig_{name}_{line}
+        """
+        # Use name + line for uniqueness and determinism
+        safe_name = name.replace(" ", "_").lower()
+        return f"sig_{safe_name}_{line}"
+
+    @property
+    def signals(self) -> list[SignalPoint]:
+        """Read-only list of detected signal points.
+
+        Returns:
+            List of SignalPoint objects extracted during AST traversal.
+        """
+        return self._signals

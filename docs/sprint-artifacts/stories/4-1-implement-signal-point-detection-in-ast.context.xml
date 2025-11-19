@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>4-1-implement-signal-point-detection-in-ast</story-key>
+    <story-title>Implement Signal Point Detection in AST</story-title>
+    <epic-key>epic-4</epic-key>
+    <epic-title>Signal &amp; Wait Condition Support</epic-title>
+    <generated-date>2025-11-19</generated-date>
+    <context-version>1.0</context-version>
+  </metadata>
+
+  <story-reference>
+    <story-file>docs/sprint-artifacts/stories/4-1-implement-signal-point-detection-in-ast.md</story-file>
+    <description>Story markdown file containing complete acceptance criteria, tasks, dev notes, and test strategy for signal point detection implementation.</description>
+  </story-reference>
+
+  <epic-context>
+    <epic-file>docs/sprint-artifacts/tech-spec-epic-4.md</epic-file>
+    <description>Epic 4 technical specification detailing signal and wait condition support architecture, including SignalDetector design (lines 75-81), SignalPoint dataclass (lines 122-132), WorkflowMetadata extension (lines 134-150), and AST detection interface (lines 254-303).</description>
+    <key-sections>
+      <section>Lines 75-81: SignalDetector class specification</section>
+      <section>Lines 122-132: SignalPoint dataclass definition</section>
+      <section>Lines 134-150: WorkflowMetadata extension with signal_points field</section>
+      <section>Lines 254-303: AST detection interface pattern for wait_condition() calls</section>
+      <section>Lines 356-377: Static analysis flow for signal detection</section>
+      <section>Lines 449-471: Error handling and validation requirements</section>
+      <section>Lines 796-844: Test strategy for signal detection</section>
+    </key-sections>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/prd.md</path>
+      <type>Product Requirements</type>
+      <relevance>Defines high-level signal node visualization requirements and user needs for wait condition support in workflow graphs.</relevance>
+    </artifact>
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>Architecture Decision Records</type>
+      <relevance>Documents AST visitor pattern selection (ADR-001), static analysis approach over runtime execution, and architectural constraints for detector implementation.</relevance>
+    </artifact>
+    <artifact>
+      <path>docs/epics.md</path>
+      <type>Epic Overview</type>
+      <relevance>Provides context for Epic 4 within overall project roadmap and dependencies on Epic 2 (basic graph generation) and Epic 3 (decision node support).</relevance>
+    </artifact>
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>Project Instructions</type>
+      <relevance>Contains project overview, technology stack (Python 3.10+, uv package manager), code conventions (snake_case, type hints, Google-style docstrings), and quality standards (>80% coverage, mypy strict).</relevance>
+    </artifact>
+    <artifact>
+      <path>IMPLEMENTATION_PLAN.md</path>
+      <type>Implementation Roadmap</type>
+      <relevance>Phase breakdown showing Epic 4 timeline and quality gate checkpoints for signal detection feature.</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/detector.py</file>
+      <type>Reference Implementation</type>
+      <description>DecisionDetector class (lines 35-304) serves as the EXACT pattern for SignalDetector implementation. Key patterns to replicate: ast.NodeVisitor extension, visit_Call() method for detection, _is_to_decision_call() pattern matcher, _extract_decision_name() argument extraction, _generate_decision_id() for unique IDs, error handling with WorkflowParseError, DEBUG logging for each detection, and sequential counter for ID generation.</description>
+      <usage>Follow this implementation pattern precisely for SignalDetector - replace "decision" with "signal" and "to_decision" with "wait_condition" while maintaining identical structure.</usage>
+    </interface>
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>Data Models</type>
+      <description>Contains DecisionPoint dataclass (lines 239-286) as pattern for SignalPoint. WorkflowMetadata class (lines 288-379) requires extension with signal_points field (line 349 currently has placeholder list[str]). NodeType enum (lines 13-32) already includes SIGNAL type. Activity dataclass (lines 206-237) shows frozen dataclass pattern with name and line_num fields.</description>
+      <usage>Add SignalPoint dataclass after DecisionPoint using frozen=True pattern. Update WorkflowMetadata.signal_points type from list[str] to list[SignalPoint]. Add total_branch_points and total_paths properties to WorkflowMetadata.</usage>
+    </interface>
+    <interface>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <type>Workflow Analyzer</type>
+      <description>WorkflowAnalyzer.analyze() method (lines 74-228) shows integration pattern for DecisionDetector (lines 188-191). Same pattern must be used for SignalDetector - instantiate detector, call visit(tree), and store results in metadata.signal_points. Currently line 225 hardcodes signal_points=[] which needs to be replaced with detected signals.</description>
+      <usage>Import SignalDetector at top of file. In analyze() method around line 189, add SignalDetector instantiation and visit() call parallel to DecisionDetector. Store signal_detector.signals in metadata.signal_points (replace line 225).</usage>
+    </interface>
+    <interface>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <type>Exception Hierarchy</type>
+      <description>TemporalioGraphsError base class (lines 7-10) and WorkflowParseError (lines 13-23) define exception hierarchy. All custom exceptions extend TemporalioGraphsError base class.</description>
+      <usage>Add InvalidSignalError class extending TemporalioGraphsError (not WorkflowParseError) following same pattern. Include docstring explaining when error is raised (wait_condition with &lt;3 arguments).</usage>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <type>Architecture Pattern</type>
+      <description>SignalDetector MUST follow EXACT pattern from DecisionDetector (Story 3.1) for consistency - same visitor pattern, same method naming convention (_is_X_call, _extract_X_name, _generate_X_id), same error handling approach.</description>
+      <source>Tech Spec Epic 4, lines 75-81; Story 4.1 Dev Notes, lines 169-176</source>
+    </constraint>
+    <constraint>
+      <type>AST Traversal Performance</type>
+      <description>Signal detection must piggyback on existing AST traversal pass (no additional tree walk). Target: &lt;0.1ms overhead per signal point, &lt;1ms total for workflow with 5 signals. Signal detection happens in same visit() pass as activity and decision detection.</description>
+      <source>Tech Spec Epic 4, NFR-PERF-1 lines 418-423; Story 4.1 AC1</source>
+    </constraint>
+    <constraint>
+      <type>String Literal Requirement</type>
+      <description>Signal names MUST be string literals (ast.Constant with str value) for static analysis. Dynamic signal names (variables) use "UnnamedSignal" fallback with DEBUG warning log - graceful degradation, no hard failure per NFR-REL-2.</description>
+      <source>Tech Spec Epic 4, lines 280-302; Story 4.1 AC2</source>
+    </constraint>
+    <constraint>
+      <type>Deterministic Node IDs</type>
+      <description>Signal node IDs must be deterministic for regression testing. Pattern: sig_{name}_{line} using signal name and source line number. Enables golden file comparison in future integration tests.</description>
+      <source>Story 4.1 Dev Notes, learnings from Story 3.5, lines 219-222</source>
+    </constraint>
+    <constraint>
+      <type>Type Safety Requirement</type>
+      <description>ALL code must pass mypy --strict with complete type hints. SignalPoint, SignalDetector, all methods must have full type annotations. No Any types except where unavoidable in AST traversal.</description>
+      <source>Story 4.1 AC1, AC7; Tech Spec Epic 4, NFR-QUAL-1</source>
+    </constraint>
+    <constraint>
+      <type>Error Message Format</type>
+      <description>All error messages must include file path, line number, and actionable suggestions per NFR-USE-2. Example format: "wait_condition() requires 3 arguments (condition, timeout, name), got 2 at line 42"</description>
+      <source>Story 4.1 AC6; Tech Spec Epic 4, lines 449-471</source>
+    </constraint>
+    <constraint>
+      <type>Logging Requirements</type>
+      <description>DEBUG level: Log each wait_condition() detection with name and line. WARNING level: Log when signal name is not string literal (using UnnamedSignal). INFO level: Log signal count in WorkflowMetadata after detection.</description>
+      <source>Tech Spec Epic 4, NFR-OBS-1 lines 479-486; Story 4.1 Task 9</source>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <type>Python Standard Library</type>
+      <modules>
+        <module>ast - Abstract Syntax Tree module for AST parsing and traversal (ast.NodeVisitor, ast.Call, ast.Constant, ast.unparse)</module>
+        <module>logging - For DEBUG/WARNING/INFO logging during signal detection</module>
+        <module>dataclasses - For SignalPoint dataclass definition (frozen=True pattern)</module>
+      </modules>
+      <version>Python 3.10+ (ast.unparse available since 3.9, compatible with project requirement)</version>
+    </dependency>
+    <dependency>
+      <type>Internal Modules</type>
+      <modules>
+        <module>temporalio_graphs._internal.graph_models - Import Activity, DecisionPoint patterns; define SignalPoint dataclass; extend WorkflowMetadata</module>
+        <module>temporalio_graphs.exceptions - Import TemporalioGraphsError base; define InvalidSignalError</module>
+        <module>temporalio_graphs.detector - Add SignalDetector class (can extend existing detector.py file)</module>
+        <module>temporalio_graphs.analyzer - Import SignalDetector, call during AST traversal, store signal_points in metadata</module>
+      </modules>
+      <note>No new external dependencies required - all modules already exist or use stdlib</note>
+    </dependency>
+    <dependency>
+      <type>Test Dependencies</type>
+      <modules>
+        <module>pytest - Test framework (already in dev dependencies)</module>
+        <module>pytest-asyncio - For async test support (already in dev dependencies)</module>
+      </modules>
+      <note>Test fixtures will be created in tests/fixtures/sample_workflows/ following existing pattern</note>
+    </dependency>
+  </dependencies>
+
+  <testing-context>
+    <framework>pytest with pytest-asyncio for async support</framework>
+    <coverage-target>100% for SignalDetector class (all branches covered per AC7)</coverage-target>
+    <test-patterns>
+      <pattern>
+        <name>Unit Tests - Signal Detection</name>
+        <file>tests/test_detector.py</file>
+        <description>Extend existing test file with signal detection tests following DecisionDetector test pattern. Tests: single wait_condition detection, multiple wait_condition detection, ignore non-wait_condition calls, extract signal name from string literal, missing signal name raises InvalidSignalError, dynamic signal name uses "UnnamedSignal", source line numbers correct, condition and timeout expressions extracted.</description>
+      </pattern>
+      <pattern>
+        <name>Unit Tests - Data Models</name>
+        <file>tests/test_graph_models.py</file>
+        <description>Add tests for SignalPoint dataclass creation, field validation, and WorkflowMetadata.total_branch_points / total_paths properties. Verify property correctly sums decisions + signals for branch point calculation.</description>
+      </pattern>
+      <pattern>
+        <name>Integration Tests - Analyzer</name>
+        <file>tests/integration/test_analyzer.py or new test file</file>
+        <description>Test full WorkflowAnalyzer pipeline with signal workflows. Validate signal_points populated in metadata, signal name/line/expressions extracted correctly, both signal_points and decision_points populated for mixed workflows.</description>
+      </pattern>
+      <pattern>
+        <name>Test Fixtures</name>
+        <location>tests/fixtures/sample_workflows/</location>
+        <files>
+          <file>signal_simple.py - Workflow with single wait_condition call</file>
+          <file>signal_multiple.py - Workflow with 2 sequential wait_condition calls</file>
+          <file>signal_with_decision.py - Workflow with both signal and decision nodes</file>
+          <file>signal_dynamic_name.py - Workflow with dynamic signal name (warning test case)</file>
+        </files>
+      </pattern>
+    </test-patterns>
+    <test-requirements>
+      <requirement>All tests must pass with pytest -v</requirement>
+      <requirement>Coverage &gt;100% for SignalDetector class measured with pytest --cov</requirement>
+      <requirement>Type checking passes with mypy --strict src/</requirement>
+      <requirement>Linting passes with ruff check src/</requirement>
+      <requirement>No regressions in existing Epic 2-3 tests (backward compatibility)</requirement>
+    </test-requirements>
+  </testing-context>
+
+  <implementation-notes>
+    <note>
+      <title>SignalDetector Implementation Pattern</title>
+      <content>Copy DecisionDetector class structure from detector.py exactly:
+
+class SignalDetector(ast.NodeVisitor):
+    def __init__(self) -&gt; None:
+        self._signals: list[SignalPoint] = []
+        self._signal_counter: int = 0
+
+    def visit_Call(self, node: ast.Call) -&gt; None:
+        if self._is_wait_condition_call(node):
+            try:
+                signal_point = self._extract_signal_metadata(node)
+                self._signals.append(signal_point)
+                logger.debug(f"Detected signal: {signal_point.name} at line {signal_point.source_line}")
+            except InvalidSignalError as e:
+                raise
+        self.generic_visit(node)
+
+    def _is_wait_condition_call(self, node: ast.Call) -&gt; bool:
+        # Check for wait_condition(...) or workflow.wait_condition(...)
+        if isinstance(node.func, ast.Name) and node.func.id == "wait_condition":
+            return True
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "wait_condition":
+            return True
+        return False
+
+    def _extract_signal_metadata(self, node: ast.Call) -&gt; SignalPoint:
+        if len(node.args) &lt; 3:
+            raise InvalidSignalError(
+                file_path="&lt;unknown&gt;",
+                line=node.lineno,
+                message=f"wait_condition() requires 3 arguments (condition, timeout, name), got {len(node.args)}"
+            )
+
+        name_arg = node.args[2]
+        if isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str):
+            name = name_arg.value
+        else:
+            logger.warning(f"Signal name at line {node.lineno} is not a string literal - using 'UnnamedSignal'")
+            name = "UnnamedSignal"
+
+        return SignalPoint(
+            name=name,
+            condition_expr=ast.unparse(node.args[0]),
+            timeout_expr=ast.unparse(node.args[1]),
+            source_line=node.lineno,
+            node_id=self._generate_signal_id(name, node.lineno)
+        )
+
+    def _generate_signal_id(self, name: str, line: int) -&gt; str:
+        safe_name = name.replace(" ", "_").lower()
+        return f"sig_{safe_name}_{line}"
+
+    @property
+    def signals(self) -&gt; list[SignalPoint]:
+        return self._signals
+</content>
+    </note>
+    <note>
+      <title>SignalPoint Dataclass Definition</title>
+      <content>Add to graph_models.py after DecisionPoint:
+
+@dataclass(frozen=True)
+class SignalPoint:
+    """Represents a signal/wait condition point in a workflow.
+
+    A signal point is a location where workflow waits for external event or condition,
+    identified by wait_condition() call. Each signal creates 2 execution paths (Signaled/Timeout).
+
+    Args:
+        name: Human-readable display name for signal node (from 3rd argument of wait_condition).
+        condition_expr: String representation of condition check expression (1st argument).
+        timeout_expr: String representation of timeout duration (2nd argument).
+        source_line: Line number in workflow source code where signal is defined.
+        node_id: Unique deterministic identifier for this signal node (sig_{name}_{line}).
+
+    Example:
+        &gt;&gt;&gt; signal = SignalPoint(
+        ...     name="WaitForApproval",
+        ...     condition_expr="lambda: self.approved",
+        ...     timeout_expr="timedelta(hours=24)",
+        ...     source_line=67,
+        ...     node_id="sig_waitforapproval_67"
+        ... )
+    """
+    name: str
+    condition_expr: str
+    timeout_expr: str
+    source_line: int
+    node_id: str
+</content>
+    </note>
+    <note>
+      <title>WorkflowMetadata Extension</title>
+      <content>Update WorkflowMetadata in graph_models.py:
+
+1. Change line 349 from:
+   signal_points: list[str]
+
+   To:
+   signal_points: list[SignalPoint]
+
+2. Add properties after calculate_total_paths method:
+
+    @property
+    def total_branch_points(self) -&gt; int:
+        """Total decision + signal points (determines path count).
+
+        Returns:
+            Sum of decision points and signal points in workflow.
+        """
+        return len(self.decision_points) + len(self.signal_points)
+
+    @property
+    def total_paths_from_branches(self) -&gt; int:
+        """Calculate total execution paths from branch points.
+
+        Returns:
+            2^(total_branch_points) representing all path permutations.
+        """
+        return 2 ** self.total_branch_points
+</content>
+    </note>
+    <note>
+      <title>InvalidSignalError Exception</title>
+      <content>Add to exceptions.py after GraphGenerationError:
+
+class InvalidSignalError(TemporalioGraphsError):
+    """Raised when wait_condition() call is invalid or malformed.
+
+    This exception is raised when:
+    - wait_condition() called with fewer than 3 required arguments
+    - Signal name argument is missing or invalid
+    - Other signal-specific validation failures
+
+    Args:
+        file_path: Path to workflow file where error occurred
+        line: Line number of invalid wait_condition() call
+        message: Detailed error description with actionable suggestion
+    """
+
+    def __init__(self, file_path: str, line: int, message: str) -&gt; None:
+        full_message = f"{file_path}:{line}: {message}"
+        super().__init__(full_message)
+        self.file_path = file_path
+        self.line = line
+</content>
+    </note>
+    <note>
+      <title>WorkflowAnalyzer Integration</title>
+      <content>Modify analyzer.py:
+
+1. Add import at top (around line 29):
+   from temporalio_graphs.detector import DecisionDetector, SignalDetector
+
+2. In analyze() method after DecisionDetector (around line 191):
+   # Detect signal points using SignalDetector
+   signal_detector = SignalDetector()
+   signal_detector.visit(tree)
+   signal_points = signal_detector.signals
+
+3. Replace line 225:
+   signal_points=[],
+
+   With:
+   signal_points=signal_points,
+
+4. Update total_paths calculation (line 227) to use metadata property:
+   total_paths=WorkflowMetadata.calculate_total_paths(
+       len(decision_points),
+       len(signal_points)
+   ),
+</content>
+    </note>
+    <note>
+      <title>Test Fixture Example - signal_simple.py</title>
+      <content>Create tests/fixtures/sample_workflows/signal_simple.py:
+
+from datetime import timedelta
+from temporalio import workflow
+
+@workflow.defn
+class SimpleSignalWorkflow:
+    def __init__(self) -&gt; None:
+        self.approved = False
+
+    @workflow.run
+    async def run(self) -&gt; str:
+        # Submit approval request
+        await workflow.execute_activity(
+            submit_request,
+            schedule_to_close_timeout=timedelta(seconds=30)
+        )
+
+        # Wait for approval signal (24 hour timeout)
+        result = await wait_condition(
+            lambda: self.approved,
+            timedelta(hours=24),
+            "WaitForApproval"
+        )
+
+        if result:
+            await workflow.execute_activity(
+                process_approved,
+                schedule_to_close_timeout=timedelta(seconds=30)
+            )
+        else:
+            await workflow.execute_activity(
+                handle_timeout,
+                schedule_to_close_timeout=timedelta(seconds=30)
+            )
+
+        return "complete"
+</content>
+    </note>
+  </implementation-notes>
+
+  <validation-checklist>
+    <item>SignalDetector class implemented in src/temporalio_graphs/detector.py following DecisionDetector pattern</item>
+    <item>SignalPoint dataclass added to src/temporalio_graphs/_internal/graph_models.py with frozen=True</item>
+    <item>WorkflowMetadata.signal_points field type changed from list[str] to list[SignalPoint]</item>
+    <item>WorkflowMetadata.total_branch_points and total_paths_from_branches properties implemented</item>
+    <item>InvalidSignalError exception class added to src/temporalio_graphs/exceptions.py</item>
+    <item>WorkflowAnalyzer.analyze() method updated to call SignalDetector and populate signal_points</item>
+    <item>All code passes mypy --strict with no type errors</item>
+    <item>All code passes ruff check with no lint violations</item>
+    <item>Unit tests in tests/test_detector.py cover all SignalDetector methods (100% coverage)</item>
+    <item>Unit tests in tests/test_graph_models.py verify SignalPoint creation and WorkflowMetadata properties</item>
+    <item>Integration tests verify signal detection through full WorkflowAnalyzer pipeline</item>
+    <item>Test fixtures created for simple signal, multiple signals, signal+decision, and dynamic name cases</item>
+    <item>All tests pass with pytest -v (no regressions in Epic 2-3 tests)</item>
+    <item>Coverage report shows &gt;100% for SignalDetector class</item>
+    <item>DEBUG logging added for each signal detected with name and line</item>
+    <item>WARNING logging added for dynamic signal names (non-string-literal)</item>
+    <item>Error messages include line numbers and actionable suggestions</item>
+    <item>Performance benchmark confirms &lt;1ms total analysis time for workflow with 5 signals</item>
+  </validation-checklist>
+
+  <warnings-and-gaps>
+    <warning>
+      <severity>Medium</severity>
+      <description>WorkflowMetadata.signal_points is currently typed as list[str] (line 349 of graph_models.py) but needs to be list[SignalPoint]. This will require updating the type annotation AND ensuring backward compatibility if any code currently uses this field.</description>
+      <mitigation>Check if any existing code references signal_points field before changing type. Since this is Epic 4 (signal support not yet implemented), the field should be unused and safe to change.</mitigation>
+    </warning>
+    <warning>
+      <severity>Low</severity>
+      <description>SignalDetector will need to be added to detector.py alongside DecisionDetector. File currently contains only DecisionDetector - adding SignalDetector increases file size and complexity.</description>
+      <mitigation>Could split into separate files (decision_detector.py, signal_detector.py) if file becomes unwieldy, but for MVP keeping in same file follows established pattern and maintains module cohesion.</mitigation>
+    </warning>
+    <warning>
+      <severity>Low</severity>
+      <description>Test fixtures for signal workflows reference wait_condition() helper which won't exist until Story 4.2. Test fixtures may need placeholder import or mock.</description>
+      <mitigation>Create test fixtures with wait_condition import but expect Story 4.2 to implement actual function. Tests in Story 4.1 will use AST parsing on fixture source code, not runtime execution, so placeholder import is acceptable.</mitigation>
+    </warning>
+    <gap>
+      <description>Story 4.1 focuses only on DETECTION of wait_condition() calls. Actual signal node RENDERING and PATH PERMUTATION are deferred to Story 4.3. This story establishes data models and detection only.</description>
+      <impact>Developers implementing Story 4.1 should not attempt to render signal nodes or generate signal paths - that is out of scope. Focus is purely on AST traversal, metadata extraction, and data model population.</impact>
+    </gap>
+    <gap>
+      <description>wait_condition() helper function implementation is Story 4.2 (next story). Story 4.1 detects calls to wait_condition() but does not implement the helper itself.</description>
+      <impact>Test fixtures will reference wait_condition() but Story 4.1 won't provide working implementation. This is expected - fixtures are for AST analysis, not runtime execution.</impact>
+    </gap>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step>Story 4.2: Implement wait_condition() helper function (depends on SignalPoint dataclass from 4.1)</step>
+    <step>Story 4.3: Implement signal node rendering and path permutation (depends on signal_points metadata from 4.1)</step>
+    <step>Story 4.4: Add integration test with signal example workflow (validates end-to-end pipeline)</step>
+  </next-steps>
+</story-context>
