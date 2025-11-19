@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from temporalio_graphs._internal.graph_models import DecisionPoint, SignalPoint
-from temporalio_graphs.detector import DecisionDetector, SignalDetector
+from temporalio_graphs._internal.graph_models import ChildWorkflowCall, DecisionPoint, SignalPoint
+from temporalio_graphs.detector import ChildWorkflowDetector, DecisionDetector, SignalDetector
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 
@@ -928,3 +928,437 @@ obj.wait_condition_v2(condition, timeout, "Test2")
         # Original detector unchanged
         assert len(detector1.signals) == 1
         assert detector1.signals[0].name == "First"
+
+
+# ============================================================================
+# Child Workflow Detection Tests (Story 6.1)
+# ============================================================================
+
+
+class TestChildWorkflowDetectorBasic:
+    """Basic child workflow detection tests."""
+
+    def test_single_child_workflow_class_reference(self) -> None:
+        """Test detection of single execute_child_workflow with class reference."""
+        source = """
+result = await workflow.execute_child_workflow(ChildWorkflow, args={"param": value})
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("ParentWorkflow")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "ChildWorkflow"
+        assert detector.child_calls[0].parent_workflow == "ParentWorkflow"
+
+    def test_single_child_workflow_string_literal(self) -> None:
+        """Test detection of single execute_child_workflow with string literal."""
+        source = """
+result = await workflow.execute_child_workflow("ChildWorkflowName", args={"param": value})
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("ParentWorkflow")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "ChildWorkflowName"
+        assert detector.child_calls[0].parent_workflow == "ParentWorkflow"
+
+    def test_multiple_child_workflow_calls(self) -> None:
+        """Test detection of multiple child workflow calls."""
+        source = """
+result1 = await workflow.execute_child_workflow(FirstChild, args={})
+result2 = await workflow.execute_child_workflow("SecondChild", args={})
+result3 = await workflow.execute_child_workflow(ThirdChild, args={})
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("ParentWorkflow")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 3
+        assert detector.child_calls[0].workflow_name == "FirstChild"
+        assert detector.child_calls[1].workflow_name == "SecondChild"
+        assert detector.child_calls[2].workflow_name == "ThirdChild"
+
+    def test_ignore_non_child_workflow_calls(self) -> None:
+        """Test that non-execute_child_workflow calls are ignored."""
+        source = """
+result = await workflow.execute_activity(my_activity, args={})
+result = await workflow.start_child_workflow(Child, args={})
+result = await other.execute_child_workflow(Child, args={})
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("ParentWorkflow")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 0
+
+
+class TestChildWorkflowNameExtraction:
+    """Tests for child workflow name extraction."""
+
+    def test_class_reference_extraction(self) -> None:
+        """Test extraction of workflow name from class reference."""
+        source = "workflow.execute_child_workflow(MyChildWorkflow)"
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "MyChildWorkflow"
+
+    def test_string_literal_extraction(self) -> None:
+        """Test extraction of workflow name from string literal."""
+        source = 'workflow.execute_child_workflow("MyChildWorkflow")'
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "MyChildWorkflow"
+
+    def test_missing_workflow_argument_error(self) -> None:
+        """Test error when workflow argument is missing."""
+        source = "workflow.execute_child_workflow()"
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value)
+        assert "at least 1 argument" in error_msg.lower()
+
+    def test_invalid_workflow_argument_type_error(self) -> None:
+        """Test error when workflow argument is not class or string."""
+        source = "workflow.execute_child_workflow(123)"
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value)
+        assert "class reference or string" in error_msg.lower()
+
+
+class TestChildWorkflowMetadata:
+    """Tests for child workflow call metadata."""
+
+    def test_call_site_line_number(self) -> None:
+        """Test that call site line numbers are recorded correctly."""
+        source = """
+
+result1 = await workflow.execute_child_workflow(Child1)
+
+
+result2 = await workflow.execute_child_workflow(Child2)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 2
+        assert detector.child_calls[0].call_site_line == 3
+        assert detector.child_calls[1].call_site_line == 6
+
+    def test_call_id_generation_deterministic(self) -> None:
+        """Test that call IDs are deterministic based on name and line."""
+        source = """
+await workflow.execute_child_workflow(MyChild)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        call = detector.child_calls[0]
+        assert call.call_id == f"child_mychild_{call.call_site_line}"
+
+    def test_call_id_handles_spaces(self) -> None:
+        """Test that call IDs handle workflow names with spaces."""
+        source = 'workflow.execute_child_workflow("My Child Workflow")'
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert "my_child_workflow" in detector.child_calls[0].call_id
+
+    def test_parent_workflow_recorded(self) -> None:
+        """Test that parent workflow name is recorded in each call."""
+        source = """
+result1 = await workflow.execute_child_workflow(Child1)
+result2 = await workflow.execute_child_workflow(Child2)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("ParentWorkflowName")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 2
+        assert detector.child_calls[0].parent_workflow == "ParentWorkflowName"
+        assert detector.child_calls[1].parent_workflow == "ParentWorkflowName"
+
+    def test_child_workflow_call_dataclass_fields(self) -> None:
+        """Test that ChildWorkflowCall has all required fields."""
+        source = 'workflow.execute_child_workflow(TestChild)'
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        call = detector.child_calls[0]
+
+        # Verify all fields exist and have correct types
+        assert isinstance(call.workflow_name, str)
+        assert isinstance(call.call_site_line, int)
+        assert isinstance(call.call_id, str)
+        assert isinstance(call.parent_workflow, str)
+
+        # Verify field values are populated
+        assert call.workflow_name == "TestChild"
+        assert call.call_site_line > 0
+        assert len(call.call_id) > 0
+        assert call.parent_workflow == "Parent"
+
+
+class TestChildWorkflowNestedDetection:
+    """Tests for child workflow detection in nested code structures."""
+
+    def test_child_workflow_in_if_block(self) -> None:
+        """Test detection of child workflow call inside if block."""
+        source = """
+if condition:
+    result = await workflow.execute_child_workflow(ChildWorkflow)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "ChildWorkflow"
+
+    def test_child_workflow_in_else_block(self) -> None:
+        """Test detection of child workflow call inside else block."""
+        source = """
+if condition:
+    pass
+else:
+    result = await workflow.execute_child_workflow(ChildWorkflow)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "ChildWorkflow"
+
+    def test_child_workflow_in_for_loop(self) -> None:
+        """Test detection of child workflow call inside for loop."""
+        source = """
+for item in items:
+    result = await workflow.execute_child_workflow(ChildWorkflow)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "ChildWorkflow"
+
+    def test_deeply_nested_child_workflow(self) -> None:
+        """Test detection of child workflow in deeply nested structure."""
+        source = """
+if outer:
+    if inner1:
+        if inner2:
+            result = await workflow.execute_child_workflow(DeepChild)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "DeepChild"
+
+    def test_multiple_child_workflows_different_blocks(self) -> None:
+        """Test detection of multiple child workflows in different blocks."""
+        source = """
+if condition1:
+    result1 = await workflow.execute_child_workflow(Child1)
+else:
+    result2 = await workflow.execute_child_workflow(Child2)
+
+for item in items:
+    result3 = await workflow.execute_child_workflow(Child3)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        assert len(detector.child_calls) == 3
+        assert detector.child_calls[0].workflow_name == "Child1"
+        assert detector.child_calls[1].workflow_name == "Child2"
+        assert detector.child_calls[2].workflow_name == "Child3"
+
+
+class TestChildWorkflowDetectorProperty:
+    """Tests for ChildWorkflowDetector property."""
+
+    def test_child_calls_property_returns_list(self) -> None:
+        """Test that child_calls property returns list."""
+        detector = ChildWorkflowDetector()
+        assert isinstance(detector.child_calls, list)
+        assert len(detector.child_calls) == 0
+
+    def test_child_calls_property_read_only(self) -> None:
+        """Test that child_calls property cannot be reassigned."""
+        detector = ChildWorkflowDetector()
+        with pytest.raises(AttributeError):
+            detector.child_calls = []  # type: ignore
+
+
+class TestChildWorkflowEdgeCases:
+    """Tests for child workflow detection edge cases."""
+
+    def test_child_workflow_call_immutability(self) -> None:
+        """Test that ChildWorkflowCall is frozen (immutable)."""
+        call = ChildWorkflowCall(
+            workflow_name="Test",
+            call_site_line=10,
+            call_id="child_test_10",
+            parent_workflow="Parent",
+        )
+
+        # Attempting to modify should raise error
+        with pytest.raises(AttributeError):
+            call.workflow_name = "Modified"  # type: ignore
+
+    def test_detector_reuse_creates_fresh_state(self) -> None:
+        """Test that each detector instance has independent state."""
+        source1 = "workflow.execute_child_workflow(Child1)"
+        source2 = "workflow.execute_child_workflow(Child2)"
+
+        tree1 = ast.parse(source1, mode="eval")
+        tree2 = ast.parse(source2, mode="eval")
+
+        detector1 = ChildWorkflowDetector()
+        detector1.set_parent_workflow("Parent1")
+        detector1.visit(tree1)
+        assert len(detector1.child_calls) == 1
+        assert detector1.child_calls[0].workflow_name == "Child1"
+
+        # Create new detector for independent state
+        detector2 = ChildWorkflowDetector()
+        detector2.set_parent_workflow("Parent2")
+        detector2.visit(tree2)
+        assert len(detector2.child_calls) == 1
+        assert detector2.child_calls[0].workflow_name == "Child2"
+
+        # Original detector unchanged
+        assert len(detector1.child_calls) == 1
+        assert detector1.child_calls[0].workflow_name == "Child1"
+        assert detector1.child_calls[0].parent_workflow == "Parent1"
+
+    def test_set_parent_workflow_updates_context(self) -> None:
+        """Test that set_parent_workflow updates parent context."""
+        source = "workflow.execute_child_workflow(Child)"
+        tree = ast.parse(source, mode="eval")
+
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("FirstParent")
+        detector.visit(tree)
+
+        assert detector.child_calls[0].parent_workflow == "FirstParent"
+
+    def test_attribute_access_non_workflow_object(self) -> None:
+        """Test that execute_child_workflow on non-workflow object is ignored."""
+        source = """
+other_object.execute_child_workflow(Child)
+obj.execute_child_workflow(Child)
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        # Should not detect any child workflow calls
+        assert len(detector.child_calls) == 0
+
+    def test_child_workflow_in_function_call_argument(self) -> None:
+        """Test detection when execute_child_workflow is nested in another call."""
+        source = """
+some_function(await workflow.execute_child_workflow(Child))
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+        detector.visit(tree)
+
+        # Should detect the nested execute_child_workflow call
+        assert len(detector.child_calls) == 1
+        assert detector.child_calls[0].workflow_name == "Child"
+
+
+class TestChildWorkflowErrorMessages:
+    """Tests for child workflow detection error messages."""
+
+    def test_error_includes_line_number(self) -> None:
+        """Test that error messages include line number."""
+        source = """# Line 1
+# Line 2
+workflow.execute_child_workflow()  # Line 3 - missing workflow arg
+"""
+        tree = ast.parse(source)
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        assert "Line 3" in str(exc_info.value)
+
+    def test_error_includes_suggestion(self) -> None:
+        """Test that error messages include helpful suggestions."""
+        source = "workflow.execute_child_workflow()"
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value).lower()
+        assert "execute_child_workflow" in error_msg
+        assert "at least 1 argument" in error_msg
+
+    def test_error_for_wrong_argument_type(self) -> None:
+        """Test error message for wrong argument type."""
+        source = "workflow.execute_child_workflow(123)"
+        tree = ast.parse(source, mode="eval")
+        detector = ChildWorkflowDetector()
+        detector.set_parent_workflow("Parent")
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value).lower()
+        assert "class reference or string" in error_msg

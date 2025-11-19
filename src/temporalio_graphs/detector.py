@@ -27,7 +27,7 @@ import ast
 import logging
 from pathlib import Path
 
-from temporalio_graphs._internal.graph_models import DecisionPoint, SignalPoint
+from temporalio_graphs._internal.graph_models import ChildWorkflowCall, DecisionPoint, SignalPoint
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 logger = logging.getLogger(__name__)
@@ -547,3 +547,181 @@ class SignalDetector(ast.NodeVisitor):
             List of SignalPoint objects extracted during AST traversal.
         """
         return self._signals
+
+
+class ChildWorkflowDetector(ast.NodeVisitor):
+    """Detects execute_child_workflow() calls in workflow AST.
+
+    This class extends ast.NodeVisitor to traverse Python workflow source files
+    and extract child workflow call metadata. It identifies workflow.execute_child_workflow()
+    calls, extracts child workflow names (from class references or string literals),
+    and tracks source line numbers for cross-workflow visualization.
+
+    The detector handles various patterns:
+    - Class reference: workflow.execute_child_workflow(ChildWorkflow, ...)
+    - String literal: workflow.execute_child_workflow("ChildWorkflowName", ...)
+    - Multiple calls: Detects all child workflow invocations in parent workflow
+    - Nested blocks: Detects calls inside if/else, loops, etc.
+
+    Attributes:
+        _child_calls: List of detected ChildWorkflowCall objects.
+        _parent_workflow: Name of the parent workflow class.
+
+    Example:
+        >>> detector = ChildWorkflowDetector()
+        >>> tree = ast.parse(workflow_source)
+        >>> detector.set_parent_workflow("ParentWorkflow")
+        >>> detector.visit(tree)
+        >>> for call in detector.child_calls:
+        ...     print(f"Child: {call.workflow_name} at line {call.call_site_line}")
+    """
+
+    def __init__(self) -> None:
+        """Initialize the child workflow detector with empty state."""
+        self._child_calls: list[ChildWorkflowCall] = []
+        self._parent_workflow: str = ""
+
+    def set_parent_workflow(self, parent_workflow: str) -> None:
+        """Set the parent workflow name for context.
+
+        Args:
+            parent_workflow: Name of the parent workflow class.
+        """
+        self._parent_workflow = parent_workflow
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Visit Call nodes to identify execute_child_workflow() function calls.
+
+        This visitor method is called for each function call in the AST. It checks
+        if the call is to workflow.execute_child_workflow() and extracts child
+        workflow metadata if found.
+
+        Args:
+            node: AST node representing a function call.
+        """
+        if self._is_execute_child_workflow_call(node):
+            try:
+                workflow_name = self._extract_child_workflow_name(node)
+                call_id = self._generate_call_id(workflow_name, node.lineno)
+
+                child_call = ChildWorkflowCall(
+                    workflow_name=workflow_name,
+                    call_site_line=node.lineno,
+                    call_id=call_id,
+                    parent_workflow=self._parent_workflow,
+                )
+                self._child_calls.append(child_call)
+                logger.debug(
+                    f"Detected child workflow '{workflow_name}' at line {node.lineno} "
+                    f"in parent '{self._parent_workflow}' (id={call_id})"
+                )
+            except WorkflowParseError as e:
+                # Re-raise parse errors with full context
+                raise e
+
+        # Continue traversal to find nested calls
+        self.generic_visit(node)
+
+    def _is_execute_child_workflow_call(self, node: ast.Call) -> bool:
+        """Check if a Call node is an execute_child_workflow() call.
+
+        This helper method identifies calls to workflow.execute_child_workflow()
+        by matching against the function name pattern.
+
+        Args:
+            node: AST Call node to check.
+
+        Returns:
+            True if the call is to execute_child_workflow(), False otherwise.
+        """
+        # Check for attribute access: workflow.execute_child_workflow(...)
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr == "execute_child_workflow":
+                # Verify it's called on workflow object
+                if isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == "workflow":
+                        return True
+        return False
+
+    def _extract_child_workflow_name(self, node: ast.Call) -> str:
+        """Extract child workflow name from execute_child_workflow() call.
+
+        The workflow name can be provided as either:
+        1. Class reference: execute_child_workflow(MyWorkflow, ...)
+        2. String literal: execute_child_workflow("MyWorkflow", ...)
+
+        Args:
+            node: AST Call node for execute_child_workflow() call.
+
+        Returns:
+            Child workflow name as a string.
+
+        Raises:
+            WorkflowParseError: If workflow name argument is missing or invalid.
+        """
+        # Check that we have at least 1 argument (the workflow reference)
+        if len(node.args) < 1:
+            raise WorkflowParseError(
+                file_path=Path("unknown"),
+                line=node.lineno,
+                message=(
+                    "execute_child_workflow() requires at least 1 argument "
+                    "(workflow class or name)"
+                ),
+                suggestion=(
+                    "Use: workflow.execute_child_workflow(ChildWorkflow, ...) or "
+                    "workflow.execute_child_workflow('ChildWorkflowName', ...)"
+                ),
+            )
+
+        # Get the first argument (workflow reference)
+        workflow_arg = node.args[0]
+
+        # Handle class reference: execute_child_workflow(MyWorkflow, ...)
+        if isinstance(workflow_arg, ast.Name):
+            return workflow_arg.id
+
+        # Handle string literal: execute_child_workflow("MyWorkflow", ...)
+        if isinstance(workflow_arg, ast.Constant) and isinstance(workflow_arg.value, str):
+            return workflow_arg.value
+
+        # Workflow argument is not a class reference or string literal
+        type_name = type(workflow_arg).__name__
+        raise WorkflowParseError(
+            file_path=Path("unknown"),
+            line=node.lineno,
+            message=(
+                f"execute_child_workflow() first argument must be a class reference "
+                f"or string. Got {type_name}"
+            ),
+            suggestion=(
+                "Use: workflow.execute_child_workflow(ChildWorkflow, ...) or "
+                "workflow.execute_child_workflow('ChildWorkflowName', ...)"
+            ),
+        )
+
+    def _generate_call_id(self, workflow_name: str, line: int) -> str:
+        """Generate deterministic call ID for child workflow call.
+
+        Creates a unique identifier using workflow name and source line number.
+        This ensures deterministic IDs for regression testing.
+
+        Args:
+            workflow_name: Child workflow name from execute_child_workflow() call.
+            line: Source line number where call is made.
+
+        Returns:
+            Deterministic call ID in format: child_{workflow_name}_{line}
+        """
+        # Use name + line for uniqueness and determinism
+        safe_name = workflow_name.replace(" ", "_").lower()
+        return f"child_{safe_name}_{line}"
+
+    @property
+    def child_calls(self) -> list[ChildWorkflowCall]:
+        """Read-only list of detected child workflow calls.
+
+        Returns:
+            List of ChildWorkflowCall objects extracted during AST traversal.
+        """
+        return self._child_calls

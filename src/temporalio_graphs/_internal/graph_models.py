@@ -22,6 +22,7 @@ class NodeType(Enum):
         ACTIVITY: Temporal activity invocation (rectangular node).
         DECISION: Conditional branching point (diamond node).
         SIGNAL: Signal wait or condition check (hexagonal node).
+        CHILD_WORKFLOW: Child workflow execution (subroutine node).
     """
 
     START = "start"
@@ -29,6 +30,7 @@ class NodeType(Enum):
     ACTIVITY = "activity"
     DECISION = "decision"
     SIGNAL = "signal"
+    CHILD_WORKFLOW = "child_workflow"
 
 
 @dataclass
@@ -108,6 +110,9 @@ class GraphNode:
                 return f"{self.node_id}{{{self.display_name}}}"
             case NodeType.SIGNAL:
                 return f"{self.node_id}{{{{{self.display_name}}}}}"
+            case NodeType.CHILD_WORKFLOW:
+                # Child workflow nodes - Story 6.2 will implement rendering
+                return f"{self.node_id}[{self.display_name}]"
 
 
 @dataclass
@@ -326,6 +331,46 @@ class SignalPoint:
     timeout_branch_activities: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class ChildWorkflowCall:
+    """Represents a child workflow execution call in a parent workflow.
+
+    A child workflow call is a location where the parent workflow invokes another workflow
+    via workflow.execute_child_workflow(). This is detected for cross-workflow visualization
+    to show dependencies between parent and child workflows.
+
+    The frozen=True attribute ensures ChildWorkflowCall instances are immutable,
+    preventing accidental modifications to call metadata once created.
+
+    Args:
+        workflow_name: Name of the child workflow class or string identifier.
+            Can be extracted from either a class reference (MyWorkflow) or
+            string literal ("MyWorkflow").
+        call_site_line: Line number in parent workflow source code where the
+            execute_child_workflow() call is made.
+        call_id: Unique identifier for this child workflow call within the parent.
+            Format: child_{workflow_name}_{line}
+        parent_workflow: Name of the parent workflow class containing this call.
+
+    Example:
+        >>> child_call = ChildWorkflowCall(
+        ...     workflow_name="ProcessOrderWorkflow",
+        ...     call_site_line=45,
+        ...     call_id="child_processorderworkflow_45",
+        ...     parent_workflow="CheckoutWorkflow"
+        ... )
+        >>> child_call.workflow_name
+        'ProcessOrderWorkflow'
+        >>> child_call.call_site_line
+        45
+    """
+
+    workflow_name: str
+    call_site_line: int
+    call_id: str
+    parent_workflow: str
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.
@@ -388,6 +433,7 @@ class WorkflowMetadata:
     activities: list[Activity]
     decision_points: list[DecisionPoint]
     signal_points: list[SignalPoint]
+    child_workflow_calls: list[ChildWorkflowCall]
     source_file: Path
     total_paths: int
 
