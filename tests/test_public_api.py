@@ -193,17 +193,19 @@ class TestAnalyzeWorkflowErrorHandling:
         # Act & Assert
         with pytest.raises(ValueError) as exc_info:
             analyze_workflow(fixture_path, output_format="json")  # type: ignore
-        assert "not supported in Epic 2" in str(exc_info.value)
+        assert "reserved for future use" in str(exc_info.value)
 
-    def test_analyze_workflow_error_invalid_format_paths(self) -> None:
-        """AC11: Verify ValueError for 'paths' format."""
+    def test_analyze_workflow_paths_format_supported(self) -> None:
+        """Story 5-3: Verify 'paths' format is now supported."""
         # Arrange
         fixture_path = Path("tests/fixtures/sample_workflows/multi_activity_workflow.py")
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            analyze_workflow(fixture_path, output_format="paths")  # type: ignore
-        assert "not supported in Epic 2" in str(exc_info.value)
+        # Act - Should not raise
+        result = analyze_workflow(fixture_path, output_format="paths")  # type: ignore
+
+        # Assert - Should get path list output
+        assert "--- Execution Paths" in result
+        assert "Path 1:" in result
 
     def test_analyze_workflow_error_none_workflow_file(self) -> None:
         """AC2: Verify ValueError when workflow_file is None."""

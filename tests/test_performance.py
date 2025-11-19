@@ -1,7 +1,8 @@
-"""Performance tests for workflow validation.
+"""Performance tests for workflow validation and path list formatting.
 
 Tests ensure validation operations meet performance requirements:
 - Unreachable activity detection: <10ms for 50 activities
+- Path list formatting: <5ms for 100 paths (Story 5-3)
 """
 
 import time
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from temporalio_graphs._internal.graph_models import Activity, WorkflowMetadata
 from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.formatter import format_path_list
 from temporalio_graphs.path import GraphPath, PathStep
 from temporalio_graphs.validator import validate_workflow
 
@@ -56,4 +58,45 @@ def test_validation_performance() -> None:
     # Performance requirement: <10ms (0.01 seconds)
     assert duration < 0.01, (
         f"Validation took {duration*1000:.2f}ms, exceeds 10ms requirement"
+    )
+
+
+def test_path_list_performance() -> None:
+    """Test path list formatting completes in <5ms for 100 paths.
+
+    Story 5-3 AC 7: Performance requirement (<5ms for 100 paths).
+    Tests that format_path_list() has linear complexity and meets
+    performance target even with large path counts.
+    """
+    # Create 100 GraphPath objects with 5 activities each
+    paths = []
+    for i in range(100):
+        steps = [
+            PathStep("activity", f"Activity{j}")
+            for j in range(5)
+        ]
+        path = GraphPath(
+            path_id=str(i),
+            steps=steps,
+            decisions={}  # Linear paths, no decisions
+        )
+        paths.append(path)
+
+    # Measure path list formatting time
+    start = time.perf_counter()
+    path_list = format_path_list(paths)
+    duration = time.perf_counter() - start
+
+    # Validate results are correct
+    assert path_list.total_paths == 100
+    assert path_list.total_decisions == 0
+    assert len(path_list.paths) == 100
+
+    # Verify formatted output can be generated
+    output = path_list.format()
+    assert "--- Execution Paths (100 total) ---" in output
+
+    # Performance requirement: <5ms (0.005 seconds)
+    assert duration < 0.005, (
+        f"Path list formatting took {duration*1000:.2f}ms, exceeds 5ms requirement"
     )

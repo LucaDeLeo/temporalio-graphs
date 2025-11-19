@@ -6,6 +6,7 @@ configuration options for workflow graph generation.
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,13 @@ class GraphBuildingContext:
             Used in Epic 4 signal node rendering. Default: "Signaled".
         signal_timeout_label: Edge label for signal timeout paths.
             Used in Epic 4 signal node rendering. Default: "Timeout".
+        include_path_list: Include text path list in output when True.
+            Path list shows all execution paths in text format. Default: True.
+        output_format: Output format mode. Controls which sections are included:
+            - "mermaid": Mermaid diagram only (no path list, no validation)
+            - "paths": Path list only (no diagram, no validation)
+            - "full": Mermaid + path list + validation report (default)
+            Default: "full".
 
     Example:
         >>> # Basic usage with defaults
@@ -90,3 +98,5 @@ class GraphBuildingContext:
     decision_false_label: str = "no"
     signal_success_label: str = "Signaled"
     signal_timeout_label: str = "Timeout"
+    include_path_list: bool = True
+    output_format: Literal["mermaid", "paths", "full"] = "full"

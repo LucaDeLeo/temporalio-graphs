@@ -1,0 +1,1030 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>5-3-implement-path-list-output-format</story-key>
+    <story-file>docs/sprint-artifacts/stories/5-3-implement-path-list-output-format.md</story-file>
+    <epic-key>epic-5</epic-key>
+    <epic-tech-spec>docs/sprint-artifacts/tech-spec-epic-5.md</epic-tech-spec>
+    <generated-date>2025-11-19</generated-date>
+    <status>ready-for-dev</status>
+  </metadata>
+
+  <story-summary>
+    <title>Implement Path List Output Format</title>
+    <description>
+      Add text-based path list output format as alternative/supplement to Mermaid diagrams.
+      Implement FormattedPath and PathListOutput dataclasses with format() methods, create
+      format_path_list() function to convert GraphPath objects to formatted text, extend
+      GraphBuildingContext with include_path_list and output_format fields, and integrate
+      into analyze_workflow() with three output modes: "mermaid" (diagram only), "paths"
+      (list only), "full" (both + validation).
+    </description>
+    <acceptance-criteria-count>8</acceptance-criteria-count>
+    <task-count>11</task-count>
+  </story-summary>
+
+  <epic-context>
+    <epic-goal>Add validation, error handling, examples, and documentation for production use</epic-goal>
+    <epic-value>Library is production-ready with comprehensive error messages, validation warnings, complete examples, and documentation</epic-value>
+    <related-stories>
+      <story id="5-1">Validation Warnings (done - provides dataclass pattern with format() methods)</story>
+      <story id="5-2">Error Handling Hierarchy (done - provides integration pattern into analyze_workflow)</story>
+      <story id="5-4">Comprehensive Example Gallery (backlog)</story>
+      <story id="5-5">Production-Grade Documentation (backlog)</story>
+    </related-stories>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+      <type>technical-specification</type>
+      <relevance>Primary technical specification for path list formatting</relevance>
+      <sections>
+        <section>Lines 291-325: Path list data models (FormattedPath, PathListOutput)</section>
+        <section>Lines 453-502: format_path_list() function API specification</section>
+        <section>Lines 504-608: analyze_workflow integration and output assembly</section>
+        <section>Lines 328-340: GraphBuildingContext extensions (include_path_list, output_format)</section>
+        <section>Lines 671-702: Path list generation workflow</section>
+        <section>Lines 796-802: Performance requirement (NFR-PERF-2: &lt;5ms for 100 paths)</section>
+        <section>Lines 979-989: AC-5.3 acceptance criteria (authoritative)</section>
+      </sections>
+      <critical-correction>
+        <issue>Lines 478-479 show INCORRECT type checking: isinstance(step, ActivityStep)</issue>
+        <correct-pattern>Use step.node_type == 'activity' to filter activities</correct-pattern>
+        <rationale>PathStep is a SINGLE dataclass with node_type discriminator, NOT separate ActivityStep/DecisionStep classes</rationale>
+      </critical-correction>
+    </artifact>
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>architecture-documentation</type>
+      <relevance>Architecture patterns for dataclasses, formatting, module organization</relevance>
+      <sections>
+        <section>Lines 1-100: Architecture overview, static analysis approach, module organization</section>
+        <section>Lines 116-124: Module organization (new formatter.py module)</section>
+        <section>Dataclass patterns: frozen=True for immutability, Google-style docstrings</section>
+        <section>Strategy Pattern for output rendering (Mermaid, path list, JSON future)</section>
+      </sections>
+    </artifact>
+    <artifact>
+      <path>docs/prd.md</path>
+      <type>product-requirements</type>
+      <relevance>Functional requirement FR24 and performance NFR-PERF-2</relevance>
+      <sections>
+        <section>FR24: Path list output format with all execution paths in text format</section>
+        <section>NFR-PERF-2: Performance requirement (&lt;5ms for 100 paths)</section>
+      </sections>
+    </artifact>
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>project-guidance</type>
+      <relevance>Project conventions, tool preferences, testing requirements</relevance>
+      <sections>
+        <section>Use uv for Python package management (user requirement)</section>
+        <section>Testing: pytest -v --cov, mypy --strict, ruff check/format</section>
+        <section>Code conventions: snake_case, Google-style docstrings, 100% type hints</section>
+        <section>Coverage target: &gt;80% overall (target 100% for new modules)</section>
+      </sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <type>dataclass</type>
+      <name>GraphBuildingContext</name>
+      <description>Configuration context for workflow graph generation (immutable, frozen=True)</description>
+      <current-implementation>
+        <location>Lines 11-92</location>
+        <dataclass-frozen>true</dataclass-frozen>
+      </current-implementation>
+      <existing-fields>
+        <field name="is_building_graph" type="bool" default="True" line="79"/>
+        <field name="exit_after_building_graph" type="bool" default="False" line="80"/>
+        <field name="graph_output_file" type="Path | None" default="None" line="81"/>
+        <field name="split_names_by_words" type="bool" default="True" line="82"/>
+        <field name="suppress_validation" type="bool" default="False" line="83"/>
+        <field name="include_validation_report" type="bool" default="True" line="84"/>
+        <field name="start_node_label" type="str" default="Start" line="85"/>
+        <field name="end_node_label" type="str" default="End" line="86"/>
+        <field name="max_decision_points" type="int" default="10" line="87"/>
+        <field name="max_paths" type="int" default="1024" line="88"/>
+        <field name="decision_true_label" type="str" default="yes" line="89"/>
+        <field name="decision_false_label" type="str" default="no" line="90"/>
+        <field name="signal_success_label" type="str" default="Signaled" line="91"/>
+        <field name="signal_timeout_label" type="str" default="Timeout" line="92"/>
+      </existing-fields>
+      <modifications-needed>
+        <modification priority="CRITICAL">
+          <action>Add import: from typing import Literal (if not already imported)</action>
+          <reason>Required for output_format field type annotation</reason>
+        </modification>
+        <modification priority="CRITICAL">
+          <action>Add NEW field: include_path_list: bool = True</action>
+          <reason>Controls whether path list is included in output (AC-5)</reason>
+          <location>After line 92, before end of dataclass</location>
+        </modification>
+        <modification priority="CRITICAL">
+          <action>Add NEW field: output_format: Literal["mermaid", "paths", "full"] = "full"</action>
+          <reason>Controls output mode selection (AC-5)</reason>
+          <location>After include_path_list field</location>
+        </modification>
+        <modification priority="HIGH">
+          <action>Update docstring to document new fields</action>
+          <details>
+            <detail>include_path_list: Include text path list in output when True. Default: True.</detail>
+            <detail>output_format: Output format mode. "mermaid" = diagram only, "paths" = list only, "full" = both + validation. Default: "full".</detail>
+          </details>
+        </modification>
+      </modifications-needed>
+      <critical-note>
+        These fields DO NOT currently exist in context.py. They are NEW additions for Story 5-3.
+        The previous context incorrectly listed them as existing fields.
+      </critical-note>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/path.py</file>
+      <type>dataclass</type>
+      <name>GraphPath</name>
+      <description>Tracks single execution path through workflow with ordered steps</description>
+      <current-implementation>
+        <location>Lines 44-226</location>
+      </current-implementation>
+      <fields>
+        <field name="path_id" type="str" description="Unique identifier (e.g., '0b00', '0b01')" line="96"/>
+        <field name="steps" type="list[PathStep]" description="Ordered list of PathStep objects" line="97"/>
+        <field name="decisions" type="dict[str, bool]" description="Decision ID to boolean value mapping" line="98"/>
+      </fields>
+      <methods>
+        <method name="add_activity(name: str) -> str" description="Add activity step, return node ID" lines="100-133"/>
+        <method name="add_decision(id: str, value: bool, name: str) -> str" description="Add decision step" lines="135-182"/>
+        <method name="add_signal(name: str, outcome: str) -> str" description="Add signal step" lines="184-225"/>
+      </methods>
+      <usage-in-formatter>
+        <detail>format_path_list() receives list[GraphPath] and extracts activities from path.steps</detail>
+        <detail>Filter path.steps by step.node_type == 'activity' to get activity names</detail>
+        <detail>Filter path.steps by step.node_type == 'decision' to get decision outcomes</detail>
+        <detail>Use path.decisions dict to count total decision points</detail>
+      </usage-in-formatter>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/path.py</file>
+      <type>dataclass</type>
+      <name>PathStep</name>
+      <description>Represents single step in execution path with node_type discriminator</description>
+      <current-implementation>
+        <location>Lines 12-41</location>
+        <critical-note>PathStep is a SINGLE dataclass, NOT separate ActivityStep/DecisionStep/SignalStep classes</critical-note>
+      </current-implementation>
+      <fields>
+        <field name="node_type" type="Literal['activity', 'decision', 'signal']" line="36">
+          <purpose>Discriminator field to identify step type</purpose>
+          <critical>Use this field to filter steps, NOT isinstance checks</critical>
+        </field>
+        <field name="name" type="str" description="Human-readable name" line="37"/>
+        <field name="decision_id" type="str | None" description="Decision ID (only for decisions)" line="38"/>
+        <field name="decision_value" type="bool | None" description="Decision outcome (only for decisions)" line="39"/>
+        <field name="signal_outcome" type="str | None" description="Signal result (only for signals)" line="40"/>
+      </fields>
+      <usage-in-formatter>
+        <critical-pattern>
+          <correct>
+            # Extract activities by filtering on node_type discriminator
+            activities = [
+                step.name
+                for step in path.steps
+                if step.node_type == 'activity'  # CORRECT: node_type field check
+            ]
+          </correct>
+          <incorrect>
+            # DO NOT use isinstance - there is NO ActivityStep class
+            activities = [
+                step.name
+                for step in path.steps
+                if isinstance(step, ActivityStep)  # WRONG: ActivityStep does not exist
+            ]
+          </incorrect>
+        </critical-pattern>
+        <extraction-patterns>
+          <activities>Filter by: step.node_type == 'activity', extract: step.name</activities>
+          <decisions>Filter by: step.node_type == 'decision', extract: step.name and step.decision_value</decisions>
+          <signals>Filter by: step.node_type == 'signal', extract: step.name and step.signal_outcome</signals>
+        </extraction-patterns>
+      </usage-in-formatter>
+      <code-example>
+        <title>Activity extraction from GraphPath.steps</title>
+        <code>
+# Correct pattern for format_path_list() implementation
+def format_path_list(paths: list[GraphPath]) -> PathListOutput:
+    formatted_paths = []
+
+    for i, path in enumerate(paths, 1):
+        # Extract activity names using node_type discriminator
+        activities = [
+            step.name
+            for step in path.steps
+            if step.node_type == 'activity'  # Use node_type field
+        ]
+
+        # Extract decision outcomes using node_type discriminator
+        decisions = {
+            step.name: step.decision_value
+            for step in path.steps
+            if step.node_type == 'decision' and step.decision_value is not None
+        }
+
+        formatted_paths.append(FormattedPath(
+            path_number=i,
+            activities=activities,
+            decisions=decisions
+        ))
+
+    # Count decisions from first path's decisions dict
+    total_decisions = len(paths[0].decisions) if paths else 0
+
+    return PathListOutput(
+        paths=formatted_paths,
+        total_paths=len(paths),
+        total_decisions=total_decisions
+    )
+        </code>
+      </code-example>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>dataclass</type>
+      <name>Activity</name>
+      <description>Activity metadata with name and line number (frozen=True)</description>
+      <fields>
+        <field name="name" type="str"/>
+        <field name="line_num" type="int"/>
+      </fields>
+      <usage-note>Not directly used in formatter, but provides pattern for dataclass design</usage-note>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/validator.py</file>
+      <type>dataclass</type>
+      <name>ValidationWarning</name>
+      <description>Validation warning with format() method (frozen=True) - pattern to follow</description>
+      <reference-lines>Lines 1-100 of test_validator.py show usage patterns</reference-lines>
+      <fields>
+        <field name="severity" type="WarningSeverity"/>
+        <field name="category" type="str"/>
+        <field name="message" type="str"/>
+        <field name="file_path" type="Path"/>
+        <field name="line" type="int"/>
+        <field name="activity_name" type="str | None"/>
+        <field name="suggestion" type="str | None"/>
+      </fields>
+      <methods>
+        <method name="format() -> str" description="Returns formatted string with icon, category, message, location"/>
+      </methods>
+      <pattern-reference>
+        <detail>FormattedPath and PathListOutput should follow SAME pattern</detail>
+        <detail>Use @dataclass decorator (frozen=True optional for these)</detail>
+        <detail>Implement format() method returning multi-line string</detail>
+        <detail>Use str.join() for efficient string building</detail>
+      </pattern-reference>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/validator.py</file>
+      <type>dataclass</type>
+      <name>ValidationReport</name>
+      <description>Validation report aggregating warnings with format() method (frozen=True)</description>
+      <fields>
+        <field name="warnings" type="list[ValidationWarning]"/>
+        <field name="total_activities" type="int"/>
+        <field name="total_paths" type="int"/>
+        <field name="unreachable_count" type="int"/>
+        <field name="unused_count" type="int"/>
+      </fields>
+      <methods>
+        <method name="has_warnings() -> bool" description="Check if warnings exist"/>
+        <method name="format() -> str" description="Returns formatted report with header and warnings"/>
+      </methods>
+      <pattern-reference>
+        <detail>PathListOutput should follow SAME pattern</detail>
+        <detail>Aggregate data (paths list), provide summary (total_paths, total_decisions)</detail>
+        <detail>format() returns multi-line formatted output with clear structure</detail>
+        <detail>Use clear section headers with dashes (--- Header ---)</detail>
+      </pattern-reference>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <type>function</type>
+      <name>analyze_workflow</name>
+      <description>Main entry point for workflow analysis</description>
+      <current-implementation>
+        <location>Lines 79-183</location>
+      </current-implementation>
+      <signature>
+        <current>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</current>
+        <note>output_format parameter exists but only supports "mermaid" currently (line 82, 146-149)</note>
+      </signature>
+      <current-flow>
+        <step number="1">Validate inputs (lines 140-149)</step>
+        <step number="2">Prepare context (lines 151-156)</step>
+        <step number="3">WorkflowAnalyzer.analyze(workflow_path, context) -> WorkflowMetadata (lines 158-160)</step>
+        <step number="4">PathPermutationGenerator.generate_paths(metadata, context) -> list[GraphPath] (lines 162-164)</step>
+        <step number="5">validate_workflow(metadata, paths, context) -> ValidationReport (line 167)</step>
+        <step number="6">MermaidRenderer.to_mermaid(paths, context) -> str (lines 169-171)</step>
+        <step number="7">Append validation report if enabled and has warnings (lines 173-175)</step>
+        <step number="8">Write to file if configured (lines 177-181)</step>
+        <step number="9">Return result string (line 183)</step>
+      </current-flow>
+      <integration-point>
+        <location>After step 4 (path generation), before step 6 (rendering)</location>
+        <insertion-point>After line 164 (paths = generator.generate_paths(...))</insertion-point>
+        <new-logic>
+          <step>Import format_path_list from temporalio_graphs.formatter</step>
+          <step>Call validation BEFORE output assembly: validation_report = validate_workflow(metadata, paths, context)</step>
+          <step>Initialize output_parts: list[str] = []</step>
+          <step>Determine effective output_format: use context.output_format if context has it, else parameter default</step>
+          <step>Conditional Mermaid rendering: if output_format in ("mermaid", "full"), render and append to output_parts</step>
+          <step>Conditional path list: if output_format in ("paths", "full") and context.include_path_list, call format_path_list and append</step>
+          <step>Conditional validation: if output_format == "full" and context.include_validation_report and validation_report.has_warnings(), append validation report</step>
+          <step>Join output_parts with "\n" to create result</step>
+          <step>Continue with file writing (lines 177-181)</step>
+        </new-logic>
+        <critical-conditional-flow>
+          <mode name="mermaid">
+            <includes>Mermaid diagram only</includes>
+            <excludes>Path list, validation report</excludes>
+            <condition>output_format == "mermaid"</condition>
+          </mode>
+          <mode name="paths">
+            <includes>Path list only (if context.include_path_list is True)</includes>
+            <excludes>Mermaid diagram, validation report</excludes>
+            <condition>output_format == "paths"</condition>
+          </mode>
+          <mode name="full">
+            <includes>Mermaid diagram, path list (if include_path_list), validation report (if has warnings and include_validation_report)</includes>
+            <condition>output_format == "full"</condition>
+            <order>1. Mermaid, 2. Path list, 3. Validation report</order>
+            <separator>Single newline between sections</separator>
+          </mode>
+        </critical-conditional-flow>
+        <output-assembly-pseudocode>
+# After path generation (line 164)
+output_parts: list[str] = []
+
+# Determine effective output format
+effective_format = context.output_format if hasattr(context, 'output_format') else output_format
+
+# Validate workflow (move before rendering)
+validation_report = validate_workflow(metadata, paths, context)
+
+# Conditional Mermaid rendering
+if effective_format in ("mermaid", "full"):
+    renderer = MermaidRenderer()
+    mermaid_output = renderer.to_mermaid(paths, context)
+    output_parts.append(mermaid_output)
+
+# Conditional path list
+if effective_format in ("paths", "full"):
+    # Check if context has include_path_list (backward compat)
+    include_list = getattr(context, 'include_path_list', True)
+    if include_list:
+        path_list = format_path_list(paths)
+        output_parts.append(path_list.format())
+
+# Conditional validation report (only in full mode)
+if effective_format == "full" and context.include_validation_report and validation_report.has_warnings():
+    output_parts.append(validation_report.format())
+
+# Assemble final result
+result = "\n".join(output_parts)
+
+# Continue with file writing (existing lines 177-181)
+        </output-assembly-pseudocode>
+      </integration-point>
+      <modifications-needed>
+        <modification priority="CRITICAL">
+          <action>Add import: from temporalio_graphs.formatter import format_path_list</action>
+          <location>Top of file with other imports (around line 27)</location>
+        </modification>
+        <modification priority="CRITICAL">
+          <action>Update output_format parameter to support "paths" option</action>
+          <location>Line 82 signature</location>
+          <change>Keep Literal["mermaid", "json", "paths"] but remove validation that rejects "paths"</change>
+        </modification>
+        <modification priority="CRITICAL">
+          <action>Replace simple rendering with output assembly logic</action>
+          <location>Lines 167-175 (validation and rendering section)</location>
+          <change>Implement conditional flow based on output_format with output_parts list assembly</change>
+        </modification>
+        <modification priority="HIGH">
+          <action>Update docstring to document output_format modes</action>
+          <location>Lines 84-139 (docstring)</location>
+          <details>
+            <detail>Document "mermaid" mode: Mermaid diagram only</detail>
+            <detail>Document "paths" mode: Path list only</detail>
+            <detail>Document "full" mode: Mermaid + path list + validation (if warnings)</detail>
+            <detail>Update example to show full output with path list</detail>
+          </details>
+        </modification>
+      </modifications-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <type>module</type>
+      <name>__all__ exports</name>
+      <description>Public API surface exports</description>
+      <current-implementation>
+        <location>Lines 31-43</location>
+      </current-implementation>
+      <current-exports>
+        <export>GraphBuildingContext</export>
+        <export>analyze_workflow</export>
+        <export>to_decision</export>
+        <export>wait_condition</export>
+        <export>ValidationWarning</export>
+        <export>ValidationReport</export>
+        <export>TemporalioGraphsError</export>
+        <export>WorkflowParseError</export>
+        <export>UnsupportedPatternError</export>
+        <export>GraphGenerationError</export>
+        <export>InvalidDecisionError</export>
+      </current-exports>
+      <decision-required>
+        <question>Should PathListOutput be exported for type hints?</question>
+        <rationale>Users may want to type-hint format_path_list return value if they call it directly</rationale>
+        <recommendation>Keep formatter.py FULLY INTERNAL - do not export PathListOutput or format_path_list</recommendation>
+        <justification>format_path_list is internal implementation detail used by analyze_workflow, not part of public API</justification>
+        <action>No changes to __all__ exports needed</action>
+      </decision-required>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <category>backward-compatibility</category>
+      <requirement>All 406 existing tests must continue to pass</requirement>
+      <rationale>Stories 2.1-5.2 created comprehensive test suite, no regressions allowed</rationale>
+      <validation>Run full test suite: pytest -v (all tests pass)</validation>
+      <backward-compat-considerations>
+        <consideration>
+          <issue>Existing analyze_workflow calls use output_format="mermaid" parameter</issue>
+          <solution>Parameter default remains "mermaid" for backward compatibility</solution>
+          <impact>No breaking changes to existing code</impact>
+        </consideration>
+        <consideration>
+          <issue>GraphBuildingContext adds new fields (include_path_list, output_format)</issue>
+          <solution>New fields have sensible defaults (True, "full")</solution>
+          <impact>Existing GraphBuildingContext() calls work unchanged</impact>
+        </consideration>
+        <consideration>
+          <issue>Default output_format="full" in context means new output includes path list by default</issue>
+          <solution>Accept as additive enhancement - path list adds value without breaking parsing</solution>
+          <impact>Output format changes but remains valid (Mermaid still renders, additional sections parseable)</impact>
+        </consideration>
+      </backward-compat-considerations>
+    </constraint>
+
+    <constraint>
+      <category>type-checking-pattern</category>
+      <requirement>Use node_type discriminator field, NOT isinstance checks</requirement>
+      <rationale>PathStep is single dataclass with node_type field, not separate subclasses</rationale>
+      <critical-error-to-avoid>
+        <wrong>isinstance(step, ActivityStep)  # ActivityStep class does not exist</wrong>
+        <correct>step.node_type == 'activity'  # Use discriminator field</correct>
+      </critical-error-to-avoid>
+      <implementation>
+        <detail>Filter activities: [step.name for step in path.steps if step.node_type == 'activity']</detail>
+        <detail>Filter decisions: [step for step in path.steps if step.node_type == 'decision']</detail>
+        <detail>Filter signals: [step for step in path.steps if step.node_type == 'signal']</detail>
+      </implementation>
+    </constraint>
+
+    <constraint>
+      <category>dataclass-pattern</category>
+      <requirement>Use @dataclass decorator for FormattedPath and PathListOutput</requirement>
+      <rationale>Follows pattern from ValidationWarning (Story 5-1) and ValidationReport</rationale>
+      <details>
+        <detail>FormattedPath: @dataclass (no frozen=True needed, mutable OK)</detail>
+        <detail>PathListOutput: @dataclass (no frozen=True needed, mutable OK)</detail>
+        <detail>Both implement format() -> str method</detail>
+        <detail>All fields have complete type hints</detail>
+      </details>
+    </constraint>
+
+    <constraint>
+      <category>format-method-pattern</category>
+      <requirement>format() methods return multi-line strings with clear structure</requirement>
+      <rationale>Matches ValidationReport.format() pattern from Story 5-1</rationale>
+      <example>
+        <detail>Header: "--- Execution Paths (N total) ---"</detail>
+        <detail>Optional decision info: "Decision Points: X (2^X = Y paths)"</detail>
+        <detail>Empty line after header</detail>
+        <detail>Path lines: "Path N: Start → Activity1 → Activity2 → End"</detail>
+        <detail>Use str.join() for efficient string building (not +=)</detail>
+      </example>
+    </constraint>
+
+    <constraint>
+      <category>performance</category>
+      <requirement>Path list generation must complete in &lt;5ms for 100 paths (NFR-PERF-2)</requirement>
+      <rationale>Performance requirement from PRD and tech spec</rationale>
+      <implementation>
+        <detail>Use O(paths × activities per path) algorithm (linear complexity)</detail>
+        <detail>Use str.join() for string building (not +=)</detail>
+        <detail>No file I/O or network calls in format() methods</detail>
+        <detail>Performance test validates timing requirement</detail>
+      </implementation>
+    </constraint>
+
+    <constraint>
+      <category>output-format-modes</category>
+      <requirement>Support three output modes: "mermaid", "paths", "full"</requirement>
+      <rationale>Tech spec lines 336-340, analyze_workflow integration</rationale>
+      <modes>
+        <mode name="mermaid">Mermaid diagram only (no path list, no validation)</mode>
+        <mode name="paths">Path list only (no Mermaid, no validation)</mode>
+        <mode name="full">Mermaid + path list + validation (default for context.output_format)</mode>
+      </modes>
+      <parameter-vs-context>
+        <detail>analyze_workflow output_format parameter default: "mermaid" (backward compat)</detail>
+        <detail>GraphBuildingContext.output_format field default: "full" (new field)</detail>
+        <detail>Parameter takes precedence when explicitly provided</detail>
+        <detail>Context field used when parameter not provided and context has field</detail>
+      </parameter-vs-context>
+    </constraint>
+
+    <constraint>
+      <category>type-safety</category>
+      <requirement>All code must pass mypy --strict with zero errors</requirement>
+      <rationale>Project standard from architecture.md and NFR-QUAL-1</rationale>
+      <details>
+        <detail>All dataclass fields have type hints</detail>
+        <detail>format_path_list signature: (paths: list[GraphPath]) -> PathListOutput</detail>
+        <detail>Use Literal["mermaid", "paths", "full"] for output_format type</detail>
+        <detail>No type: ignore comments without strong justification</detail>
+      </details>
+    </constraint>
+
+    <constraint>
+      <category>testing</category>
+      <requirement>Minimum test coverage: 10 unit tests + 3 integration tests</requirement>
+      <rationale>Follows pattern from Stories 5-1 and 5-2 (comprehensive test coverage)</rationale>
+      <test-files>
+        <file>tests/test_formatter.py (NEW) - Unit tests for formatter module</file>
+        <file>tests/integration/test_money_transfer.py (MODIFY) - Integration tests</file>
+        <file>tests/test_performance.py (MODIFY) - Performance test for path list</file>
+      </test-files>
+      <coverage-target>100% for formatter.py module</coverage-target>
+    </constraint>
+
+    <constraint>
+      <category>string-formatting</category>
+      <requirement>Use arrow symbol (→) for path step separator, not hyphen or other symbols</requirement>
+      <rationale>Tech spec lines 301-303 specifies "Start → Activity1 → Activity2 → End"</rationale>
+      <unicode>U+2192 RIGHTWARDS ARROW (→)</unicode>
+    </constraint>
+
+    <constraint>
+      <category>module-organization</category>
+      <requirement>Create new formatter.py module in src/temporalio_graphs/</requirement>
+      <rationale>Tech spec lines 116-124, separate formatting concerns from rendering</rationale>
+      <module-contents>
+        <item>FormattedPath dataclass</item>
+        <item>PathListOutput dataclass</item>
+        <item>format_path_list() function</item>
+        <item>Module docstring explaining purpose</item>
+      </module-contents>
+      <imports-needed>
+        <import>from dataclasses import dataclass</import>
+        <import>from temporalio_graphs.path import GraphPath</import>
+        <import>NO IMPORT of ActivityStep or DecisionStep - these classes do not exist</import>
+      </imports-needed>
+    </constraint>
+  </development-constraints>
+
+  <test-patterns>
+    <pattern>
+      <name>Unit tests for dataclass format() methods</name>
+      <file>tests/test_formatter.py</file>
+      <reference>tests/test_validator.py lines 1-100 (ValidationWarning.format() tests)</reference>
+      <tests-required>
+        <test>test_formatted_path_single_activity: Path with 1 activity</test>
+        <test>test_formatted_path_multiple_activities: Path with 3+ activities</test>
+        <test>test_formatted_path_no_activities: Empty activities list (edge case)</test>
+        <test>test_path_list_output_format_linear: 1 path, 0 decisions</test>
+        <test>test_path_list_output_format_decisions: 4 paths, 2 decisions</test>
+        <test>test_format_path_list_linear_workflow: End-to-end formatting</test>
+        <test>test_format_path_list_branching_workflow: 4 paths with decisions</test>
+        <test>test_format_path_list_empty: Empty paths list (edge case)</test>
+      </tests-required>
+    </pattern>
+
+    <pattern>
+      <name>Integration tests for analyze_workflow output modes</name>
+      <file>tests/integration/test_money_transfer.py</file>
+      <reference>Existing test_money_transfer_* tests in file</reference>
+      <tests-required>
+        <test>test_money_transfer_path_list_output: Verify path list in full output</test>
+        <test>test_output_format_mermaid_only: output_format="mermaid" has no path list</test>
+        <test>test_output_format_paths_only: output_format="paths" has no Mermaid</test>
+      </tests-required>
+      <validation>
+        <check>Full output contains "--- Execution Paths (4 total) ---"</check>
+        <check>Full output contains "Decision Points: 2 (2^2 = 4 paths)"</check>
+        <check>4 paths present: "Path 1:", "Path 2:", "Path 3:", "Path 4:"</check>
+        <check>Activities in paths: Withdraw, CurrencyConvert, NotifyAto, TakeNonResidentTax, Deposit</check>
+      </validation>
+    </pattern>
+
+    <pattern>
+      <name>Performance test for path list generation</name>
+      <file>tests/test_performance.py</file>
+      <reference>tests/test_performance.py existing structure</reference>
+      <test-required>
+        <test>test_path_list_performance: Generate 100 paths with 5 activities each</test>
+        <implementation>
+          <detail>Create 100 GraphPath objects with 5 PathStep(node_type='activity', name='...') each</detail>
+          <detail>Start timer with time.perf_counter()</detail>
+          <detail>Call format_path_list(paths)</detail>
+          <detail>End timer and calculate duration</detail>
+          <detail>Assert duration &lt; 0.005 seconds (5ms)</detail>
+        </implementation>
+      </test-required>
+    </pattern>
+  </test-patterns>
+
+  <implementation-examples>
+    <example>
+      <title>FormattedPath dataclass structure (CORRECT)</title>
+      <reference>Tech spec lines 293-303</reference>
+      <code-pattern>
+from dataclasses import dataclass
+
+@dataclass
+class FormattedPath:
+    """A single execution path formatted for display."""
+    path_number: int
+    activities: list[str]
+    decisions: dict[str, bool]
+
+    def format(self) -> str:
+        """Format as: Path 1: Start → Activity1 → Activity2 → End"""
+        steps = ["Start"] + self.activities + ["End"]
+        return f"Path {self.path_number}: {' → '.join(steps)}"
+      </code-pattern>
+    </example>
+
+    <example>
+      <title>PathListOutput format() method structure (CORRECT)</title>
+      <reference>Tech spec lines 312-324</reference>
+      <code-pattern>
+@dataclass
+class PathListOutput:
+    """Complete path list with metadata."""
+    paths: list[FormattedPath]
+    total_paths: int
+    total_decisions: int
+
+    def format(self) -> str:
+        """Format complete path list."""
+        lines = [
+            f"\n--- Execution Paths ({self.total_paths} total) ---"
+        ]
+        if self.total_decisions > 0:
+            lines.append(f"Decision Points: {self.total_decisions} (2^{self.total_decisions} = {self.total_paths} paths)")
+        lines.append("")  # Empty line
+
+        for path in self.paths:
+            lines.append(path.format())
+
+        return "\n".join(lines)
+      </code-pattern>
+    </example>
+
+    <example>
+      <title>format_path_list() implementation pattern (CORRECTED)</title>
+      <reference>Tech spec lines 456-502 (with critical corrections)</reference>
+      <critical-note>Tech spec shows INCORRECT isinstance checks - use node_type field instead</critical-note>
+      <code-pattern>
+from temporalio_graphs.path import GraphPath
+
+def format_path_list(paths: list[GraphPath]) -> PathListOutput:
+    """Convert GraphPath objects to formatted path list.
+
+    Args:
+        paths: All execution paths from generator
+
+    Returns:
+        PathListOutput with formatted paths
+
+    Example:
+        >>> path_list = format_path_list(paths)
+        >>> print(path_list.format())
+        Path 1: Start → Withdraw → Deposit → End
+        Path 2: Start → Withdraw → Convert → Deposit → End
+    """
+    formatted_paths = []
+
+    for i, path in enumerate(paths, 1):
+        # CORRECT: Extract activity names using node_type discriminator
+        activities = [
+            step.name
+            for step in path.steps
+            if step.node_type == 'activity'  # Use node_type field, NOT isinstance
+        ]
+
+        # CORRECT: Extract decision outcomes using node_type discriminator
+        decisions = {
+            step.name: step.decision_value
+            for step in path.steps
+            if step.node_type == 'decision' and step.decision_value is not None
+        }
+
+        formatted_paths.append(FormattedPath(
+            path_number=i,
+            activities=activities,
+            decisions=decisions
+        ))
+
+    # Count decisions (same across all paths)
+    total_decisions = len(paths[0].decisions) if paths else 0
+
+    return PathListOutput(
+        paths=formatted_paths,
+        total_paths=len(paths),
+        total_decisions=total_decisions
+    )
+      </code-pattern>
+    </example>
+
+    <example>
+      <title>analyze_workflow output assembly pattern (DETAILED)</title>
+      <reference>Tech spec lines 572-592, src/__init__.py lines 167-175</reference>
+      <code-pattern>
+# In analyze_workflow function, after path generation (line 164)
+
+# 1. Validate workflow BEFORE output assembly
+validation_report = validate_workflow(metadata, paths, context)
+
+# 2. Determine effective output format
+# Priority: parameter > context.output_format > parameter default
+effective_format = output_format
+if context is not None and hasattr(context, 'output_format'):
+    effective_format = context.output_format
+
+# 3. Assemble output parts based on format
+output_parts: list[str] = []
+
+# 3a. Conditional Mermaid rendering
+if effective_format in ("mermaid", "full"):
+    renderer = MermaidRenderer()
+    mermaid_output = renderer.to_mermaid(paths, context)
+    output_parts.append(mermaid_output)
+
+# 3b. Conditional path list
+if effective_format in ("paths", "full"):
+    # Check if context has include_path_list field (backward compat)
+    include_list = getattr(context, 'include_path_list', True)
+    if include_list:
+        from temporalio_graphs.formatter import format_path_list
+        path_list = format_path_list(paths)
+        output_parts.append(path_list.format())
+
+# 3c. Conditional validation report (only in full mode)
+if effective_format == "full" and context.include_validation_report:
+    if validation_report.has_warnings():
+        output_parts.append(validation_report.format())
+
+# 4. Join output parts with newline
+result = "\n".join(output_parts)
+
+# 5. Continue with file writing (existing lines 177-181)
+if context.graph_output_file is not None:
+    output_path = Path(context.graph_output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(result, encoding="utf-8")
+
+return result
+      </code-pattern>
+    </example>
+
+    <example>
+      <title>GraphBuildingContext extension (EXACT additions needed)</title>
+      <reference>src/temporalio_graphs/context.py lines 79-92</reference>
+      <code-pattern>
+# In context.py, add to imports at top
+from typing import Literal  # Add if not already present
+
+# In GraphBuildingContext dataclass, after line 92:
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    # ... existing fields (lines 79-92) ...
+    signal_success_label: str = "Signaled"
+    signal_timeout_label: str = "Timeout"
+
+    # NEW FIELDS FOR STORY 5-3:
+    include_path_list: bool = True
+    output_format: Literal["mermaid", "paths", "full"] = "full"
+      </code-pattern>
+      <docstring-update>
+# Update GraphBuildingContext docstring (around line 38-56) to add:
+        include_path_list: Include text path list in output when True.
+            Path list shows all execution paths in text format. Default: True.
+        output_format: Output format mode. Controls which sections are included:
+            - "mermaid": Mermaid diagram only (no path list, no validation)
+            - "paths": Path list only (no diagram, no validation)
+            - "full": Mermaid + path list + validation report (default)
+            Default: "full".
+      </docstring-update>
+    </example>
+  </implementation-examples>
+
+  <expected-output-examples>
+    <example>
+      <title>Linear workflow (1 path, 0 decisions)</title>
+      <reference>Story dev notes lines 377-382</reference>
+      <output>
+--- Execution Paths (1 total) ---
+
+Path 1: Start → Withdraw → Deposit → End
+      </output>
+    </example>
+
+    <example>
+      <title>MoneyTransfer workflow (4 paths, 2 decisions)</title>
+      <reference>Story dev notes lines 384-393</reference>
+      <output>
+--- Execution Paths (4 total) ---
+Decision Points: 2 (2^2 = 4 paths)
+
+Path 1: Start → Withdraw → CurrencyConvert → NotifyAto → Deposit → End
+Path 2: Start → Withdraw → CurrencyConvert → TakeNonResidentTax → Deposit → End
+Path 3: Start → Withdraw → NotifyAto → Deposit → End
+Path 4: Start → Withdraw → TakeNonResidentTax → Deposit → End
+      </output>
+    </example>
+
+    <example>
+      <title>Full output mode (Mermaid + path list + validation)</title>
+      <reference>Tech spec lines 534-546</reference>
+      <output>
+```mermaid
+flowchart LR
+s((Start)) --> 1[Withdraw] --> 0{NeedToConvert} -- yes --> 2[CurrencyConvert]
+0 -- no --> 3{IsTFN_Known}
+2 --> 3 -- yes --> 4[NotifyAto] --> 5[Deposit]
+3 -- no --> 6[TakeNonResidentTax] --> 5 --> e((End))
+```
+
+--- Execution Paths (4 total) ---
+Decision Points: 2 (2^2 = 4 paths)
+
+Path 1: Start → Withdraw → CurrencyConvert → NotifyAto → Deposit → End
+Path 2: Start → Withdraw → CurrencyConvert → TakeNonResidentTax → Deposit → End
+Path 3: Start → Withdraw → NotifyAto → Deposit → End
+Path 4: Start → Withdraw → TakeNonResidentTax → Deposit → End
+
+--- Validation Report ---
+(if any warnings exist)
+      </output>
+    </example>
+  </expected-output-examples>
+
+  <files-to-create>
+    <file>
+      <path>src/temporalio_graphs/formatter.py</path>
+      <purpose>New module for path list formatting</purpose>
+      <contents>
+        <item>Module docstring</item>
+        <item>Imports: dataclass from dataclasses</item>
+        <item>Import GraphPath from temporalio_graphs.path</item>
+        <item>NO IMPORT of ActivityStep or DecisionStep - these do not exist</item>
+        <item>FormattedPath dataclass with format() method</item>
+        <item>PathListOutput dataclass with format() method</item>
+        <item>format_path_list() function</item>
+      </contents>
+    </file>
+    <file>
+      <path>tests/test_formatter.py</path>
+      <purpose>Unit tests for formatter module</purpose>
+      <contents>
+        <item>Test FormattedPath.format() with various activity counts</item>
+        <item>Test PathListOutput.format() with linear and branching workflows</item>
+        <item>Test format_path_list() end-to-end conversion</item>
+        <item>Edge case tests: empty paths, single activity, no decisions</item>
+      </contents>
+    </file>
+  </files-to-create>
+
+  <files-to-modify>
+    <file>
+      <path>src/temporalio_graphs/context.py</path>
+      <changes>
+        <change priority="CRITICAL">Add import: from typing import Literal (if not already present)</change>
+        <change priority="CRITICAL">Add NEW field after line 92: include_path_list: bool = True</change>
+        <change priority="CRITICAL">Add NEW field after include_path_list: output_format: Literal["mermaid", "paths", "full"] = "full"</change>
+        <change priority="HIGH">Update docstring (lines 24-76) to document new fields and output_format modes</change>
+      </changes>
+    </file>
+    <file>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <changes>
+        <change priority="CRITICAL">Add import around line 27: from temporalio_graphs.formatter import format_path_list</change>
+        <change priority="CRITICAL">Update analyze_workflow to accept "paths" in output_format parameter (remove validation error at lines 146-149)</change>
+        <change priority="CRITICAL">Replace rendering section (lines 167-175) with output assembly logic using output_parts list</change>
+        <change priority="HIGH">Update docstring (lines 84-139) to document output_format modes and show full output example</change>
+      </changes>
+    </file>
+    <file>
+      <path>tests/integration/test_money_transfer.py</path>
+      <changes>
+        <change>Add test_money_transfer_path_list_output() - verify path list in full output</change>
+        <change>Add test_output_format_mermaid_only() - verify no path list with "mermaid"</change>
+        <change>Add test_output_format_paths_only() - verify no Mermaid with "paths"</change>
+      </changes>
+    </file>
+    <file>
+      <path>tests/test_performance.py</path>
+      <changes>
+        <change>Add test_path_list_performance() - validate &lt;5ms for 100 paths</change>
+      </changes>
+    </file>
+  </files-to-modify>
+
+  <quality-gates>
+    <gate>
+      <name>Type Safety</name>
+      <validation>mypy --strict src/ passes with zero errors</validation>
+      <focus>All dataclass fields typed, format_path_list signature typed, Literal for output_format</focus>
+    </gate>
+    <gate>
+      <name>Code Quality</name>
+      <validation>ruff check src/ passes with zero errors</validation>
+      <focus>PEP 8 compliance, no unused imports, consistent formatting</focus>
+    </gate>
+    <gate>
+      <name>Test Coverage</name>
+      <validation>pytest --cov=src/temporalio_graphs/formatter passes with 100% coverage</validation>
+      <focus>All functions, all branches, all edge cases covered</focus>
+    </gate>
+    <gate>
+      <name>Regression Prevention</name>
+      <validation>pytest -v passes with all 406+ existing tests passing</validation>
+      <focus>No breaking changes to Epic 2-5.2 functionality</focus>
+    </gate>
+    <gate>
+      <name>Performance</name>
+      <validation>test_path_list_performance passes (&lt;5ms for 100 paths)</validation>
+      <focus>Efficient string building, no performance bottlenecks</focus>
+    </gate>
+    <gate>
+      <name>Integration</name>
+      <validation>MoneyTransfer example produces correct 4-path output</validation>
+      <focus>Path list matches expected format, all activities included</focus>
+    </gate>
+  </quality-gates>
+
+  <completion-checklist>
+    <item>FormattedPath dataclass created with format() method</item>
+    <item>PathListOutput dataclass created with format() method</item>
+    <item>format_path_list() function implemented using CORRECT node_type checking</item>
+    <item>GraphBuildingContext extended with NEW fields: include_path_list and output_format</item>
+    <item>analyze_workflow() updated with conditional output assembly logic</item>
+    <item>10+ unit tests in test_formatter.py, all passing</item>
+    <item>3+ integration tests in test_money_transfer.py, all passing</item>
+    <item>Performance test validates &lt;5ms requirement</item>
+    <item>mypy --strict passes with zero errors</item>
+    <item>ruff check passes with zero errors</item>
+    <item>pytest --cov shows 100% coverage for formatter.py</item>
+    <item>All 406+ existing tests still pass (no regressions)</item>
+    <item>Manual verification: MoneyTransfer example shows correct 4 paths</item>
+    <item>Manual verification: All 3 output_format modes work correctly</item>
+  </completion-checklist>
+
+  <critical-corrections-summary>
+    <correction priority="CRITICAL">
+      <issue>Tech spec lines 478-479 show isinstance(step, ActivityStep) checks</issue>
+      <problem>ActivityStep and DecisionStep classes DO NOT EXIST in codebase</problem>
+      <correct-implementation>Use step.node_type == 'activity' to filter PathStep objects</correct-implementation>
+      <code-location>src/temporalio_graphs/path.py lines 12-41 define PathStep with node_type discriminator</code-location>
+    </correction>
+    <correction priority="CRITICAL">
+      <issue>Previous context listed include_path_list and output_format as "existing fields"</issue>
+      <problem>These fields DO NOT currently exist in GraphBuildingContext</problem>
+      <correct-status>These are NEW fields to be ADDED in Story 5-3</correct-status>
+      <code-location>src/temporalio_graphs/context.py lines 79-92 show current field list (14 fields, ending with signal_timeout_label)</code-location>
+    </correction>
+    <correction priority="HIGH">
+      <issue>Integration point lacked specificity about conditional output assembly</issue>
+      <enhancement>Added detailed pseudocode showing output_parts list assembly with three conditional branches</enhancement>
+      <details>
+        <detail>Mode "mermaid": Append Mermaid only</detail>
+        <detail>Mode "paths": Append path list only (if include_path_list)</detail>
+        <detail>Mode "full": Append Mermaid, path list (if include_path_list), validation (if has warnings)</detail>
+      </details>
+    </correction>
+  </critical-corrections-summary>
+</story-context>
