@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <story-reference>
+    <story-key>6-5-add-integration-test-with-parent-child-workflow-example</story-key>
+    <story-file>docs/sprint-artifacts/stories/6-5-add-integration-test-with-parent-child-workflow-example.md</story-file>
+    <epic-key>epic-6</epic-key>
+    <epic-name>Cross-Workflow Visualization (MVP Extension)</epic-name>
+    <story-status>drafted</story-status>
+    <position-in-epic>Final story (5 of 5)</position-in-epic>
+  </story-reference>
+
+  <epic-context>
+    <parent-epic>
+      <epic-file>docs/sprint-artifacts/tech-spec-epic-6.md</epic-file>
+      <epic-objective>Extend temporalio-graphs library with deep cross-workflow analysis capabilities, enabling visualization of parent-child workflow relationships and complete end-to-end execution flows spanning multiple workflows</epic-objective>
+      <epic-scope>Child workflow call detection, multi-workflow analysis pipeline, cross-workflow path generation with three expansion modes (reference, inline, subgraph), and parent-child workflow examples</epic-scope>
+    </parent-epic>
+    <preceding-stories>
+      <story id="6-1" status="done">Detect child workflow calls in AST - Child workflow call detection complete</story>
+      <story id="6-2" status="done">Child workflow node rendering in Mermaid - Double-bracket [[ChildWorkflow]] syntax implemented</story>
+      <story id="6-3" status="done">Multi-workflow analysis pipeline - WorkflowCallGraphAnalyzer, circular detection, import tracking complete</story>
+      <story id="6-4" status="done">End-to-end path generation across workflows - All three expansion modes (reference, inline, subgraph) implemented with path explosion safeguards</story>
+    </preceding-stories>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+      <type>technical-specification</type>
+      <relevance>Contains AC-Epic6-5 acceptance criteria, example structure requirements, path count validation (4 paths = 2² for 1 parent decision × 1 child decision), and all three expansion mode specifications</relevance>
+      <key-sections>
+        <section>AC-Epic6-5: Integration Test with Parent-Child Example (lines 477-485)</section>
+        <section>Story 6.5: Add Integration Test with Parent-Child Workflow Example (lines 633-641)</section>
+        <section>Data Models and Contracts - MultiWorkflowPath (lines 170-177)</section>
+        <section>Path Generation Modes - Reference, Inline, Subgraph (lines 322-348)</section>
+        <section>Test Strategy Summary - Integration Testing (lines 588-606)</section>
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/prd.md</path>
+      <type>product-requirements</type>
+      <relevance>FR73 defines parent-child workflow example requirement as part of MVP Extension (v0.2.0). Cross-workflow visualization requirements (FR67-FR74)</relevance>
+      <key-sections>
+        <section>MVP Extension (v0.2.0) - Cross-Workflow Support (lines 108-125)</section>
+        <section>Success Criteria - Feature Parity with .NET Version (lines 47-71)</section>
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>architecture-documentation</type>
+      <relevance>Defines project structure, testing strategy, example organization pattern. Integration test should follow established patterns from examples/money_transfer/</relevance>
+      <key-sections>
+        <section>Project Structure - examples/ directory organization (lines 90-102)</section>
+        <section>Testing Strategy - Integration tests end-to-end workflow analysis (lines 131-136)</section>
+        <section>FR Category Mapping - Cross-Workflow Visualization (line 165)</section>
+      </key-sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/6-4-implement-end-to-end-path-generation-across-workflows.md</path>
+      <type>predecessor-story</type>
+      <relevance>Story 6.4 implemented all three expansion modes (reference, inline, subgraph) and MultiWorkflowPath data model. Story 6.5 validates this implementation with integration test</relevance>
+      <key-sections>
+        <section>Learnings from Previous Story - All three modes working (lines 93-112)</section>
+        <section>Dev Agent Record - Implementation decisions, path explosion safeguards (lines 142-184)</section>
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <name>analyze_workflow_graph</name>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <type>public-api-function</type>
+      <signature>def analyze_workflow_graph(entry_workflow: Path | str, workflow_search_paths: Optional[list[Path | str]] = None, context: Optional[GraphBuildingContext] = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <description>Multi-workflow analysis function from Epic 6. Integration test must use this API (not analyze_workflow) to test cross-workflow visualization</description>
+      <usage-note>This function is the primary API for parent-child workflow analysis. Example must demonstrate usage in run.py file</usage-note>
+      <expected-location>Should be exported from src/temporalio_graphs/__init__.py but NOT YET IMPLEMENTED - Story 6.5 must verify this exists or create it</expected-location>
+    </interface>
+
+    <interface>
+      <name>GraphBuildingContext</name>
+      <file>src/temporalio_graphs/context.py</file>
+      <type>configuration-dataclass</type>
+      <fields>
+        <field name="child_workflow_expansion" type="Literal['reference', 'inline', 'subgraph']" default="reference">Controls visualization mode for child workflows</field>
+        <field name="max_expansion_depth" type="int" default="2">Maximum recursion depth for multi-workflow analysis</field>
+        <field name="output_format" type="Literal['mermaid', 'paths', 'full']" default="full">Controls output sections</field>
+      </fields>
+      <usage>Integration test must test all three child_workflow_expansion modes: reference (2 paths), inline (4 paths), subgraph (2 paths per workflow)</usage>
+    </interface>
+
+    <interface>
+      <name>MultiWorkflowPath</name>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>data-model</type>
+      <description>Frozen dataclass representing execution path spanning multiple workflows. Contains workflows list, steps list, workflow_transitions tuples</description>
+      <fields>
+        <field name="path_id" type="str">Unique path identifier</field>
+        <field name="workflows" type="list[str]">Ordered workflow names in execution path</field>
+        <field name="steps" type="list[str]">All steps including workflow boundaries</field>
+        <field name="workflow_transitions" type="list[tuple[int, str, str]]">Step index, from_workflow, to_workflow tuples</field>
+        <field name="total_decisions" type="int">Total decision points across all workflows</field>
+      </fields>
+    </interface>
+
+    <interface>
+      <name>WorkflowCallGraphAnalyzer</name>
+      <file>src/temporalio_graphs/call_graph_analyzer.py</file>
+      <type>analyzer-class</type>
+      <description>Orchestrates multi-workflow analysis, resolves child workflow files, builds WorkflowCallGraph with parent-child relationships</description>
+      <key-methods>
+        <method name="analyze">Returns WorkflowCallGraph containing root_workflow, child_workflows dict, call_relationships list</method>
+      </key-methods>
+    </interface>
+
+    <interface>
+      <name>PathPermutationGenerator.generate_cross_workflow_paths</name>
+      <file>src/temporalio_graphs/generator.py</file>
+      <type>path-generator-method</type>
+      <description>Generates cross-workflow paths based on child_workflow_expansion mode. Reference mode: 2 parent paths. Inline mode: 2² = 4 total paths (parent × child). Subgraph mode: separate path sets</description>
+      <critical-note>Path explosion safeguard enforces max_paths limit BEFORE generation in inline mode</critical-note>
+    </interface>
+
+    <interface>
+      <name>workflow.execute_child_workflow</name>
+      <file>temporalio SDK</file>
+      <type>temporal-sdk-function</type>
+      <signature>await workflow.execute_child_workflow(ChildWorkflow, args, id="...", parent_close_policy=...)</signature>
+      <description>Temporal SDK function for executing child workflows. Example workflows must use this to demonstrate child workflow calls</description>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <category>example-design</category>
+      <description>Parent workflow (OrderWorkflow) must have exactly 1 decision point (HighValue check). Child workflow (PaymentWorkflow) must have exactly 1 decision point (Requires3DS check). This creates 2² = 4 total paths in inline mode</description>
+      <rationale>Simple enough to understand (4 paths) but realistic enough to demonstrate value. Matches tech spec requirement for 4-path end-to-end flow</rationale>
+    </constraint>
+
+    <constraint>
+      <category>testing-standard</category>
+      <description>Golden file regression testing required. Create expected_output_reference.md, expected_output_inline.md, expected_output_subgraph.md files with expected Mermaid diagrams for each mode</description>
+      <rationale>Regression tests prevent breaking changes to output format (Story 6.4 learnings line 102)</rationale>
+    </constraint>
+
+    <constraint>
+      <category>path-validation</category>
+      <description>Integration test must validate path counts: reference mode = 2 paths (parent only), inline mode = 4 paths (2 parent × 2 child), subgraph mode = 2 paths per workflow</description>
+      <rationale>Critical validation from AC-Epic6-5 (tech spec line 481). Ensures path generation logic is correct</rationale>
+    </constraint>
+
+    <constraint>
+      <category>expansion-mode-coverage</category>
+      <description>All three expansion modes (reference, inline, subgraph) must be demonstrated and tested. Reference is default/safest, inline shows complete flow, subgraph shows structure</description>
+      <rationale>Story 6.4 implemented all three modes (lines 203-221 in dev notes). Story 6.5 must validate all work correctly</rationale>
+    </constraint>
+
+    <constraint>
+      <category>mermaid-syntax-validation</category>
+      <description>Generated Mermaid must be valid and parseable. Reference mode: child as [[PaymentWorkflow]] node. Inline mode: complete flow with both parent and child activities. Subgraph mode: subgraph blocks with transition edges</description>
+      <rationale>Visual distinction between modes critical for user understanding (tech spec AC-Epic6-5)</rationale>
+    </constraint>
+
+    <constraint>
+      <category>example-structure</category>
+      <description>Follow examples/money_transfer/ pattern: parent_workflow.py (workflow code), child_workflow.py (child workflow code), run.py (runner demonstrating all modes), expected_output_*.md (golden files), README.md (documentation)</description>
+      <rationale>Consistency with existing examples (architecture.md lines 90-102)</rationale>
+    </constraint>
+
+    <constraint>
+      <category>activity-naming</category>
+      <description>Parent workflow activities: validate_order, manager_approval. Child workflow activities: process_payment, verify_3ds. Use realistic business scenario (order processing with payment child workflow)</description>
+      <rationale>Example should be realistic enough to demonstrate value (story requirements lines 26-29)</rationale>
+    </constraint>
+
+    <constraint>
+      <category>test-coverage-standard</category>
+      <description>Maintain 100% coverage standard from Story 6.4 for integration test (Story 6.4 line 99). Test all acceptance criteria comprehensively</description>
+      <rationale>Story 6.4 achieved 100% coverage with 14 tests. Story 6.5 should maintain this quality bar</rationale>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <name>pytest</name>
+      <type>test-framework</type>
+      <version>>=7.4.0</version>
+      <usage>Integration test framework. Use tmp_path fixture for temporary workflow files if needed</usage>
+    </dependency>
+
+    <dependency>
+      <name>pytest-asyncio</name>
+      <type>async-test-support</type>
+      <version>>=0.21.0</version>
+      <usage>Support for async workflow helper functions (to_decision, wait_condition) in test workflows</usage>
+    </dependency>
+
+    <dependency>
+      <name>temporalio SDK</name>
+      <type>workflow-runtime</type>
+      <version>>=1.7.1</version>
+      <usage>Workflow decorators (@workflow.defn, @workflow.run), execute_child_workflow function</usage>
+    </dependency>
+
+    <dependency>
+      <name>temporalio_graphs</name>
+      <type>library-under-test</type>
+      <version>local</version>
+      <imports>analyze_workflow_graph (primary API), GraphBuildingContext, to_decision, MultiWorkflowPath</imports>
+    </dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-framework>pytest</test-framework>
+    <test-file-location>tests/integration/test_parent_child_workflow.py</test-file-location>
+    <existing-integration-test>
+      <file>tests/integration/test_parent_child_workflow.py</file>
+      <status>exists-but-incomplete</status>
+      <description>Contains basic parent-child tests from Story 6.2 (child workflow rendering). Story 6.5 must EXTEND this file with comprehensive end-to-end tests for all three expansion modes</description>
+      <current-tests>
+        <test>test_parent_workflow_with_child_call_renders_mermaid - Basic child workflow node rendering</test>
+        <test>test_multiple_child_workflows_unique_ids - Multiple child workflow handling</test>
+        <test>test_child_workflow_after_decision_point - Child workflow in conditional branch</test>
+      </current-tests>
+      <missing-coverage>
+        <gap>No test for inline mode with 4-path end-to-end flow (parent + child decisions)</gap>
+        <gap>No test for subgraph mode with Mermaid subgraph syntax validation</gap>
+        <gap>No golden file comparison for regression testing</gap>
+        <gap>No test using analyze_workflow_graph() API (current tests use analyze_workflow)</gap>
+      </missing-coverage>
+    </test-file-location>
+
+    <test-patterns>
+      <pattern>
+        <name>Golden file regression testing</name>
+        <description>Compare generated Mermaid output against expected_output_*.md files to detect regressions</description>
+        <example-location>See examples/money_transfer/expected_output.md pattern</example-location>
+      </pattern>
+
+      <pattern>
+        <name>Path count validation</name>
+        <description>Parse generated output, count paths, assert against expected count based on mode and decision points</description>
+        <formula>Reference: 2^parent_decisions, Inline: 2^(parent_decisions + child_decisions), Subgraph: 2^decisions per workflow</formula>
+      </pattern>
+
+      <pattern>
+        <name>Mermaid structure validation</name>
+        <description>Verify Mermaid syntax elements: flowchart LR declaration, node definitions, edge connections, subgraph blocks (subgraph mode only)</description>
+      </pattern>
+
+      <pattern>
+        <name>Mode-specific output validation</name>
+        <description>Reference mode: verify [[ChildWorkflow]] nodes. Inline mode: verify child activities in paths. Subgraph mode: verify subgraph syntax</description>
+      </pattern>
+    </test-patterns>
+
+    <test-fixtures>
+      <fixture>
+        <location>tests/fixtures/parent_child_workflows/</location>
+        <available-fixtures>
+          <file>simple_parent.py - Linear parent workflow with child call</file>
+          <file>simple_child.py - Linear child workflow</file>
+          <file>multi_child_parent.py - Parent with multiple child calls</file>
+          <file>nested_grandchild.py - Three-level hierarchy</file>
+        </available-fixtures>
+        <note>Story 6.5 needs NEW fixtures: parent with 1 decision + child with 1 decision for 4-path testing</note>
+      </fixture>
+    </test-fixtures>
+
+    <coverage-requirements>
+      <requirement>Integration test must cover all 8 acceptance criteria from story file</requirement>
+      <requirement>Test all three expansion modes (reference, inline, subgraph) with dedicated test methods</requirement>
+      <requirement>Validate path counts for each mode (2, 4, 2 respectively)</requirement>
+      <requirement>Test golden file comparison for regression protection</requirement>
+      <requirement>Verify example files exist and are executable (run.py script validation)</requirement>
+    </coverage-requirements>
+  </testing-context>
+
+  <implementation-notes>
+    <note priority="critical">
+      <title>analyze_workflow_graph API Requirement</title>
+      <description>Story assumes analyze_workflow_graph() function exists in public API. This function was specified in tech spec (lines 202-236) but may not be implemented yet. MUST verify existence in src/temporalio_graphs/__init__.py and implement if missing before creating example</description>
+      <action>Check if analyze_workflow_graph is exported in __init__.py. If not, implement wrapper function that calls WorkflowCallGraphAnalyzer.analyze() and PathPermutationGenerator.generate_cross_workflow_paths()</action>
+    </note>
+
+    <note priority="critical">
+      <title>4-Path Validation Formula</title>
+      <description>Inline mode with 1 parent decision + 1 child decision = 2¹ × 2¹ = 4 total paths. Each path combination: (parent_decision=yes/no) × (child_decision=yes/no). Test must validate all 4 combinations exist: [yes,yes], [yes,no], [no,yes], [no,no]</description>
+    </note>
+
+    <note priority="high">
+      <title>Example Workflow Design</title>
+      <description>Parent: OrderWorkflow with activities [validate_order, manager_approval (conditional), ...]. Decision: "HighValue" (order amount > threshold). Child: PaymentWorkflow with activities [process_payment, verify_3ds (conditional)]. Decision: "Requires3DS" (payment requires 3D Secure). This creates realistic e-commerce scenario</description>
+    </note>
+
+    <note priority="high">
+      <title>Golden File Structure</title>
+      <description>Create three golden files: expected_output_reference.md (2 parent paths, child as [[PaymentWorkflow]] node), expected_output_inline.md (4 complete paths with both parent and child activities), expected_output_subgraph.md (subgraph blocks for parent and child workflows)</description>
+    </note>
+
+    <note priority="medium">
+      <title>Reference Mode as Default</title>
+      <description>Reference mode is safest default (no path explosion). Example README should explain when to use each mode: reference for overview, inline for complete flow understanding, subgraph for structural visualization</description>
+    </note>
+
+    <note priority="medium">
+      <title>Workflow Transitions Validation</title>
+      <description>MultiWorkflowPath.workflow_transitions field tracks (step_index, from_workflow, to_workflow) tuples. Integration test should validate these transitions are recorded correctly at child workflow call sites</description>
+    </note>
+
+    <note priority="low">
+      <title>Documentation Updates</title>
+      <description>Story requires updating main README.md with cross-workflow visualization section, usage examples for analyze_workflow_graph(), and troubleshooting guide. This is final story in Epic 6, so documentation should be comprehensive</description>
+    </note>
+  </implementation-notes>
+
+  <warnings-and-gaps>
+    <warning>
+      <severity>high</severity>
+      <category>missing-api</category>
+      <message>analyze_workflow_graph() function specified in tech spec but may not exist in public API yet. Must verify and implement if missing</message>
+      <impact>Cannot create working example without this function. Example run.py script depends on it</impact>
+      <mitigation>Check src/temporalio_graphs/__init__.py for function export. If missing, implement wrapper that orchestrates WorkflowCallGraphAnalyzer + PathPermutationGenerator + MermaidRenderer</mitigation>
+    </warning>
+
+    <warning>
+      <severity>medium</severity>
+      <category>test-file-conflict</category>
+      <message>tests/integration/test_parent_child_workflow.py already exists from Story 6.2. Story 6.5 must EXTEND (not replace) this file</message>
+      <impact>Risk of overwriting existing tests. Need careful integration of new tests</impact>
+      <mitigation>Add new test classes for each expansion mode. Keep existing tests intact. Add comprehensive end-to-end tests as separate test class</mitigation>
+    </warning>
+
+    <warning>
+      <severity>low</severity>
+      <category>documentation-scope</category>
+      <message>Story requires extensive documentation updates (README, API reference, troubleshooting). Large scope for final story</message>
+      <impact>May take longer than expected. Documentation quality critical for library adoption</impact>
+      <mitigation>Prioritize working example and integration tests first. Documentation can be completed in follow-up if time constrained</mitigation>
+    </warning>
+
+    <gap>
+      <category>example-fixtures</category>
+      <description>No existing test fixture for parent (1 decision) + child (1 decision) scenario. Must create new workflow files for 4-path testing</description>
+      <resolution>Create order_workflow.py and payment_workflow.py in examples/parent_child_workflow/ directory</resolution>
+    </gap>
+
+    <gap>
+      <category>golden-files</category>
+      <description>No golden files exist yet for expected Mermaid output in three modes. Must create and validate these manually first</description>
+      <resolution>Generate diagrams using implemented functionality, manually verify correctness, save as golden files for regression testing</resolution>
+    </gap>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step order="1">Verify analyze_workflow_graph() exists in public API or implement if missing</step>
+    <step order="2">Create parent_child_workflow example directory structure with parent_workflow.py, child_workflow.py, run.py</step>
+    <step order="3">Implement OrderWorkflow (parent) with 1 decision point (HighValue check)</step>
+    <step order="4">Implement PaymentWorkflow (child) with 1 decision point (Requires3DS check)</step>
+    <step order="5">Create run.py script demonstrating all three expansion modes</step>
+    <step order="6">Generate golden files by running implementation and validating output correctness</step>
+    <step order="7">Extend tests/integration/test_parent_child_workflow.py with comprehensive tests</step>
+    <step order="8">Implement tests for reference mode (2 paths, child as [[PaymentWorkflow]] node)</step>
+    <step order="9">Implement tests for inline mode (4 paths, all combinations validated)</step>
+    <step order="10">Implement tests for subgraph mode (subgraph syntax validation)</step>
+    <step order="11">Implement golden file comparison tests for regression protection</step>
+    <step order="12">Update main README.md with cross-workflow visualization section</step>
+    <step order="13">Create examples/parent_child_workflow/README.md with usage guide</step>
+    <step order="14">Validate all tests pass and coverage meets 100% standard</step>
+    <step order="15">Update sprint-status.yaml: drafted → ready-for-dev</step>
+  </next-steps>
+
+  <validation-checklist>
+    <item>✓ Story file exists and contains all 8 acceptance criteria</item>
+    <item>✓ Tech spec Epic 6 defines AC-Epic6-5 for this story</item>
+    <item>✓ All predecessor stories (6.1-6.4) are marked done in sprint-status.yaml</item>
+    <item>✓ GraphBuildingContext has child_workflow_expansion field implemented</item>
+    <item>✓ MultiWorkflowPath data model exists in graph_models.py</item>
+    <item>✓ PathPermutationGenerator has generate_cross_workflow_paths method</item>
+    <item>✓ WorkflowCallGraphAnalyzer exists and handles multi-workflow analysis</item>
+    <item>? analyze_workflow_graph() public API function - NEEDS VERIFICATION</item>
+    <item>✓ tests/integration/test_parent_child_workflow.py exists (needs extension)</item>
+    <item>✓ Test fixtures available in tests/fixtures/parent_child_workflows/</item>
+  </validation-checklist>
+</story-context>
