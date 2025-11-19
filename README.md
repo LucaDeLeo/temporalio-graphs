@@ -1,73 +1,426 @@
 # temporalio-graphs
 
-Generate complete workflow visualizations as Mermaid diagrams for Temporal workflows using static code analysis.
+[![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/project/temporalio-graphs/)
+[![Python versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/temporalio-graphs/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Test Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](https://github.com/yourusername/temporalio-graphs)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen)](https://github.com/yourusername/temporalio-graphs)
 
-## Status
+Generate complete workflow visualization diagrams for Temporal workflows using static code analysis.
 
-🚀 **Production-Ready** - Epic 5 (Production Readiness) In Progress
+## Table of Contents
 
-**Test Quality:** 406 tests passing, 95% coverage, <1s execution time
-
-**Completed Epics:**
-- Epic 1: Foundation & Project Setup ✅
-- Epic 2: Basic Graph Generation (Linear Workflows) ✅
-- Epic 3: Decision Node Support (Branching Workflows) ✅
-- Epic 4: Signal & Wait Condition Support ✅
-
-**Epic 5 Progress (2/5 stories complete):**
-- Story 5-1: Validation Warnings ✅ (Unreachable activity detection)
-- Story 5-2: Error Handling Hierarchy 🔄 (75% complete, integration tests needed)
-- Story 5-3: Path List Output Format (Backlog)
-- Story 5-4: Comprehensive Example Gallery (Backlog)
-- Story 5-5: Production-Grade Documentation (Backlog)
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Architecture: Python vs .NET](#architecture-python-vs-net)
+- [API Reference](#api-reference)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+- [Credits](#credits)
 
 ## Overview
 
 Unlike DAG-based workflow engines, Temporal workflows don't provide complete visualization of all possible execution paths. This library generates Mermaid diagrams showing **ALL** possible workflow paths by analyzing workflow code structure using Python's AST (Abstract Syntax Tree).
 
-### Key Innovation
+**The Innovation:** Most workflow engines visualize only executed paths. temporalio-graphs uses static code analysis to generate complete path coverage (2^n paths for n decision points) without executing any workflow code. Perfect for documentation, code review, and workflow understanding.
 
-- **Static Analysis Approach**: Analyzes workflow code without executing it
-- **Complete Path Coverage**: Generates 2^n paths for n decision points
-- **Fast**: < 1ms analysis time vs exponential execution time
-- **No Runtime Dependencies**: Works on source code directly
+### Why temporalio-graphs?
 
-## Architecture Decision
+- **Complete Path Coverage**: See all possible execution paths, not just executed ones
+- **Zero Runtime Overhead**: Pure static analysis - no workflow execution required
+- **Blazing Fast**: <1ms analysis time vs exponential execution time
+- **No Mock Setup**: Unlike runtime approaches, no interceptor or mock configuration needed
+- **Production Ready**: 95% test coverage, comprehensive error handling, actionable error messages
 
-After evaluating three approaches (mock execution, history parsing, static analysis), we chose **static code analysis** because:
+## Key Features
 
-1. Python Temporal SDK interceptors cannot mock activity return values (unlike .NET)
-2. Generates ALL possible paths without workflow execution
-3. Performance: sub-millisecond vs exponential execution time
-4. Matches conceptual model of .NET reference implementation
+### Core Capabilities
 
-See `/spike/EXECUTIVE_SUMMARY.md` for detailed rationale.
+- **Static AST Analysis**: Analyzes workflow code without executing it
+- **Complete Path Visualization**: Generates 2^n paths for n decision points
+- **Decision Node Support**: Mark decision points with `to_decision()` helper
+- **Signal Node Support**: Mark wait conditions with `wait_condition()` helper
+- **Mermaid Output**: Industry-standard flowchart LR syntax
+- **Path List Format**: Text-based alternative for CI/CD integration
+- **Validation Warnings**: Detects unreachable activities and path explosion
+- **Comprehensive Error Handling**: 5 exception types with actionable messages
+
+### Configuration Options
+
+- Customizable node labels (Start/End, Yes/No, Signaled/Timeout)
+- Word splitting control for activity names
+- Path explosion limits (max decisions, max paths)
+- File output support for CI/CD pipelines
+- Validation control (suppress warnings, include reports)
+
+### Output Formats
+
+- **Mermaid Diagrams**: Flowchart LR syntax for GitHub, GitLab, Notion, etc.
+- **Path Lists**: Text-based execution path enumeration
+- **Full Mode**: Combined Mermaid + path list + validation report
 
 ## Installation
 
-```bash
-# Once published to PyPI
-pip install temporalio-graphs
+### Using pip (recommended for production)
 
-# Development installation
+```bash
+pip install temporalio-graphs
+```
+
+### Using uv (recommended for development)
+
+```bash
+uv pip install temporalio-graphs
+```
+
+### Using poetry
+
+```bash
+poetry add temporalio-graphs
+```
+
+### From source (development)
+
+```bash
 git clone https://github.com/yourusername/temporalio-graphs
 cd temporalio-graphs
 uv venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv sync
 ```
 
+### Requirements
+
+- Python 3.10+ (3.11+ recommended)
+- temporalio >= 1.7.1
+
 ## Quick Start
 
-### Basic Usage (3 lines)
-
-Analyze a workflow and get a Mermaid diagram:
+Analyze a workflow and generate a Mermaid diagram in 3 lines:
 
 ```python
 from temporalio_graphs import analyze_workflow
 
 result = analyze_workflow("my_workflow.py")
-print(result)  # Prints Mermaid diagram
+print(result)
+```
+
+That's it! The `analyze_workflow()` function performs static analysis on your workflow source file and returns a complete Mermaid flowchart showing all possible execution paths.
+
+## Core Concepts
+
+Understanding how temporalio-graphs works will help you write better workflows and interpret generated diagrams effectively.
+
+### Static AST Analysis
+
+**How it works:** The library parses your workflow source code into an Abstract Syntax Tree (AST) and analyzes the structure to detect activities, decision points, and control flow - all without executing any code.
+
+**Benefits:**
+- **No execution required**: Analyze workflows without setting up Temporal server or activities
+- **Complete coverage**: Detects all possible paths, not just executed ones
+- **Fast**: Sub-millisecond analysis time vs exponential execution time
+- **Safe**: No side effects from running workflow code
+
+**Comparison with other approaches:**
+
+| Approach | Analysis Time | Path Coverage | Execution Required |
+|----------|---------------|---------------|-------------------|
+| **Static Analysis (Python)** | <1ms | 100% (all paths) | No |
+| Runtime Interceptors (.NET) | 2^n executions | 100% (all paths) | Yes |
+| History Parsing | Instant | Partial (executed only) | Yes |
+
+### Decision Nodes
+
+Decision nodes represent branching logic in your workflow. Each decision creates **2 execution paths** (yes and no branches).
+
+**Path Permutations Formula:** For n independent decisions, the workflow has **2^n total paths**.
+
+**Examples:**
+- 1 decision = 2^1 = 2 paths
+- 2 decisions = 2^2 = 4 paths
+- 3 decisions = 2^3 = 8 paths
+- 10 decisions = 2^10 = 1,024 paths (default limit)
+
+**Marking Decision Points:**
+
+Use the `to_decision()` helper to mark boolean expressions as decision nodes:
+
+```python
+from temporalio import workflow
+from temporalio_graphs import to_decision
+
+@workflow.defn
+class PaymentWorkflow:
+    @workflow.run
+    async def run(self, amount: int) -> str:
+        await workflow.execute_activity(validate_payment, amount)
+
+        # Mark this as a decision point
+        if await to_decision(amount > 1000, "HighValue"):
+            await workflow.execute_activity(require_approval, amount)
+
+        await workflow.execute_activity(process_payment, amount)
+        return "completed"
+```
+
+**Graph Output:**
+
+```mermaid
+flowchart LR
+s((Start)) --> ValidatePayment
+ValidatePayment --> d0{HighValue}
+d0 -- yes --> RequireApproval --> ProcessPayment --> e((End))
+d0 -- no --> ProcessPayment
+```
+
+**When to use `to_decision()` vs raw if statements:**
+
+- **Use `to_decision()`** when you want the decision visible in the graph
+- **Use raw if statements** for implementation details you want hidden from the diagram
+- Rule of thumb: Mark decisions that represent business logic branches
+
+### Signal Nodes
+
+Signal nodes represent asynchronous wait conditions with timeouts. Each signal creates **2 execution paths** (Signaled and Timeout).
+
+**Marking Signal Points:**
+
+Use the `wait_condition()` helper to mark wait conditions:
+
+```python
+from temporalio import workflow
+from temporalio_graphs import wait_condition
+from datetime import timedelta
+
+@workflow.defn
+class ApprovalWorkflow:
+    def __init__(self) -> None:
+        self.approved = False
+
+    @workflow.run
+    async def run(self, request_id: str) -> str:
+        await workflow.execute_activity(submit_request, request_id)
+
+        # Wait for approval signal (max 24 hours)
+        if await wait_condition(
+            lambda: self.approved,
+            timedelta(hours=24),
+            "WaitForApproval"
+        ):
+            # Signaled path
+            await workflow.execute_activity(process_approved, request_id)
+            return "approved"
+        else:
+            # Timeout path
+            await workflow.execute_activity(handle_timeout, request_id)
+            return "timeout"
+
+    @workflow.signal
+    async def approve(self) -> None:
+        self.approved = True
+```
+
+**Graph Output:**
+
+```mermaid
+flowchart LR
+s((Start)) --> SubmitRequest
+SubmitRequest --> {{WaitForApproval}}
+{{WaitForApproval}} -- Signaled --> ProcessApproved --> e((End))
+{{WaitForApproval}} -- Timeout --> HandleTimeout --> e
+```
+
+### Node Types in Diagrams
+
+Visual reference for all node types in generated Mermaid diagrams:
+
+```mermaid
+flowchart LR
+    Start((Start))
+    Activity[Activity Name]
+    Decision{Decision Name}
+    Signal{{Signal Name}}
+    End((End))
+
+    Start --> Activity
+    Activity --> Decision
+    Decision -- yes --> Signal
+    Decision -- no --> End
+    Signal -- Signaled --> End
+    Signal -- Timeout --> End
+```
+
+| Node Type | Shape | Mermaid Syntax | Represents |
+|-----------|-------|----------------|------------|
+| Start | Circle | `((Start))` | Workflow entry point |
+| Activity | Rectangle | `[ActivityName]` | Temporal activity execution |
+| Decision | Diamond | `{DecisionName}` | Conditional branch (if/else) |
+| Signal | Hexagon | `{{SignalName}}` | Wait condition with timeout |
+| End | Circle | `((End))` | Workflow completion |
+
+### Path Explosion Management
+
+As workflows grow in complexity, the number of paths can explode exponentially. temporalio-graphs provides built-in limits and warnings to prevent performance issues.
+
+**Default Limits:**
+- `max_decision_points`: 10 (generates up to 1,024 paths)
+- `max_paths`: 1,024
+
+**When limits are exceeded:**
+- Validation warning is emitted with actionable suggestions
+- Graph generation continues (non-blocking by default)
+- Recommendations provided: increase limits or refactor workflow
+
+**Example Warning:**
+
+```
+⚠️  Validation Warning: Path Explosion Risk
+Decision points: 12 (limit: 10)
+Estimated paths: 4,096 (limit: 1,024)
+
+Suggestions:
+1. Increase limits: GraphBuildingContext(max_decision_points=12, max_paths=4096)
+2. Refactor workflow: Break into sub-workflows or reduce decision points
+3. Suppress warning: GraphBuildingContext(suppress_validation=True)
+```
+
+**Best Practices:**
+- Keep workflows under 10 independent decision points for maintainability
+- Use sub-workflows to break complex logic into smaller pieces
+- Consider if all decisions need to be graphed (some can use raw if statements)
+
+### String Literal Requirement (CRITICAL)
+
+For static analysis to work, the `name` parameter in `to_decision()` and `wait_condition()` **must be a string literal**.
+
+```python
+# ✅ Correct - string literal
+if await to_decision(amount > 1000, "HighValue"):
+    pass
+
+# ❌ Incorrect - variable won't be detected by AST
+decision_name = "HighValue"
+if await to_decision(amount > 1000, decision_name):
+    pass
+
+# ❌ Incorrect - f-string won't be detected by AST
+if await to_decision(amount > 1000, f"Check_{item}"):
+    pass
+```
+
+**Why?** Static analysis examines the source code's AST structure before execution. Variables and f-strings are resolved at runtime, so their values aren't available during static analysis.
+
+## Configuration
+
+All configuration options are provided via the `GraphBuildingContext` dataclass. The context is immutable and flows through the entire analysis pipeline.
+
+### Configuration Options
+
+| Option | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `split_names_by_words` | bool | `True` | Convert camelCase activity names to "Camel Case" in labels |
+| `start_node_label` | str | `"Start"` | Custom label for workflow start node |
+| `end_node_label` | str | `"End"` | Custom label for workflow end node |
+| `suppress_validation` | bool | `False` | Disable validation warnings (e.g., path explosion) |
+| `include_validation_report` | bool | `True` | Include validation report in output |
+| `max_decision_points` | int | `10` | Maximum allowed decision points (prevents 2^n explosion) |
+| `max_paths` | int | `1024` | Maximum allowed total execution paths |
+| `decision_true_label` | str | `"yes"` | Edge label for true branches |
+| `decision_false_label` | str | `"no"` | Edge label for false branches |
+| `signal_success_label` | str | `"Signaled"` | Edge label for successful signals |
+| `signal_timeout_label` | str | `"Timeout"` | Edge label for timeout paths |
+| `graph_output_file` | Path \| None | `None` | Write output to file instead of returning string |
+| `output_format` | str | `"full"` | Output mode: "mermaid", "paths", or "full" |
+| `include_path_list` | bool | `True` | Include text path list in output |
+
+### Configuration Patterns
+
+#### Pattern 1: Disable Word Splitting for Acronyms
+
+When your activities use acronyms or prefer exact naming:
+
+```python
+from temporalio_graphs import analyze_workflow, GraphBuildingContext
+
+context = GraphBuildingContext(split_names_by_words=False)
+result = analyze_workflow("workflow.py", context)
+# "fetchAPIData" stays as "fetchAPIData", not "fetch A P I Data"
+```
+
+#### Pattern 2: Custom Domain Terminology
+
+Use domain-specific labels for start/end nodes:
+
+```python
+context = GraphBuildingContext(
+    start_node_label="Initiate",
+    end_node_label="Complete"
+)
+result = analyze_workflow("workflow.py", context)
+# Output: "i((Initiate)) --> ... --> e((Complete))"
+```
+
+#### Pattern 3: Complex Workflows with Many Decisions
+
+Increase limits for workflows with many decision points:
+
+```python
+context = GraphBuildingContext(
+    max_decision_points=15,  # Allows up to 32,768 paths (2^15)
+    max_paths=32768
+)
+result = analyze_workflow("workflow.py", context)
+# Note: May generate large diagrams; consider breaking into sub-workflows
+```
+
+#### Pattern 4: File Output for CI/CD Integration
+
+Automatically write generated diagrams to files:
+
+```python
+from pathlib import Path
+
+context = GraphBuildingContext(
+    graph_output_file=Path("docs/workflow_diagram.md")
+)
+result = analyze_workflow("workflow.py", context)
+# File is created at docs/workflow_diagram.md
+# Result is still returned and can be printed/processed
+```
+
+#### Pattern 5: Quick Analysis Without Validation
+
+Suppress validation warnings for rapid iteration:
+
+```python
+context = GraphBuildingContext(suppress_validation=True)
+result = analyze_workflow("workflow.py", context)
+# No validation warnings printed, only diagram output
+```
+
+#### Pattern 6: Mermaid Only (No Path List)
+
+Get only the Mermaid diagram without path list:
+
+```python
+result = analyze_workflow("workflow.py", output_format="mermaid")
+# Returns only Mermaid diagram (backward compatible default)
+```
+
+#### Pattern 7: Path List Only (No Diagram)
+
+Get text-based path list for CI/CD parsing:
+
+```python
+result = analyze_workflow("workflow.py", output_format="paths")
+# Returns only path list in text format
 ```
 
 ## Examples
@@ -283,420 +636,501 @@ Each example follows a consistent structure:
 - **Signal Workflow**: Implementing approval flows, event-driven patterns, timeout handling
 - **Multi-Decision**: Complex business logic, multi-criteria evaluation, understanding path explosion
 
-### Using Decision Points
+## Troubleshooting
 
-Mark decision points in your workflow using the `to_decision()` helper function to enable graph generation with branching paths:
+Common errors and their solutions.
 
-```python
-from temporalio import workflow, activity
-from temporalio_graphs import to_decision
+### Error: Cannot parse workflow file
 
-@activity.defn
-async def process_high_value(amount: int) -> str:
-    """Handle high-value transactions."""
-    return f"High-value processing: {amount}"
-
-@activity.defn
-async def process_regular(amount: int) -> str:
-    """Handle regular transactions."""
-    return f"Regular processing: {amount}"
-
-@workflow.defn
-class PaymentWorkflow:
-    @workflow.run
-    async def run(self, amount: int) -> str:
-        # Mark decision point with to_decision()
-        if await to_decision(amount > 5000, "HighValue"):
-            return await workflow.execute_activity(
-                process_high_value, amount, schedule_to_close_timeout=600
-            )
-        else:
-            return await workflow.execute_activity(
-                process_regular, amount, schedule_to_close_timeout=600
-            )
-```
-
-The `to_decision()` function marks boolean expressions as decision nodes in your workflow graph. It's a transparent passthrough - at runtime it simply returns the input boolean value unchanged while serving as a marker for static analysis.
-
-**Important**: The decision name must be a string literal (not a variable or f-string) for static analysis to extract it:
-
-```python
-# ✅ Correct - string literal
-if await to_decision(amount > 5000, "HighValue"):
-    pass
-
-# ❌ Incorrect - variable name won't be detected
-decision_name = "HighValue"
-if await to_decision(amount > 5000, decision_name):
-    pass
-
-# ❌ Incorrect - f-string won't be detected
-if await to_decision(amount > 5000, f"Check_{item}"):
-    pass
-```
-
-### Using Signal/Wait Conditions
-
-Mark signal points in your workflow using the `wait_condition()` helper function to visualize asynchronous wait patterns:
-
-```python
-from temporalio import workflow
-from temporalio_graphs import wait_condition
-from datetime import timedelta
-
-@workflow.defn
-class ApprovalWorkflow:
-    def __init__(self) -> None:
-        self.approved = False
-
-    @workflow.run
-    async def run(self, request_id: str) -> str:
-        # Submit request
-        await workflow.execute_activity(submit_request, args=[request_id], ...)
-
-        # Wait for approval signal (creates hexagon node in graph)
-        if await wait_condition(
-            lambda: self.approved,
-            timedelta(hours=24),
-            "WaitForApproval",  # Signal name (must be string literal)
-        ):
-            # Signaled branch
-            await workflow.execute_activity(process_approved, ...)
-            return "approved"
-        else:
-            # Timeout branch
-            await workflow.execute_activity(handle_timeout, ...)
-            return "timeout"
-
-    @workflow.signal
-    async def approve(self) -> None:
-        self.approved = True
-```
-
-**Important Notes:**
-- Signal names must be **string literals** (not variables or f-strings) for static analysis
-- Returns `True` if signaled before timeout, `False` if timeout occurs
-- Creates hexagon-shaped nodes in Mermaid diagrams: `{{NodeName}}`
-- Generates two execution paths: "Signaled" and "Timeout"
-
-### Advanced Usage with Custom Configuration
-
-Customize node labels and output location:
-
-```python
-from temporalio_graphs import analyze_workflow, GraphBuildingContext
-
-context = GraphBuildingContext(
-    split_names_by_words=False,
-    start_node_label="BEGIN",
-    end_node_label="FINISH",
-    graph_output_file="workflow_diagram.md"
-)
-result = analyze_workflow("my_workflow.py", context)
-```
-
-## Configuration
-
-All configuration options are provided via the `GraphBuildingContext` dataclass. The context is immutable and flows through the entire analysis pipeline. Default values support typical use cases; customize for specific requirements.
-
-### Configuration Options
-
-| Option | Type | Default | Purpose |
-|--------|------|---------|---------|
-| `split_names_by_words` | bool | True | Convert camelCase activity names to "camel Case" in labels |
-| `start_node_label` | str | "Start" | Custom label for workflow start node |
-| `end_node_label` | str | "End" | Custom label for workflow end node |
-| `suppress_validation` | bool | False | Disable validation warnings (e.g., path explosion) |
-| `max_decision_points` | int | 10 | Maximum allowed decision points (prevents 2^n path explosion) |
-| `max_paths` | int | 1024 | Maximum allowed total execution paths |
-| `graph_output_file` | Path \| None | None | Write output to file instead of returning string |
-
-### Configuration Examples
-
-#### Example 1: Disable Word Splitting for Acronyms
-
-When your activities use acronyms or prefer exact naming:
-
-```python
-from temporalio_graphs import analyze_workflow, GraphBuildingContext
-
-context = GraphBuildingContext(split_names_by_words=False)
-result = analyze_workflow("workflow.py", context)
-# Output: "fetchAPIData" stays as "fetchAPIData", not "fetch A P I Data"
-```
-
-#### Example 2: Custom Domain Terminology
-
-Use domain-specific labels for start/end nodes:
-
-```python
-context = GraphBuildingContext(
-    start_node_label="Initiate",
-    end_node_label="Complete"
-)
-result = analyze_workflow("workflow.py", context)
-# Output: "i((Initiate)) --> ... --> e((Complete))"
-```
-
-#### Example 3: Complex Workflows with Many Decisions
-
-Increase limits for workflows with many decision points (Epic 3+):
-
-```python
-context = GraphBuildingContext(
-    max_decision_points=15,  # Allows up to 32,768 paths (2^15)
-    max_paths=32768
-)
-result = analyze_workflow("workflow.py", context)
-# Note: May generate large diagrams; consider breaking into sub-workflows
-```
-
-#### Example 4: File Output for CI/CD Integration
-
-Automatically write generated diagrams to files:
-
-```python
-from pathlib import Path
-
-context = GraphBuildingContext(
-    graph_output_file=Path("docs/workflow_diagram.md")
-)
-result = analyze_workflow("workflow.py", context)
-# File is created at docs/workflow_diagram.md
-# Result is still returned and can be printed/processed
-```
-
-#### Example 5: Quick Analysis Without Validation
-
-Suppress validation warnings for rapid iteration:
-
-```python
-context = GraphBuildingContext(suppress_validation=True)
-result = analyze_workflow("workflow.py", context)
-# No validation warnings printed, only diagram output
-```
-
-#### Example 6: Combined Configuration
-
-Use multiple options together for full control:
-
-```python
-from pathlib import Path
-
-context = GraphBuildingContext(
-    split_names_by_words=False,
-    start_node_label="WORKFLOW_START",
-    end_node_label="WORKFLOW_END",
-    suppress_validation=True,
-    max_decision_points=10,
-    graph_output_file=Path("output/diagram.md")
-)
-result = analyze_workflow("complex_workflow.py", context)
-```
-
-### Performance Implications
-
-- **Word Splitting**: O(n) where n = activity name length. Negligible performance impact.
-- **Max Decision Points**: Prevents path explosion. Default (10) generates up to 1024 paths. Epic 3 will support decision-based path generation; larger limits increase generation time exponentially (2^n).
-- **File Output**: Adds I/O time proportional to diagram size. Minimal impact (<5ms typical).
-
-### Configuration Validation
-
-Invalid configuration raises `ValueError` with clear error messages:
-
-```python
-# Negative max_decision_points raises ValueError
-context = GraphBuildingContext(max_decision_points=-1)
-# ValueError: max_decision_points must be positive, got -1.
-# Consider increasing this value (default: 10)
-```
-
-All configuration is validated when `analyze_workflow()` is called.
-
-## Error Handling
-
-The library provides comprehensive error handling with actionable error messages for all failure modes.
-
-### Exception Hierarchy
-
-All library exceptions inherit from `TemporalioGraphsError`, enabling you to catch all library errors with a single except clause:
-
-```python
-from temporalio_graphs import (
-    analyze_workflow,
-    TemporalioGraphsError,
-    WorkflowParseError,
-    GraphGenerationError,
-    UnsupportedPatternError,
-)
-
-try:
-    result = analyze_workflow("my_workflow.py")
-    print(result)
-except WorkflowParseError as e:
-    # Handle parsing errors (missing decorators, syntax errors, file not found)
-    print(f"Parse error at {e.file_path}:{e.line}")
-    print(f"Suggestion: {e.suggestion}")
-except GraphGenerationError as e:
-    # Handle generation errors (path explosion, rendering failures)
-    print(f"Generation failed: {e.reason}")
-    if e.context:
-        print(f"Context: {e.context}")
-except TemporalioGraphsError as e:
-    # Catch all other library errors
-    print(f"Library error: {e}")
-```
-
-### Exception Types
-
-| Exception | Raised When | Attributes |
-|-----------|-------------|------------|
-| `WorkflowParseError` | Workflow file cannot be parsed, missing decorators, syntax errors, file not found | `file_path`, `line`, `message`, `suggestion` |
-| `UnsupportedPatternError` | Workflow uses patterns beyond MVP scope (loops, dynamic activity names) | `pattern`, `suggestion`, `line` |
-| `GraphGenerationError` | Graph generation fails (path explosion, rendering failures) | `reason`, `context` (dict with details) |
-| `InvalidDecisionError` | Helper functions used incorrectly (to_decision, wait_condition) | `function`, `issue`, `suggestion` |
-
-### Common Errors
-
-**Missing Decorator:**
+**Error Message:**
 ```
 WorkflowParseError: Cannot parse workflow file: workflow.py
 Line 10: Missing @workflow.defn decorator
 Suggestion: Add @workflow.defn decorator to workflow class
 ```
 
-**Path Explosion:**
+**Root Cause:** Workflow class is missing the `@workflow.defn` decorator.
+
+**Solution:**
+
+```python
+from temporalio import workflow
+
+@workflow.defn  # Add this decorator
+class MyWorkflow:
+    @workflow.run
+    async def run(self):
+        ...
 ```
-GraphGenerationError: Graph generation failed: Too many decision points (12) would generate 4096 paths (limit: 1024)
+
+---
+
+### Error: Too many decision points
+
+**Error Message:**
+```
+GraphGenerationError: Too many decision points (12) would generate 4096 paths (limit: 1024)
 Context: {'decision_count': 12, 'limit': 10, 'paths': 4096}
-Suggestion: Refactor workflow to reduce decisions or increase max_decision_points
 ```
 
-**File Not Found:**
+**Root Cause:** Workflow has more decision points than the configured limit, which would cause path explosion.
+
+**Solution 1 - Increase Limits:**
+
+```python
+from temporalio_graphs import analyze_workflow, GraphBuildingContext
+
+context = GraphBuildingContext(
+    max_decision_points=15,
+    max_paths=32768
+)
+result = analyze_workflow("workflow.py", context)
 ```
-WorkflowParseError: Cannot parse workflow file: missing_workflow.py
-Line 0: Workflow file not found
-Suggestion: Verify file path is correct
+
+**Solution 2 - Refactor Workflow:**
+
+Break complex workflow into sub-workflows:
+
+```python
+@workflow.defn
+class MainWorkflow:
+    @workflow.run
+    async def run(self):
+        result1 = await workflow.execute_child_workflow(SubWorkflow1)
+        result2 = await workflow.execute_child_workflow(SubWorkflow2)
+        return combine_results(result1, result2)
 ```
 
-All error messages include actionable suggestions to help you fix the issue quickly.
+---
 
-## Features
+### Warning: Unsupported pattern detected
 
-### Completed (Epics 1-4)
-
-**Core Analysis (Epic 2):**
-- ✅ Static code analysis using Python AST
-- ✅ Linear workflow detection (0 decision points)
-- ✅ Activity tracking and sequencing
-- ✅ Mermaid flowchart LR syntax output
-- ✅ Public API with analyze_workflow() function
-- ✅ Type-safe configuration via GraphBuildingContext
-
-**Decision Support (Epic 3):**
-- ✅ Decision point detection with `to_decision()` helper
-- ✅ Path permutation generation (2^n paths for n decisions)
-- ✅ Decision node rendering in Mermaid (diamond shapes)
-- ✅ MoneyTransfer example workflow (2 decisions, 4 paths)
-
-**Signal Support (Epic 4):**
-- ✅ Signal/wait condition detection with `wait_condition()` helper
-- ✅ Signal node rendering in Mermaid (hexagon shapes)
-- ✅ Timeout vs Signaled path branches
-- ✅ ApprovalWorkflow example
-
-**Production Readiness (Epic 5 - Partial):**
-- ✅ Validation warnings (unreachable activity detection)
-- ✅ Comprehensive error handling hierarchy (5 exception types)
-- ✅ Complete test coverage (406 tests, 95% coverage)
-
-### In Progress (Epic 5 Remaining)
-
-- 🔄 Path list output format (text-based alternative to Mermaid)
-- 🔄 Comprehensive example gallery
-- 🔄 Production-grade documentation
-
-### Planned (Post-MVP)
-
-- 🚧 CLI interface (command-line tool)
-- 🚧 Multiple output formats (JSON, DOT)
-- 🚧 Loop detection and warnings
-- 🚧 Complex control flow patterns
-
-## Project Structure
-
+**Warning Message:**
 ```
-/spike/                          # Architecture validation (COMPLETE)
-  ├── EXECUTIVE_SUMMARY.md       # Decision rationale
-  ├── findings.md                # Technical analysis
-  └── temporal-spike/            # Working prototypes
-      └── approach3_static_analysis.py  # ✅ RECOMMENDED
-
-/src/temporalio_graphs/          # Python implementation (IN PROGRESS)
-/tests/                          # Test suite
-/examples/                       # Example workflows
+UnsupportedPatternError: Unsupported pattern: while loop at line 23
+Suggestion: Refactor loop into linear activities
 ```
+
+**Root Cause:** Workflow uses control flow patterns that cannot be analyzed statically (loops, dynamic logic).
+
+**Supported Patterns:**
+- Sequential activities
+- if/elif/else statements with `to_decision()`
+- Ternary operators
+- Linear control flow
+
+**Not Supported:**
+- while loops
+- for loops
+- Dynamic activity names (using variables)
+- Complex nested logic with multiple returns
+
+**Solution:**
+
+Refactor loops into explicit activities:
+
+```python
+# ❌ Not supported - loop
+for item in items:
+    await workflow.execute_activity(process_item, item)
+
+# ✅ Supported - explicit activities
+await workflow.execute_activity(process_batch, items)
+```
+
+---
+
+### Error: Missing helper function
+
+**Error Message:**
+```
+InvalidDecisionError: to_decision() called without name parameter
+Suggestion: Provide decision name as second argument
+```
+
+**Root Cause:** Raw if statement used instead of `to_decision()` helper, or helper called incorrectly.
+
+**Solution:**
+
+```python
+from temporalio_graphs import to_decision
+
+# ❌ Raw if statement - not visible in graph
+if amount > 1000:
+    await workflow.execute_activity(special_handling)
+
+# ✅ Using to_decision() - visible in graph
+if await to_decision(amount > 1000, "HighValue"):
+    await workflow.execute_activity(special_handling)
+```
+
+---
+
+### Performance Tips
+
+**Issue:** Analysis takes too long for large workflows
+
+**Tips:**
+
+1. **Limit decision points** - Keep workflows under 10 decisions
+   ```python
+   context = GraphBuildingContext(max_decision_points=10)
+   ```
+
+2. **Suppress validation** - Disable warnings for faster iteration
+   ```python
+   context = GraphBuildingContext(suppress_validation=True)
+   ```
+
+3. **Consider refactoring** - Break workflows with >1024 paths into sub-workflows
+
+4. **Use sub-workflows** - Each sub-workflow analyzed separately, avoiding combinatorial explosion
+
+---
+
+### Debugging Tips
+
+**Enable detailed logging:**
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+result = analyze_workflow("workflow.py")
+```
+
+**Examine AST structure:**
+
+```python
+import ast
+from pathlib import Path
+
+source = Path("workflow.py").read_text()
+tree = ast.parse(source)
+print(ast.dump(tree, indent=2))
+```
+
+**Use validation mode:**
+
+```python
+from temporalio_graphs import analyze_workflow, GraphBuildingContext
+
+context = GraphBuildingContext(
+    suppress_validation=False,
+    include_validation_report=True,
+    output_format="full"
+)
+result = analyze_workflow("workflow.py", context)
+# Check validation report for issues
+```
+
+---
+
+### Reporting Issues
+
+Found a bug or have a feature request? Please [open an issue on GitHub](https://github.com/yourusername/temporalio-graphs/issues) with:
+
+1. **Environment details** (Python version, OS, library version)
+2. **Minimal reproducible example** (workflow code that triggers the issue)
+3. **Expected behavior** vs actual behavior
+4. **Error messages** (full stack trace if applicable)
+
+## Architecture: Python vs .NET
+
+temporalio-graphs is a Python port of [Temporalio.Graphs (.NET)](https://github.com/oleg-shilo/Temporalio.Graphs), with architectural adaptations for Python SDK constraints.
+
+### Key Architectural Difference
+
+| Aspect | .NET Temporalio.Graphs | Python temporalio-graphs |
+|--------|------------------------|--------------------------|
+| **Approach** | Runtime interceptors with mock execution | Static AST analysis |
+| **Execution Required** | Yes (2^n workflow executions) | No (zero executions) |
+| **Analysis Time** | Exponential (2^n × workflow time) | Sub-millisecond (<1ms) |
+| **Path Coverage** | Complete (2^n paths) | Complete (2^n paths) |
+| **Mock Setup** | Required (activity return values) | Not required |
+| **Runtime Overhead** | Workflow execution + mocking | Zero (analysis at build time) |
+
+### Why Static Analysis for Python?
+
+**Problem:** Python Temporal SDK interceptors cannot mock activity return values (unlike .NET).
+
+**Solution:** Analyze workflow source code with Python's AST module to detect structure without execution.
+
+**Benefits:**
+1. **Faster**: <1ms vs exponential execution time
+2. **Simpler**: No mock setup or interceptor configuration
+3. **Safer**: No side effects from executing workflow code
+4. **CI-Friendly**: Run in build pipelines without Temporal server
+
+### Feature Parity Comparison
+
+| Feature | .NET | Python | Status |
+|---------|------|--------|--------|
+| Activity Detection | ✅ Runtime | ✅ Static | ✅ **Equivalent** |
+| Decision Nodes | ✅ GraphBuilder context | ✅ `to_decision()` helper | ✅ **Equivalent** |
+| Path Permutations (2^n) | ✅ Execution-based | ✅ Analysis-based | ✅ **Equivalent** |
+| Mermaid Output | ✅ Flowchart LR | ✅ Flowchart LR | ✅ **Compatible** |
+| Signal Support | ✅ GraphBuilder context | ✅ `wait_condition()` helper | ✅ **Equivalent** |
+| Configuration Options | ✅ `GraphBuildingContext` | ✅ `GraphBuildingContext` | ✅ **Same API** |
+| Validation Warnings | ❌ Not available | ✅ Built-in | ✅ **Enhanced** |
+| Error Handling | ⚠️ Basic | ✅ Comprehensive | ✅ **Enhanced** |
+| CLI Tool | ✅ Available | 🚧 Planned | 🚧 **Roadmap** |
+
+### Migration Guide for .NET Users
+
+If you're familiar with .NET Temporalio.Graphs, here's how to port your workflows:
+
+#### 1. Setup Changes
+
+**.NET (Runtime Interceptor):**
+```csharp
+var context = new GraphBuildingContext
+{
+    IsEnabled = true
+};
+var builder = new GraphBuilder(context);
+await workflow.ExecuteAsync(builder.Interceptor);
+```
+
+**Python (Static Analysis):**
+```python
+from temporalio_graphs import analyze_workflow
+
+result = analyze_workflow("workflow.py")
+```
+
+#### 2. Decision Point Marking
+
+**.NET (GraphBuilder Context):**
+```csharp
+var needsApproval = amount > 1000;
+if (builder.ToDecision(needsApproval, "HighValue"))
+{
+    await workflow.ExecuteActivityAsync<ApprovalActivity>();
+}
+```
+
+**Python (to_decision Helper):**
+```python
+from temporalio_graphs import to_decision
+
+if await to_decision(amount > 1000, "HighValue"):
+    await workflow.execute_activity(approval_activity, ...)
+```
+
+#### 3. Signal/Wait Conditions
+
+**.NET (GraphBuilder Context):**
+```csharp
+var approved = await builder.WaitCondition(
+    () => this.IsApproved,
+    TimeSpan.FromHours(24),
+    "WaitForApproval"
+);
+```
+
+**Python (wait_condition Helper):**
+```python
+from temporalio_graphs import wait_condition
+from datetime import timedelta
+
+approved = await wait_condition(
+    lambda: self.approved,
+    timedelta(hours=24),
+    "WaitForApproval"
+)
+```
+
+#### 4. Output Handling
+
+**.NET (File Writing):**
+```csharp
+context.GraphOutputFile = "workflow.md";
+// Graph written automatically after execution
+```
+
+**Python (File Writing or Return):**
+```python
+from pathlib import Path
+from temporalio_graphs import GraphBuildingContext
+
+# Option 1: Return as string
+result = analyze_workflow("workflow.py")
+Path("workflow.md").write_text(result)
+
+# Option 2: Write automatically
+context = GraphBuildingContext(
+    graph_output_file=Path("workflow.md")
+)
+result = analyze_workflow("workflow.py", context)
+```
+
+### Benefits of Python Static Analysis Approach
+
+1. **No Temporal Server Required**: Analyze workflows in CI/CD without infrastructure
+2. **Instant Feedback**: <1ms analysis vs minutes of execution time for complex workflows
+3. **Build-Time Safety**: Detect workflow structure issues before deployment
+4. **Documentation Generation**: Generate diagrams as part of build process
+5. **No Mock Complexity**: No need to configure mock return values for activities
+
+## API Reference
+
+See [docs/api-reference.md](docs/api-reference.md) for complete API documentation including:
+
+- `analyze_workflow()` - Main entry point
+- `GraphBuildingContext` - Configuration dataclass
+- `to_decision()` - Decision node helper
+- `wait_condition()` - Signal node helper
+- Exception hierarchy with 5 exception types
+- ValidationWarning & ValidationReport
+
+**Quick Links:**
+- [analyze_workflow() Documentation](docs/api-reference.md#analyze_workflow)
+- [GraphBuildingContext Documentation](docs/api-reference.md#graphbuildingcontext)
+- [Helper Functions](docs/api-reference.md#to_decision)
+- [Exception Handling](docs/api-reference.md#exception-hierarchy)
 
 ## Development
 
-```bash
-# Setup environment (always use uv)
-uv venv
-source .venv/bin/activate
-uv sync
+### Setup Environment
 
-# Run tests
+```bash
+# Clone repository
+git clone https://github.com/yourusername/temporalio-graphs
+cd temporalio-graphs
+
+# Setup virtual environment (use uv for speed)
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+uv sync
+```
+
+### Run Tests
+
+```bash
+# Run all tests with coverage
 pytest -v --cov=src/temporalio_graphs
 
+# Run specific test file
+pytest tests/test_analyzer.py -v
+
+# Run tests with detailed output
+pytest -vv -s
+```
+
+### Code Quality
+
+```bash
 # Type checking
 mypy src/
 
 # Linting
 ruff check src/
+
+# Formatting
 ruff format src/
+
+# Run all quality checks
+make quality  # If Makefile available
 ```
 
-## Implementation Plan
+### Project Structure
 
-See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for the complete 15.5-hour phased implementation plan with 7 quality gate reviews.
-
-**Current Status**: Phase 0.5 Complete ✅ - Ready for Phase 1
-
-## How It Works
-
-1. **AST Parsing**: Parse Python workflow source files
-2. **Decision Detection**: Identify branching logic (if/else, conditions)
-3. **Path Generation**: Create 2^n execution paths for n decisions
-4. **Graph Building**: Construct workflow graph from paths
-5. **Mermaid Output**: Convert to flowchart syntax
-
-## Example Output
-
-MoneyTransfer workflow with 2 decision points generates 4 paths:
-
-```mermaid
-flowchart LR
-s((Start)) --> Withdraw --> 0{NeedToConvert}
-0{NeedToConvert} -- yes --> CurrencyConvert --> 1{IsTFN_Known}
-0{NeedToConvert} -- no --> 1{IsTFN_Known}
-1{IsTFN_Known} -- yes --> NotifyAto --> Deposit --> e((End))
-1{IsTFN_Known} -- no --> TakeNonResidentTax --> Deposit
 ```
+temporalio-graphs/
+├── src/temporalio_graphs/   # Source code
+│   ├── __init__.py          # Public API
+│   ├── analyzer.py          # AST analysis
+│   ├── context.py           # Configuration
+│   ├── generator.py         # Path generation
+│   ├── renderer.py          # Mermaid rendering
+│   ├── helpers.py           # Workflow helpers
+│   ├── exceptions.py        # Error types
+│   └── validator.py         # Validation logic
+├── tests/                   # Test suite (95% coverage)
+│   ├── unit/               # Unit tests
+│   └── integration/        # Integration tests
+├── examples/               # Example workflows
+│   ├── simple_linear/
+│   ├── money_transfer/
+│   ├── signal_workflow/
+│   └── multi_decision/
+├── docs/                   # Documentation
+│   ├── api-reference.md
+│   ├── architecture.md
+│   └── prd.md
+├── spike/                  # Architecture research
+│   └── EXECUTIVE_SUMMARY.md
+├── README.md              # This file
+├── CHANGELOG.md           # Version history
+├── LICENSE                # MIT License
+└── pyproject.toml         # Project metadata
+```
+
+### Contributing Workflow
+
+See [Contributing](#contributing) section below for guidelines.
 
 ## Contributing
 
-Contributions welcome! Please see the implementation plan for current priorities.
+Contributions welcome! We're looking for:
+
+- **Bug fixes** - Found an issue? Submit a PR with a fix and test
+- **Feature requests** - Open an issue to discuss new capabilities
+- **Documentation improvements** - Clarify confusing sections, add examples
+- **Example workflows** - Share interesting workflow patterns
+
+### Guidelines
+
+1. **Code Quality**: All code must pass mypy strict mode and ruff checks
+2. **Test Coverage**: Maintain >80% coverage, add tests for new features
+3. **Documentation**: Update relevant docs (README, API reference, CHANGELOG)
+4. **Commit Messages**: Use conventional commits (feat:, fix:, docs:, etc.)
+
+### Development Process
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/my-feature`
+3. Make changes with tests
+4. Run quality checks: `mypy src/ && ruff check src/ && pytest`
+5. Commit with clear message: `git commit -m "feat: add support for X"`
+6. Push and open Pull Request
+
+### Reporting Issues
+
+Found a bug? [Open an issue](https://github.com/yourusername/temporalio-graphs/issues) with:
+- Python version and OS
+- Minimal reproducible example
+- Expected vs actual behavior
+- Full error message if applicable
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Sponsors
-
-This project is made possible by the generous support of:
-
-- [@davidhw](https://github.com/davidhw) - Original bounty sponsor
+Copyright (c) 2025 Luca
 
 ## Credits
 
 Python port of [Temporalio.Graphs (.NET)](https://github.com/oleg-shilo/Temporalio.Graphs) with architectural adaptations for Python SDK constraints.
+
+### Acknowledgments
+
+- **[@davidhw](https://github.com/davidhw)** - Original bounty sponsor
+- **Oleg Shilo** - Author of .NET Temporalio.Graphs (inspiration for this project)
+- **Temporal Technologies** - Temporal workflow engine and Python SDK
+
+### Links
+
+- **Documentation**: [Full API Reference](docs/api-reference.md)
+- **Source Code**: [GitHub Repository](https://github.com/yourusername/temporalio-graphs)
+- **Issues**: [Bug Tracker](https://github.com/yourusername/temporalio-graphs/issues)
+- **PyPI**: [Package Page](https://pypi.org/project/temporalio-graphs/)
+- **Changelog**: [Release Notes](CHANGELOG.md)
+- **.NET Version**: [Temporalio.Graphs](https://github.com/oleg-shilo/Temporalio.Graphs)
+
+---
+
+**Made with ❤️ for the Temporal community**

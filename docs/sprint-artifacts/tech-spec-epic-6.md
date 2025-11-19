@@ -9,9 +9,15 @@ Status: Draft
 
 ## Overview
 
-Epic 6 extends the temporalio-graphs library with cross-workflow visualization capabilities, enabling Python developers to analyze and visualize parent-child workflow relationships and complete end-to-end execution flows spanning multiple workflows.
+Epic 6 extends the temporalio-graphs library with **Deep Cross-Workflow Analysis** capabilities, enabling Python developers to analyze and visualize parent-child workflow relationships and complete end-to-end execution flows spanning multiple workflows.
 
 This epic implements FR67-FR74 (8 functional requirements) from the PRD, delivering the "MVP Extension (v0.2.0)" after the Core MVP (v0.1.0, Epics 1-5) is complete. Real-world Temporal applications commonly use parent-child workflow patterns via `workflow.execute_child_workflow()` - this epic makes these relationships visible in generated diagrams, providing critical insights for understanding complex workflow orchestrations.
+
+**Critical Requirement: Deep Cross-Workflow Analysis**
+We must do more than just render a "Child Workflow" node. We must:
+1.  **Resolve** the child workflow class definition from source files.
+2.  **Parse** its AST to understand its internal structure.
+3.  **Inject** its graph into the parent graph (subgraph expansion) to show the complete execution flow.
 
 **Core Capability:**
 Detect child workflow calls in workflow source code, analyze multi-workflow systems as call graphs, and generate Mermaid diagrams showing end-to-end execution paths that span parent and child workflows with configurable visualization modes (reference, inline, subgraph).
@@ -19,6 +25,11 @@ Detect child workflow calls in workflow source code, analyze multi-workflow syst
 ## Objectives and Scope
 
 ### In Scope
+
+**Deep Cross-Workflow Analysis:**
+- **Class Resolution:** Resolve `ChildWorkflow` class definitions across file boundaries using import analysis and search paths.
+- **AST Parsing:** Recursively parse the AST of resolved child workflow classes.
+- **Graph Injection:** Inject the child workflow's internal graph structure into the parent's execution path (subgraph expansion).
 
 **Parent-Child Workflow Detection:**
 - Detect `workflow.execute_child_workflow()` calls in Python AST
@@ -91,6 +102,30 @@ Epic 6 extends the existing static analysis architecture (ADR-001) with cross-wo
 **Technology Stack:** No new dependencies. Pure Python AST analysis, builds on existing `temporalio` SDK integration.
 
 ## Detailed Design
+
+### Deep Analysis Challenges & Strategy
+
+This epic addresses two critical challenges inherent in deep cross-workflow analysis:
+
+**1. File Resolution (Imports)**
+The analyzer must locate the Python file defining the child workflow class.
+*   **Challenge:** `execute_child_workflow(PaymentWorkflow, ...)` gives us the class `PaymentWorkflow`, but not its file location. The class might be imported from another module.
+*   **Strategy:**
+    *   **Import Tracking:** The `WorkflowAnalyzer` will now track `Import` and `ImportFrom` nodes to map class names to their source modules/files.
+    *   **Search Paths:** If import tracking is insufficient (e.g. dynamic imports), we fall back to scanning `workflow_search_paths` for a class definition matching the name.
+    *   **Resolution Logic:**
+        1.  Check local file (defined in same file).
+        2.  Check imported modules (resolve import path to file path).
+        3.  Scan `search_paths` for file defining class `X`.
+
+**2. Recursion Detection (Cycle Prevention)**
+Workflows can call themselves or form circular dependency chains (A -> B -> A).
+*   **Challenge:** Naive recursive analysis will loop infinitely and crash with StackOverflow or OOM.
+*   **Strategy:**
+    *   **Visited Set:** `WorkflowCallGraphAnalyzer` maintains a `visited_workflows` set (list of workflow names in current chain).
+    *   **Cycle Detection:** Before analyzing a child, check if it's already in `visited_workflows`.
+    *   **Handling:** If cycle detected, raise `CircularWorkflowError` (or optionally stop recursion and render a special "Cycle" node if strictly visual). For MVP, we will raise an error to ensure dag integrity.
+    *   **Depth Limit:** Hard limit `max_expansion_depth=2` to prevent performance degradation even in acyclic but deep graphs.
 
 ### Services and Modules
 
@@ -222,10 +257,10 @@ class WorkflowCallGraphAnalyzer:
     ) -> WorkflowCallGraph:
         """
         1. Analyze entry workflow → detect child calls
-        2. Resolve child workflow files from search paths
+        2. Resolve child workflow files from search paths (IMPORTS & FILESYSTEM)
         3. Recursively analyze child workflows (depth limited)
         4. Build call graph with relationships
-        5. Detect circular references
+        5. Detect circular references (visited check)
         6. Return complete WorkflowCallGraph
         """
 ```
@@ -257,14 +292,15 @@ class CircularWorkflowError(TemporalioGraphsError):
    ↓
 4. Extract child workflow names (e.g., "PaymentWorkflow")
    ↓
-5. Resolve child workflow files:
+5. Resolve child workflow files (Crucial Step):
+   - Check imports in parent_workflow.py
    - Search in workflow_search_paths (or same dir as parent)
    - Look for PaymentWorkflow class in .py files
    - Raise ChildWorkflowNotFoundError if not found
    ↓
 6. Recursively analyze child workflows:
    - Check depth < max_expansion_depth
-   - Detect circular references (visited set)
+   - Detect circular references (visited set) -> Raise CircularWorkflowError
    - Analyze child workflow AST
    - Detect grandchild calls (if depth permits)
    ↓
@@ -406,53 +442,54 @@ flowchart LR
 ## Acceptance Criteria (Authoritative)
 
 ### AC-Epic6-1: Child Workflow Call Detection (Story 6.1)
-- [x] Detect `workflow.execute_child_workflow(ChildWorkflow, ...)` calls in AST
-- [x] Detect `workflow.execute_child_workflow("ChildWorkflowName", ...)` string-based calls
-- [x] Extract child workflow class names from first argument
-- [x] Record call site line numbers for error reporting
-- [x] Handle multiple child workflow calls in single parent
-- [x] Support nested child calls (grandchildren) within depth limits
+- [ ] Detect `workflow.execute_child_workflow(ChildWorkflow, ...)` calls in AST
+- [ ] Detect `workflow.execute_child_workflow("ChildWorkflowName", ...)` string-based calls
+- [ ] Extract child workflow class names from first argument
+- [ ] Record call site line numbers for error reporting
+- [ ] Handle multiple child workflow calls in single parent
+- [ ] Support nested child calls (grandchildren) within depth limits
 
 ### AC-Epic6-2: Child Workflow Node Rendering (Story 6.2)
-- [x] Child workflow nodes render with double-bracket syntax: `[[ChildWorkflow]]`
-- [x] Node IDs are deterministic (based on workflow name + call site)
-- [x] Child workflow nodes integrate into path generation like activities
-- [x] Generated Mermaid validates in Mermaid Live Editor
-- [x] Visual distinction clear between activities (rectangles) and child workflows (subroutines)
+- [ ] Child workflow nodes render with double-bracket syntax: `[[ChildWorkflow]]`
+- [ ] Node IDs are deterministic (based on workflow name + call site)
+- [ ] Child workflow nodes integrate into path generation like activities
+- [ ] Generated Mermaid validates in Mermaid Live Editor
+- [ ] Visual distinction clear between activities (rectangles) and child workflows (subroutines)
 
 ### AC-Epic6-3: Multi-Workflow Analysis Pipeline (Story 6.3)
-- [x] `WorkflowCallGraphAnalyzer` accepts entry workflow and discovers children
-- [x] Recursively analyzes all referenced child workflow files
-- [x] Builds `WorkflowCallGraph` with parent-child relationships
-- [x] Supports workflow resolution from search paths (default: same directory)
-- [x] Detects circular workflow references and raises `CircularWorkflowError`
-- [x] Respects `max_expansion_depth` limit (default: 2)
-- [x] Creates separate `WorkflowMetadata` for each workflow
+- [ ] `WorkflowCallGraphAnalyzer` accepts entry workflow and discovers children
+- [ ] Recursively analyzes all referenced child workflow files
+- [ ] **Resolves child workflow files via import tracking and search paths**
+- [ ] Builds `WorkflowCallGraph` with parent-child relationships
+- [ ] Supports workflow resolution from search paths (default: same directory)
+- [ ] Detects circular workflow references and raises `CircularWorkflowError`
+- [ ] Respects `max_expansion_depth` limit (default: 2)
+- [ ] Creates separate `WorkflowMetadata` for each workflow
 
 ### AC-Epic6-4: End-to-End Path Generation (Story 6.4)
-- [x] Reference mode: Child workflows as atomic nodes (no expansion)
-- [x] Inline mode: Generates parent_paths × child_paths permutations
-- [x] Subgraph mode: Renders workflows as Mermaid subgraphs with boundaries
-- [x] Cross-workflow paths show workflow transitions clearly
-- [x] Path explosion safeguards apply to total cross-workflow paths
-- [x] Configurable via `GraphBuildingContext.child_workflow_expansion`
+- [ ] Reference mode: Child workflows as atomic nodes (no expansion)
+- [ ] Inline mode: Generates parent_paths × child_paths permutations
+- [ ] Subgraph mode: Renders workflows as Mermaid subgraphs with boundaries
+- [ ] Cross-workflow paths show workflow transitions clearly
+- [ ] Path explosion safeguards apply to total cross-workflow paths
+- [ ] Configurable via `GraphBuildingContext.child_workflow_expansion`
 
 ### AC-Epic6-5: Integration Test with Parent-Child Example (Story 6.5)
-- [x] Example `examples/parent_child_workflow/` exists with parent + child workflows
-- [x] Parent workflow calls child via `execute_child_workflow()`
-- [x] Parent has 1 decision, child has 1 decision (4 total paths in inline mode)
-- [x] `analyze_workflow_graph()` produces valid Mermaid with child workflow nodes
-- [x] Integration test validates output matches expected diagram structure
-- [x] Test validates path count = 4 for inline mode (2² paths)
-- [x] Example documented in README with usage instructions
+- [ ] Example `examples/parent_child_workflow/` exists with parent + child workflows
+- [ ] Parent workflow calls child via `execute_child_workflow()`
+- [ ] Parent has 1 decision, child has 1 decision (4 total paths in inline mode)
+- [ ] `analyze_workflow_graph()` produces valid Mermaid with child workflow nodes
+- [ ] Integration test validates output matches expected diagram structure
+- [ ] Test validates path count = 4 for inline mode (2² paths)
+- [ ] Example documented in README with usage instructions
 
 ### Cross-Cutting Acceptance Criteria
-- [x] All new functions have complete type hints (mypy strict passes)
-- [x] All new functions have Google-style docstrings with examples
-- [x] New exceptions inherit from `TemporalioGraphsError` base
-- [x] Unit tests achieve 100% coverage for new modules
-- [x] Integration test demonstrates end-to-end multi-workflow flow
-- [x] No breaking changes to existing v0.1.0 API
+- [ ] All new functions have complete type hints (mypy strict passes)
+- [ ] All new functions have Google-style docstrings with examples
+- [ ] New exceptions inherit from `TemporalioGraphsError` base
+- [ ] Unit tests achieve 100% coverage for new modules
+- [ ] Integration test demonstrates end-to-end multi-workflow flow
+- [ ] No breaking changes to existing v0.1.0 API
 
 ## Traceability Mapping
 
