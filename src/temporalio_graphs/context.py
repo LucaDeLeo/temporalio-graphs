@@ -61,6 +61,11 @@ class GraphBuildingContext:
             - "paths": Path list only (no diagram, no validation)
             - "full": Mermaid + path list + validation report (default)
             Default: "full".
+        max_expansion_depth: Maximum recursion depth for multi-workflow analysis.
+            Controls how deep WorkflowCallGraphAnalyzer will traverse child workflow
+            hierarchies. Depth 0 = root only, depth 1 = root + direct children,
+            depth 2 = root + children + grandchildren (default). Prevents infinite
+            recursion and excessive memory usage. Default: 2.
 
     Example:
         >>> # Basic usage with defaults
@@ -100,3 +105,4 @@ class GraphBuildingContext:
     signal_timeout_label: str = "Timeout"
     include_path_list: bool = True
     output_format: Literal["mermaid", "paths", "full"] = "full"
+    max_expansion_depth: int = 2

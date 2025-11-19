@@ -482,3 +482,49 @@ class WorkflowMetadata:
         """
         result: int = 2 ** self.total_branch_points
         return result
+
+
+@dataclass(frozen=True)
+class WorkflowCallGraph:
+    """Represents a complete workflow call graph for multi-workflow analysis.
+
+    A workflow call graph captures all workflows (parent and children) discovered during
+    recursive analysis, their relationships, and call metadata. This is the primary output
+    of WorkflowCallGraphAnalyzer and serves as input for cross-workflow visualization.
+
+    The frozen=True attribute ensures WorkflowCallGraph instances are immutable,
+    preventing accidental modifications to call graph structure once created.
+
+    Args:
+        root_workflow: WorkflowMetadata for the entry point workflow.
+        child_workflows: Dictionary mapping child workflow class names to their
+            WorkflowMetadata. Contains all discovered child workflows recursively.
+        call_relationships: List of (parent_name, child_name) tuples representing
+            parent-child relationships in the call graph. Forms a directed graph.
+        all_child_calls: Complete list of ChildWorkflowCall objects from all workflows.
+            Used for cross-workflow path generation and visualization.
+        total_workflows: Total number of workflows in the graph (root + children).
+
+    Example:
+        >>> root = WorkflowMetadata(...)  # Parent workflow
+        >>> child1 = WorkflowMetadata(...)  # Child workflow
+        >>> call_graph = WorkflowCallGraph(
+        ...     root_workflow=root,
+        ...     child_workflows={"ChildWorkflow": child1},
+        ...     call_relationships=[("ParentWorkflow", "ChildWorkflow")],
+        ...     all_child_calls=[
+        ...         ChildWorkflowCall("ChildWorkflow", 45, "child_childworkflow_45", "ParentWorkflow")
+        ...     ],
+        ...     total_workflows=2
+        ... )
+        >>> call_graph.total_workflows
+        2
+        >>> len(call_graph.child_workflows)
+        1
+    """
+
+    root_workflow: WorkflowMetadata
+    child_workflows: dict[str, WorkflowMetadata]
+    call_relationships: list[tuple[str, str]]
+    all_child_calls: list[ChildWorkflowCall]
+    total_workflows: int
