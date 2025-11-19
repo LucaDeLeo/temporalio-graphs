@@ -11,15 +11,16 @@ from temporalio_graphs._internal.graph_models import (
 
 
 def test_node_type_enum_values() -> None:
-    """Verify NodeType enum has all 5 values with correct string representations."""
+    """Verify NodeType enum has all 6 values with correct string representations."""
     assert NodeType.START.value == "start"
     assert NodeType.END.value == "end"
     assert NodeType.ACTIVITY.value == "activity"
     assert NodeType.DECISION.value == "decision"
     assert NodeType.SIGNAL.value == "signal"
+    assert NodeType.CHILD_WORKFLOW.value == "child_workflow"
 
-    # Verify all 5 members exist
-    assert len(NodeType) == 5
+    # Verify all 6 members exist (Epic 6 adds CHILD_WORKFLOW)
+    assert len(NodeType) == 6
 
 
 def test_graph_node_to_mermaid_start() -> None:

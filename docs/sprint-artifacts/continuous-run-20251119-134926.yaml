@@ -56,12 +56,24 @@ stories_processed:
     git_push_status: success
     files_changed: 7
     test_results: "81/81 passing (100%), 82% coverage"
+  - story_key: 6-1-detect-child-workflow-calls-in-ast
+    status: success
+    start_time: 2025-11-19T13:52:00Z
+    end_time: 2025-11-19T13:55:30Z
+    duration_seconds: 210
+    phases_completed: [load, implement, review-cycle-1]
+    validation_attempts: 0
+    review_cycles: 1
+    git_commit_sha: ad3774c
+    git_push_status: success
+    files_changed: 6
+    test_results: "144/144 passing (28 new tests, 100% coverage of new logic)"
 
 statistics:
   epics_contexted: 0
   epics_blocked: 0
   total_stories: 6
-  success_count: 1
+  success_count: 2
   blocked_validation_count: 0
   blocked_review_count: 0
   blocked_external_count: 0

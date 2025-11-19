@@ -170,6 +170,7 @@ class MermaidRenderer:
                     # Determine node type directly from PathStep
                     is_decision = step.node_type == 'decision'
                     is_signal = step.node_type == 'signal'
+                    is_child_workflow = step.node_type == 'child_workflow'
 
                     if is_signal:
                         # Signal node - use signal name as node ID for reconvergence
@@ -254,6 +255,55 @@ class MermaidRenderer:
                             seen_edges.add(edge_key)
 
                         prev_node_id = node_id
+
+                    elif is_child_workflow:
+                        # Child workflow node - use deterministic ID based on name + line number
+                        # Format: child_{workflow_name}_{line} (lowercase for consistency)
+                        if step.line_number is None:
+                            raise ValueError(
+                                f"Child workflow step '{step.name}' missing line_number "
+                                f"in path {path.path_id}"
+                            )
+
+                        node_id = f"child_{step.name.lower()}_{step.line_number}"
+
+                        # Apply word splitting if enabled
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step.name)
+
+                        # Add child workflow node definition (deduplicated by dict key)
+                        if node_id not in node_definitions:
+                            child_workflow_node = GraphNode(
+                                node_id, NodeType.CHILD_WORKFLOW, display_name
+                            )
+                            node_definitions[node_id] = child_workflow_node.to_mermaid()
+
+                        # Add edge from previous node to child workflow node
+                        # Check if previous node was a decision or signal to add appropriate label
+                        edge_label = ""
+                        if prev_node_id in path.decisions:
+                            # Previous node is a decision - check its value
+                            decision_value = path.decisions[prev_node_id]
+                            edge_label = (
+                                context.decision_true_label
+                                if decision_value
+                                else context.decision_false_label
+                            )
+                        elif prev_node_id in signal_outcomes[path.path_id]:
+                            # Previous node is a signal - use its outcome as label
+                            edge_label = signal_outcomes[path.path_id][prev_node_id]
+
+                        edge_key = (prev_node_id, node_id, edge_label)
+                        if edge_key not in seen_edges:
+                            if edge_label:
+                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            else:
+                                edges.append(f"{prev_node_id} --> {node_id}")
+                            seen_edges.add(edge_key)
+
+                        prev_node_id = node_id
+
                     else:
                         # This is an activity node
                         # Use activity NAME as node ID for natural reconvergence (.NET pattern)

@@ -5,7 +5,7 @@ workflow graphs. These models are not part of the public API and should not be
 imported directly by library users.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -111,8 +111,8 @@ class GraphNode:
             case NodeType.SIGNAL:
                 return f"{self.node_id}{{{{{self.display_name}}}}}"
             case NodeType.CHILD_WORKFLOW:
-                # Child workflow nodes - Story 6.2 will implement rendering
-                return f"{self.node_id}[{self.display_name}]"
+                # Child workflow nodes render with double brackets (subroutine notation)
+                return f"{self.node_id}[[{self.display_name}]]"
 
 
 @dataclass
@@ -433,9 +433,9 @@ class WorkflowMetadata:
     activities: list[Activity]
     decision_points: list[DecisionPoint]
     signal_points: list[SignalPoint]
-    child_workflow_calls: list[ChildWorkflowCall]
     source_file: Path
     total_paths: int
+    child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
 
     @staticmethod
     def calculate_total_paths(num_decisions: int, num_signals: int) -> int:

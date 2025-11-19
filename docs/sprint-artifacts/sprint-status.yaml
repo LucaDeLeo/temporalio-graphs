@@ -82,7 +82,7 @@ development_status:
   # Epic 6: Cross-Workflow Visualization (MVP Extension)
   epic-6: contexted
   6-1-detect-child-workflow-calls-in-ast: done  # APPROVED - Senior Developer Review Complete 2025-11-19
-  6-2-implement-child-workflow-node-rendering-in-mermaid: backlog
+  6-2-implement-child-workflow-node-rendering-in-mermaid: done  # APPROVED - All issues resolved, Review Cycle 2 Complete 2025-11-19
   6-3-implement-multi-workflow-analysis-pipeline: backlog
   6-4-implement-end-to-end-path-generation-across-workflows: backlog
   6-5-add-integration-test-with-parent-child-workflow-example: backlog

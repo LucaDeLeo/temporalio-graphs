@@ -13,16 +13,18 @@ from typing import Literal
 class PathStep:
     """Represents a single step in a workflow execution path.
 
-    A step can be an activity, decision, or signal (Epic 4). This typed structure
-    eliminates the need for string parsing to determine node types, making the
-    code more robust and type-safe.
+    A step can be an activity, decision, signal (Epic 4), or child_workflow (Epic 6).
+    This typed structure eliminates the need for string parsing to determine node types,
+    making the code more robust and type-safe.
 
     Args:
-        node_type: Type of node ('activity', 'decision', 'signal')
-        name: Human-readable name (e.g., 'withdraw_funds', 'NeedToConvert')
+        node_type: Type of node ('activity', 'decision', 'signal', 'child_workflow')
+        name: Human-readable name (e.g., 'withdraw_funds', 'NeedToConvert', 'PaymentWorkflow')
         decision_id: Unique decision ID (e.g., 'd0', 'd1'), only for decisions
         decision_value: Boolean value for this path (True/False), only for decisions
         signal_outcome: Signal result ('Signaled'/'Timeout'), only for signals (Epic 4)
+        line_number: Source line number where this step occurs, used for child
+            workflow node IDs (Epic 6)
 
     Example:
         >>> # Activity step
@@ -32,12 +34,17 @@ class PathStep:
         >>> # Decision step
         >>> PathStep('decision', 'NeedToConvert', decision_id='d0', decision_value=True)
         PathStep(node_type='decision', name='NeedToConvert', decision_id='d0', decision_value=True)
+
+        >>> # Child workflow step
+        >>> PathStep('child_workflow', 'PaymentWorkflow', line_number=45)
+        PathStep(node_type='child_workflow', name='PaymentWorkflow', line_number=45)
     """
-    node_type: Literal['activity', 'decision', 'signal']
+    node_type: Literal['activity', 'decision', 'signal', 'child_workflow']
     name: str
     decision_id: str | None = None
     decision_value: bool | None = None
     signal_outcome: str | None = None  # Epic 4: 'Signaled' or 'Timeout'
+    line_number: int | None = None  # Epic 6: Source line for child workflow node IDs
 
 
 @dataclass
@@ -221,5 +228,50 @@ class GraphPath:
 
         # Generate sequential node ID: count of all steps so far
         node_id = str(len(self.steps))
+
+        return node_id
+
+    def add_child_workflow(self, name: str, line_number: int) -> str:
+        """Add a child workflow call to this execution path.
+
+        Records the child workflow name and its source line number for this path,
+        adds the child workflow to the steps list, and generates a unique node ID
+        for the child workflow subroutine in the graph.
+
+        This method is called during path generation in PathPermutationGenerator
+        to track child workflow calls encountered along each execution path. Child
+        workflows are treated like activities (linear nodes with no branching).
+
+        Args:
+            name: Human-readable child workflow name (e.g., "PaymentWorkflow").
+            line_number: Source line number where the child workflow is called.
+                Used to generate deterministic node IDs in format: child_{name}_{line}.
+
+        Returns:
+            Node ID for the child workflow node in format: child_{workflow_name}_{line}.
+            Unlike activities/decisions/signals, child workflow IDs are deterministic
+            and include the workflow name for traceability.
+
+        Example:
+            >>> path = GraphPath(path_id="path_0")
+            >>> node_id = path.add_child_workflow("PaymentWorkflow", 45)
+            >>> node_id
+            'child_paymentworkflow_45'
+            >>> [step.name for step in path.steps]
+            ['PaymentWorkflow']
+            >>> [step.line_number for step in path.steps]
+            [45]
+        """
+        # Add child workflow step to the steps list with type information
+        step = PathStep(
+            node_type='child_workflow',
+            name=name,
+            line_number=line_number
+        )
+        self.steps.append(step)
+
+        # Generate deterministic node ID based on workflow name and line number
+        # Format: child_{workflow_name}_{line} (lowercase for consistency)
+        node_id = f"child_{name.lower()}_{line_number}"
 
         return node_id

@@ -13,6 +13,7 @@ from itertools import product
 
 from temporalio_graphs._internal.graph_models import (
     Activity,
+    ChildWorkflowCall,
     DecisionPoint,
     SignalPoint,
     WorkflowMetadata,
@@ -195,21 +196,24 @@ class PathPermutationGenerator:
         # Log path generation start
         if total_branch_points == 0:
             logger.debug(
-                f"Generating paths for linear workflow with {len(metadata.activities)} activities"
+                f"Generating paths for linear workflow with {len(metadata.activities)} activities "
+                f"and {len(metadata.child_workflow_calls)} child workflows"
             )
             # Create single linear path for linear workflows
-            path = self._create_linear_path(metadata.activities)
+            path = self._create_linear_path(metadata.activities, metadata.child_workflow_calls)
             logger.debug(f"Created path with ID: {path.path_id}")
             return [path]
         else:
             logger.debug(
                 f"Generating {2**total_branch_points} paths for workflow with "
                 f"{num_decisions} decision points, {num_signals} signal points, "
-                f"and {len(metadata.activities)} activities"
+                f"{len(metadata.activities)} activities, and "
+                f"{len(metadata.child_workflow_calls)} child workflows"
             )
             # Generate permutations for workflows with decisions and/or signals
             paths = self._generate_paths_with_branches(
-                metadata.decision_points, metadata.signal_points, metadata.activities, context
+                metadata.decision_points, metadata.signal_points, metadata.activities,
+                metadata.child_workflow_calls, context
             )
             logger.debug(
                 f"Generated {len(paths)} paths for workflow with {num_decisions} decisions "
@@ -217,30 +221,57 @@ class PathPermutationGenerator:
             )
             return paths
 
-    def _create_linear_path(self, activities: list[Activity]) -> GraphPath:
-        """Create a single linear path from activity sequence.
+    def _create_linear_path(
+        self, activities: list[Activity], child_workflows: list[ChildWorkflowCall]
+    ) -> GraphPath:
+        """Create a single linear path from activity and child workflow sequence.
 
-        Helper method that constructs a GraphPath with all activities in order.
-        This implements the Epic 2 algorithm: create path with path_id="path_0",
-        add each activity sequentially, return the path.
+        Helper method that constructs a GraphPath with all activities and child workflows
+        in execution order based on source line numbers. This implements the Epic 2 algorithm
+        extended for Epic 6: create path with path_id="path_0", add each activity and child
+        workflow sequentially in source code order, return the path.
 
         Args:
-            activities: List of Activity objects or strings in order from workflow analysis.
+            activities: List of Activity objects in order from workflow analysis.
                 May be empty for workflows with no activities.
+            child_workflows: List of ChildWorkflowCall objects in order from workflow analysis.
+                May be empty for workflows with no child workflow calls.
 
         Returns:
-            GraphPath with path_id="path_0" and all activities added in order
-            via add_activity() calls.
+            GraphPath with path_id="path_0" and all activities/child workflows added in
+            source line order via add_activity() and add_child_workflow() calls.
         """
         path = GraphPath(path_id="path_0")
 
-        # Add all activities in sequence
+        # Merge activities and child workflows, then sort by line number
+        execution_order: list[tuple[str, Activity | ChildWorkflowCall | str, int]] = []
         for activity in activities:
             # Handle both Activity objects and strings for backward compatibility
             if isinstance(activity, str):
-                path.add_activity(activity)
+                # Strings don't have line numbers, so use index as fallback for ordering
+                execution_order.append(('activity', activity, activities.index(activity)))
             else:
-                path.add_activity(activity.name)
+                execution_order.append(('activity', activity, activity.line_num))
+        for child_workflow in child_workflows:
+            execution_order.append((
+                'child_workflow', child_workflow, child_workflow.call_site_line
+            ))
+
+        # Sort by line number to get execution order
+        execution_order.sort(key=lambda x: x[2])
+
+        # Add all nodes in sequence
+        for node_type, node, _ in execution_order:
+            if node_type == 'activity':
+                # Handle both Activity objects and strings for backward compatibility
+                if isinstance(node, str):
+                    path.add_activity(node)
+                else:
+                    assert isinstance(node, Activity)
+                    path.add_activity(node.name)
+            elif node_type == 'child_workflow':
+                assert isinstance(node, ChildWorkflowCall)
+                path.add_child_workflow(node.workflow_name, node.call_site_line)
 
         return path
 
@@ -249,33 +280,35 @@ class PathPermutationGenerator:
         decisions: list[DecisionPoint],
         signals: list[SignalPoint],
         activities: list[Activity],
+        child_workflows: list[ChildWorkflowCall],
         context: GraphBuildingContext,
     ) -> list[GraphPath]:
         """Generate 2^n execution paths for workflows with decision and signal points.
 
         Uses itertools.product to efficiently generate all 2^n boolean combinations
         for the given decision and signal points. For each combination, creates a GraphPath
-        that records the decisions, signals, and activities in PROPER EXECUTION ORDER by
-        merging and sorting them by source line number.
+        that records the decisions, signals, activities, and child workflows in PROPER
+        EXECUTION ORDER by merging and sorting them by source line number.
 
-        This method implements the Epic 3/4 path permutation algorithm using the
+        This method implements the Epic 3/4/6 path permutation algorithm using the
         efficient C-optimized itertools.product function, maintaining O(2^n)
         time complexity while avoiding manual recursion.
 
-        CRITICAL: Activities, decisions, and signals are interleaved based on their source
-        line numbers to generate correct branching topology instead of incorrect sequential
-        linear topology.
+        CRITICAL: Activities, decisions, signals, and child workflows are interleaved
+        based on their source line numbers to generate correct branching topology instead
+        of incorrect sequential linear topology.
 
         Args:
             decisions: List of DecisionPoint objects from workflow analysis.
             signals: List of SignalPoint objects from workflow analysis.
             activities: List of Activity objects from workflow analysis.
+            child_workflows: List of ChildWorkflowCall objects from workflow analysis.
             context: GraphBuildingContext for configuration (branch labels, etc.).
 
         Returns:
             List of GraphPath objects, one for each 2^n permutation. Each path
-            contains the activities, decisions, and signals for that specific execution path
-            in correct source code order.
+            contains the activities, decisions, signals, and child workflows for that
+            specific execution path in correct source code order.
 
         Example:
             >>> from temporalio_graphs._internal.graph_models import Activity
@@ -305,15 +338,21 @@ class PathPermutationGenerator:
         total_branches = num_decisions + num_signals
         paths: list[GraphPath] = []
 
-        # Merge activities, decisions, and signals with their positions
+        # Merge activities, decisions, signals, and child workflows with their positions
         # Each element is a tuple: (node_type, node_object, line_number)
-        execution_order: list[tuple[str, Activity | DecisionPoint | SignalPoint, int]] = []
+        execution_order: list[
+            tuple[str, Activity | DecisionPoint | SignalPoint | ChildWorkflowCall, int]
+        ] = []
         for i, activity in enumerate(activities):
             execution_order.append(('activity', activity, activity.line_num))
         for decision in decisions:
             execution_order.append(('decision', decision, decision.line_num))
         for signal in signals:
             execution_order.append(('signal', signal, signal.source_line))
+        for child_workflow in child_workflows:
+            execution_order.append((
+                'child_workflow', child_workflow, child_workflow.call_site_line
+            ))
 
         # Sort by line number to get execution order
         execution_order.sort(key=lambda x: x[2])
@@ -417,6 +456,40 @@ class PathPermutationGenerator:
                     path.add_signal(node.name, outcome)
                     # Track this signal for checking future activities
                     signals_encountered.append(node)
+
+                elif node_type == 'child_workflow':
+                    # node is ChildWorkflowCall object
+                    assert isinstance(node, ChildWorkflowCall)
+                    # Child workflows are treated like activities (linear, no branching)
+                    # Add them unconditionally unless they're in a conditional branch
+                    child_workflow_line = node.call_site_line
+                    should_include_child_workflow = True
+
+                    # Check if this child workflow is conditional on any decision
+                    for decision in decisions_encountered:
+                        if child_workflow_line in decision.true_branch_activities:
+                            if not decision_value_map[decision.id]:
+                                should_include_child_workflow = False
+                                break
+                        elif child_workflow_line in decision.false_branch_activities:
+                            if decision_value_map[decision.id]:
+                                should_include_child_workflow = False
+                                break
+
+                    # Check if this child workflow is conditional on any signal
+                    for signal in signals_encountered:
+                        if child_workflow_line in signal.signaled_branch_activities:
+                            if not signal_value_map[signal.node_id]:
+                                should_include_child_workflow = False
+                                break
+                        elif child_workflow_line in signal.timeout_branch_activities:
+                            if signal_value_map[signal.node_id]:
+                                should_include_child_workflow = False
+                                break
+
+                    # Only add child workflow if it should execute in this path
+                    if should_include_child_workflow:
+                        path.add_child_workflow(node.workflow_name, node.call_site_line)
 
             paths.append(path)
 

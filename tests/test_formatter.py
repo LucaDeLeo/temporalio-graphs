@@ -249,6 +249,68 @@ class TestFormatPathList:
         assert "Decision1" not in result.paths[0].activities
         assert "WaitForApproval" not in result.paths[0].activities
 
+    def test_format_path_list_child_workflow_extraction(self):
+        """Test that child workflows are extracted along with activities."""
+        path = GraphPath(
+            path_id="0",
+            steps=[
+                PathStep('activity', 'validate_order'),
+                PathStep('child_workflow', 'PaymentWorkflow', line_number=15),
+                PathStep('activity', 'send_confirmation')
+            ],
+            decisions={}
+        )
+
+        result = format_path_list([path])
+
+        # Both activities and child workflows should be extracted
+        assert result.paths[0].activities == ["validate_order", "PaymentWorkflow", "send_confirmation"]
+
+    def test_format_path_list_multiple_child_workflows(self):
+        """Test path list with multiple child workflows."""
+        path = GraphPath(
+            path_id="0",
+            steps=[
+                PathStep('activity', 'start_order'),
+                PathStep('child_workflow', 'InventoryWorkflow', line_number=10),
+                PathStep('activity', 'process_order'),
+                PathStep('child_workflow', 'PaymentWorkflow', line_number=15),
+                PathStep('activity', 'complete_order')
+            ],
+            decisions={}
+        )
+
+        result = format_path_list([path])
+
+        # All activities and child workflows should be in order
+        assert result.paths[0].activities == [
+            "start_order",
+            "InventoryWorkflow",
+            "process_order",
+            "PaymentWorkflow",
+            "complete_order"
+        ]
+
+    def test_format_path_list_child_workflow_integration(self):
+        """Test end-to-end integration with child workflows in output."""
+        paths = [
+            GraphPath(
+                path_id="0",
+                steps=[
+                    PathStep('activity', 'validate_order'),
+                    PathStep('child_workflow', 'PaymentWorkflow', line_number=15),
+                    PathStep('activity', 'send_confirmation')
+                ],
+                decisions={}
+            )
+        ]
+
+        path_list = format_path_list(paths)
+        output = path_list.format()
+
+        # Verify child workflow appears in path output
+        assert "validate_order → PaymentWorkflow → send_confirmation" in output
+
     def test_format_path_list_decision_extraction(self):
         """Test that decisions are extracted correctly."""
         path = GraphPath(

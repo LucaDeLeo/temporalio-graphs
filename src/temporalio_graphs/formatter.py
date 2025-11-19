@@ -162,13 +162,13 @@ def format_path_list(paths: list[GraphPath]) -> PathListOutput:
     formatted_paths = []
 
     for i, path in enumerate(paths, 1):
-        # Extract activity names using node_type discriminator
-        # CRITICAL: Use step.node_type == 'activity', NOT isinstance
+        # Extract activity and child workflow names using node_type discriminator
+        # CRITICAL: Use step.node_type in ('activity', 'child_workflow'), NOT isinstance
         # PathStep is a single dataclass with node_type field, not separate classes
         activities = [
             step.name
             for step in path.steps
-            if step.node_type == 'activity'
+            if step.node_type in ('activity', 'child_workflow')
         ]
 
         # Extract decision outcomes using node_type discriminator
