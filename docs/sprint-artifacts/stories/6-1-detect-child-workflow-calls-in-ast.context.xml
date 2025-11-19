@@ -1,0 +1,129 @@
+<story-context id="6-1-detect-child-workflow-calls-in-ast" v="1.0">
+  <metadata>
+    <epicId>epic-6</epicId>
+    <storyId>6-1</storyId>
+    <title>Detect Child Workflow Calls in AST</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/6-1-detect-child-workflow-calls-in-ast.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>temporalio-graphs developer</asA>
+    <iWant>the AST analyzer to detect `execute_child_workflow` calls within workflow methods</iWant>
+    <soThat>the system can identify dependencies between parent and child workflows for cross-workflow visualization</soThat>
+    <tasks>
+      <task>Define `ChildWorkflowCall` data model
+        <subtask>Add `ChildWorkflowCall` dataclass to `src/temporalio_graphs/_internal/graph_models.py` with fields: `workflow_name`, `call_site_line`, `call_id`, `parent_workflow`</subtask>
+        <subtask>Add `NodeType.CHILD_WORKFLOW` to `NodeType` enum in `src/temporalio_graphs/_internal/graph_models.py`</subtask>
+      </task>
+      <task>Implement `ChildWorkflowDetector`
+        <subtask>Create `ChildWorkflowDetector` class in `src/temporalio_graphs/detector.py`</subtask>
+        <subtask>Implement `detect(tree: ast.Module)` method to visit `Call` nodes</subtask>
+        <subtask>Implement logic to identify `workflow.execute_child_workflow` pattern</subtask>
+        <subtask>Implement extraction logic for both class reference and string literal arguments</subtask>
+      </task>
+      <task>Update `WorkflowAnalyzer` integration
+        <subtask>Ensure `WorkflowAnalyzer` invokes `ChildWorkflowDetector` (or exposes AST for it)</subtask>
+        <subtask>Store detected child calls in `WorkflowMetadata`</subtask>
+      </task>
+      <task>Add Unit Tests
+        <subtask>Create/Update `tests/test_detector.py` with test cases for class reference detection, string literal detection, multiple calls, and nested calls</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion>Detect `workflow.execute_child_workflow(ChildWorkflow, ...)` calls where the first argument is a class reference</criterion>
+    <criterion>Detect `workflow.execute_child_workflow("ChildWorkflowName", ...)` calls where the first argument is a string literal</criterion>
+    <criterion>Extract the child workflow class name/identifier from the first argument</criterion>
+    <criterion>Record the call site line number and parent workflow context for each detection</criterion>
+    <criterion>Handle multiple child workflow calls within a single parent workflow</criterion>
+    <criterion>Support detection within nested code blocks (e.g., inside loops or if/else blocks)</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-6.md</path>
+        <title>Epic Technical Specification: Cross-Workflow Visualization</title>
+        <section>Detailed Design</section>
+        <snippet>
+          Module `detector.py` Responsibility: Child workflow call detection. Key Classes: `ChildWorkflowDetector`.
+          Data Models: `ChildWorkflowCall` with fields `workflow_name`, `workflow_file`, `call_site_line`, `call_id`, `parent_workflow`.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Architecture Patterns</section>
+        <snippet>
+          AST Traversal: Visitor Pattern. `ast.NodeVisitor` for workflow analysis. Clean separation of concerns.
+          Child Workflow Detection: `ChildWorkflowDetector`. Identifies `execute_child_workflow()` calls, extracts workflow names.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/6-1-detect-child-workflow-calls-in-ast.md</path>
+        <title>Story 6.1: Detect Child Workflow Calls in AST</title>
+        <section>Story</section>
+        <snippet>Full story definition with acceptance criteria and dev notes.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <codeItem>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>class</kind>
+        <symbol>DecisionDetector</symbol>
+        <lines>36-312</lines>
+        <reason>Existing detector implementation to use as a pattern for `ChildWorkflowDetector`.</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>330-439</lines>
+        <reason>Data model where detected child workflow calls should be stored.</reason>
+      </codeItem>
+      <codeItem>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>class</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>38-248</lines>
+        <reason>Main analyzer class that needs to be updated to invoke the new detector.</reason>
+      </codeItem>
+    </code>
+    <dependencies>
+      <dependency>temporalio</dependency>
+      <dependency>ast</dependency>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Use `ast.NodeVisitor` pattern for traversal.</constraint>
+    <constraint>Do not execute workflow code; use static analysis only.</constraint>
+    <constraint>Follow project naming conventions (snake_case for functions/vars, PascalCase for classes).</constraint>
+    <constraint>Ensure strict type hints (mypy compatible).</constraint>
+    <constraint>Raise `WorkflowParseError` for invalid patterns.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ChildWorkflowDetector.detect</name>
+      <kind>method</kind>
+      <signature>def detect(self, tree: ast.Module) -> list[ChildWorkflowCall]</signature>
+      <path>src/temporalio_graphs/detector.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Use pytest with AST fixtures. Ensure 100% coverage for new detector logic. Test class references, string literals, multiple calls, and nested blocks.</standards>
+    <locations>tests/test_detector.py</locations>
+    <ideas>
+      <idea>Test detection of `workflow.execute_child_workflow(MyWorkflow)`</idea>
+      <idea>Test detection of `workflow.execute_child_workflow("MyWorkflow")`</idea>
+      <idea>Test detection inside `if` block</idea>
+      <idea>Test multiple child workflow calls in sequence</idea>
+    </ideas>
+  </tests>
+</story-context>
