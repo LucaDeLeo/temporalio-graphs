@@ -344,7 +344,12 @@ class TestAnalyzeWorkflowSignature:
         exported = temporalio_graphs.__all__
 
         # Assert
-        assert set(exported) == {"GraphBuildingContext", "analyze_workflow", "to_decision"}
+        assert set(exported) == {
+            "GraphBuildingContext",
+            "analyze_workflow",
+            "to_decision",
+            "wait_condition",
+        }
         # Verify internal components not exported
         assert "WorkflowAnalyzer" not in exported
         assert "PathPermutationGenerator" not in exported

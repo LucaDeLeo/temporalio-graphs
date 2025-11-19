@@ -65,7 +65,7 @@ development_status:
   # Epic 4: Signal & Wait Condition Support
   epic-4: contexted
   4-1-implement-signal-point-detection-in-ast: done  # APPROVED - Senior Developer Review Complete 2025-11-19
-  4-2-implement-wait-condition-helper-function: backlog
+  4-2-implement-wait-condition-helper-function: done  # APPROVED - Senior Developer Review Complete 2025-11-19
   4-3-implement-signal-node-rendering-in-mermaid: backlog
   4-4-add-integration-test-with-signal-example: backlog
   epic-4-retrospective: optional
