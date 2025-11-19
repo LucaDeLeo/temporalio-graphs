@@ -63,7 +63,7 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Signal & Wait Condition Support
-  epic-4: backlog
+  epic-4: contexted
   4-1-implement-signal-point-detection-in-ast: backlog
   4-2-implement-wait-condition-helper-function: backlog
   4-3-implement-signal-node-rendering-in-mermaid: backlog
