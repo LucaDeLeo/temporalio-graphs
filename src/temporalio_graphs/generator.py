@@ -334,11 +334,12 @@ class PathPermutationGenerator:
                 signal_value_map[signal.node_id] = branch_values[branch_index]
                 branch_index += 1
 
-            # Track decisions encountered so far in this path (for control flow)
+            # Track decisions and signals encountered so far in this path (for control flow)
             decisions_encountered: list[DecisionPoint] = []
+            signals_encountered: list[SignalPoint] = []
 
             # Add nodes in correct interleaved order based on source line numbers
-            # Only include activities that match the decision path (control flow aware)
+            # Only include activities that match the decision/signal path (control flow aware)
             for node_type, node, line_num in execution_order:
                 if node_type == 'activity':
                     # node is Activity object
@@ -346,7 +347,7 @@ class PathPermutationGenerator:
                     activity_name = node.name
                     activity_line = node.line_num
 
-                    # Check if this activity is conditional on any decision
+                    # Check if this activity is conditional on any decision or signal
                     should_include_activity = True
 
                     for decision in decisions_encountered:
@@ -364,6 +365,23 @@ class PathPermutationGenerator:
                                 break
                         # If not in either branch, activity is unconditional
                         # relative to this decision
+
+                    # Check if this activity is conditional on any signal
+                    for signal in signals_encountered:
+                        # Check if activity is in this signal's signaled branch
+                        if activity_line in signal.signaled_branch_activities:
+                            # Activity is conditional on signal being Signaled (True)
+                            if not signal_value_map[signal.node_id]:
+                                should_include_activity = False
+                                break
+                        # Check if activity is in this signal's timeout branch
+                        elif activity_line in signal.timeout_branch_activities:
+                            # Activity is conditional on signal being Timeout (False)
+                            if signal_value_map[signal.node_id]:
+                                should_include_activity = False
+                                break
+                        # If not in either branch, activity is unconditional
+                        # relative to this signal
 
                     # Only add activity if it should execute in this path
                     if should_include_activity:
@@ -388,6 +406,8 @@ class PathPermutationGenerator:
                         else context.signal_timeout_label
                     )
                     path.add_signal(node.name, outcome)
+                    # Track this signal for checking future activities
+                    signals_encountered.append(node)
 
             paths.append(path)
 

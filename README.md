@@ -128,6 +128,38 @@ The MoneyTransfer example demonstrates:
 
 See `/examples/money_transfer/` for the complete working example with explanation of all 4 execution paths.
 
+**Approval Workflow with Signals** (1 signal point, 2 execution paths):
+
+```bash
+python examples/signal_workflow/run.py
+```
+
+This analyzes a workflow with a wait condition demonstrating signal/timeout patterns:
+
+```mermaid
+flowchart LR
+s((Start))
+WaitForApproval{{Wait For Approval}}
+handle_timeout[handle_timeout]
+process_approved[process_approved]
+submit_request[submit_request]
+e((End))
+s --> submit_request
+submit_request --> WaitForApproval
+WaitForApproval -- Timeout --> handle_timeout
+handle_timeout --> e
+WaitForApproval -- Signaled --> process_approved
+process_approved --> e
+```
+
+The ApprovalWorkflow example demonstrates:
+- **Signal node visualization**: Hexagon shape with `{{NodeName}}` syntax
+- **Two execution paths**: Signaled (approval received) vs Timeout (no approval)
+- **Conditional activities**: process_approved only on Signaled, handle_timeout only on Timeout
+- **Asynchronous wait patterns**: Common in approval workflows and event-driven processes
+
+See `/examples/signal_workflow/` for the complete working example with explanation of signal/wait condition patterns.
+
 ### Using Decision Points
 
 Mark decision points in your workflow using the `to_decision()` helper function to enable graph generation with branching paths:
@@ -180,7 +212,49 @@ if await to_decision(amount > 5000, f"Check_{item}"):
     pass
 ```
 
-**Future Helpers**: For signal-based branching (Epic 4), a `wait_condition()` helper will be available for workflows that wait on external signals.
+### Using Signal/Wait Conditions
+
+Mark signal points in your workflow using the `wait_condition()` helper function to visualize asynchronous wait patterns:
+
+```python
+from temporalio import workflow
+from temporalio_graphs import wait_condition
+from datetime import timedelta
+
+@workflow.defn
+class ApprovalWorkflow:
+    def __init__(self) -> None:
+        self.approved = False
+
+    @workflow.run
+    async def run(self, request_id: str) -> str:
+        # Submit request
+        await workflow.execute_activity(submit_request, args=[request_id], ...)
+
+        # Wait for approval signal (creates hexagon node in graph)
+        if await wait_condition(
+            lambda: self.approved,
+            timedelta(hours=24),
+            "WaitForApproval",  # Signal name (must be string literal)
+        ):
+            # Signaled branch
+            await workflow.execute_activity(process_approved, ...)
+            return "approved"
+        else:
+            # Timeout branch
+            await workflow.execute_activity(handle_timeout, ...)
+            return "timeout"
+
+    @workflow.signal
+    async def approve(self) -> None:
+        self.approved = True
+```
+
+**Important Notes:**
+- Signal names must be **string literals** (not variables or f-strings) for static analysis
+- Returns `True` if signaled before timeout, `False` if timeout occurs
+- Creates hexagon-shaped nodes in Mermaid diagrams: `{{NodeName}}`
+- Generates two execution paths: "Signaled" and "Timeout"
 
 ### Advanced Usage with Custom Configuration
 

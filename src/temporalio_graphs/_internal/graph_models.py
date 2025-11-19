@@ -321,6 +321,9 @@ class SignalPoint:
     timeout_expr: str
     source_line: int
     node_id: str
+    # Control flow tracking: line numbers of activities in each branch
+    signaled_branch_activities: tuple[int, ...] = ()
+    timeout_branch_activities: tuple[int, ...] = ()
 
 
 @dataclass

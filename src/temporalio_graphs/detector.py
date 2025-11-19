@@ -332,6 +332,9 @@ class SignalDetector(ast.NodeVisitor):
         """Initialize the signal detector with empty state."""
         self._signals: list[SignalPoint] = []
         self._signal_counter: int = 0
+        # Track branch activities for signals:
+        # {signal_line: (signaled_activities, timeout_activities)}
+        self._signal_branches: dict[int, tuple[list[int], list[int]]] = {}
 
     def visit_Call(self, node: ast.Call) -> None:
         """Visit Call nodes to identify wait_condition() function calls.
@@ -357,6 +360,74 @@ class SignalDetector(ast.NodeVisitor):
 
         # Continue traversal to find nested calls
         self.generic_visit(node)
+
+    def visit_If(self, node: ast.If) -> None:
+        """Visit If nodes to track signal branch activities.
+
+        This visitor method traverses if/else structures that contain wait_condition()
+        results. For patterns like `if await wait_condition(...):`, it tracks which
+        activities are in the signaled (true) vs timeout (false) branches.
+
+        Args:
+            node: AST node representing an if/elif/else structure.
+        """
+        # Check if this If node's test contains a wait_condition() call
+        signal_call = None
+        if isinstance(node.test, ast.Await) and isinstance(node.test.value, ast.Call):
+            if self._is_wait_condition_call(node.test.value):
+                signal_call = node.test.value
+        elif isinstance(node.test, ast.Name):
+            # Pattern: result = await wait_condition(...); if result:
+            # We need to find the assignment, but for now we skip this pattern
+            pass
+
+        # If this is a signal-conditional block, collect branch activities
+        if signal_call:
+            signaled_activities = self._collect_activity_lines(node.body)
+            timeout_activities = self._collect_activity_lines(node.orelse)
+
+            # Store branch info keyed by signal line number
+            self._signal_branches[signal_call.lineno] = (signaled_activities, timeout_activities)
+
+        # Continue visiting child nodes
+        if hasattr(node, "test"):
+            self.visit(node.test)
+
+        for child in node.body:
+            self.visit(child)
+
+        if node.orelse:
+            for child in node.orelse:
+                self.visit(child)
+
+    def _collect_activity_lines(self, nodes: list[ast.stmt]) -> list[int]:
+        """Collect line numbers of all execute_activity calls in a block.
+
+        Args:
+            nodes: List of AST statement nodes to search.
+
+        Returns:
+            List of line numbers where execute_activity is called.
+        """
+        activity_lines = []
+
+        class ActivityCollector(ast.NodeVisitor):
+            def visit_Await(self, node: ast.Await) -> None:
+                if isinstance(node.value, ast.Call):
+                    call = node.value
+                    # Check for workflow.execute_activity or execute_activity
+                    if isinstance(call.func, ast.Attribute):
+                        if call.func.attr == "execute_activity":
+                            activity_lines.append(node.lineno)
+                    elif isinstance(call.func, ast.Name):
+                        if call.func.id == "execute_activity":
+                            activity_lines.append(node.lineno)
+                self.generic_visit(node)
+
+        collector = ActivityCollector()
+        for stmt in nodes:
+            collector.visit(stmt)
+        return activity_lines
 
     def _is_wait_condition_call(self, node: ast.Call) -> bool:
         """Check if a Call node is a wait_condition() function call.
@@ -426,12 +497,22 @@ class SignalDetector(ast.NodeVisitor):
         # Generate node ID
         node_id = self._generate_signal_id(name, node.lineno)
 
+        # Get branch activities if available
+        signaled_activities: tuple[int, ...] = ()
+        timeout_activities: tuple[int, ...] = ()
+        if node.lineno in self._signal_branches:
+            signaled_list, timeout_list = self._signal_branches[node.lineno]
+            signaled_activities = tuple(signaled_list)
+            timeout_activities = tuple(timeout_list)
+
         return SignalPoint(
             name=name,
             condition_expr=condition_expr,
             timeout_expr=timeout_expr,
             source_line=node.lineno,
             node_id=node_id,
+            signaled_branch_activities=signaled_activities,
+            timeout_branch_activities=timeout_activities,
         )
 
     def _generate_signal_id(self, name: str, line: int) -> str:
