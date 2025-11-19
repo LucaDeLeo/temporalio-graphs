@@ -15,11 +15,12 @@ from typing import Literal
 from temporalio_graphs.analyzer import WorkflowAnalyzer
 from temporalio_graphs.context import GraphBuildingContext
 from temporalio_graphs.generator import PathPermutationGenerator
+from temporalio_graphs.helpers import to_decision
 from temporalio_graphs.renderer import MermaidRenderer
 
 __version__ = "0.1.0"
 
-__all__ = ["GraphBuildingContext", "analyze_workflow"]
+__all__ = ["GraphBuildingContext", "analyze_workflow", "to_decision"]
 
 
 def _validate_context(context: GraphBuildingContext) -> None:

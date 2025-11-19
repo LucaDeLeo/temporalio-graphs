@@ -87,6 +87,60 @@ s --> 1
 
 See `/examples/simple_linear/` for the complete working example with explanations.
 
+### Using Decision Points
+
+Mark decision points in your workflow using the `to_decision()` helper function to enable graph generation with branching paths:
+
+```python
+from temporalio import workflow, activity
+from temporalio_graphs import to_decision
+
+@activity.defn
+async def process_high_value(amount: int) -> str:
+    """Handle high-value transactions."""
+    return f"High-value processing: {amount}"
+
+@activity.defn
+async def process_regular(amount: int) -> str:
+    """Handle regular transactions."""
+    return f"Regular processing: {amount}"
+
+@workflow.defn
+class PaymentWorkflow:
+    @workflow.run
+    async def run(self, amount: int) -> str:
+        # Mark decision point with to_decision()
+        if await to_decision(amount > 5000, "HighValue"):
+            return await workflow.execute_activity(
+                process_high_value, amount, schedule_to_close_timeout=600
+            )
+        else:
+            return await workflow.execute_activity(
+                process_regular, amount, schedule_to_close_timeout=600
+            )
+```
+
+The `to_decision()` function marks boolean expressions as decision nodes in your workflow graph. It's a transparent passthrough - at runtime it simply returns the input boolean value unchanged while serving as a marker for static analysis.
+
+**Important**: The decision name must be a string literal (not a variable or f-string) for static analysis to extract it:
+
+```python
+# ✅ Correct - string literal
+if await to_decision(amount > 5000, "HighValue"):
+    pass
+
+# ❌ Incorrect - variable name won't be detected
+decision_name = "HighValue"
+if await to_decision(amount > 5000, decision_name):
+    pass
+
+# ❌ Incorrect - f-string won't be detected
+if await to_decision(amount > 5000, f"Check_{item}"):
+    pass
+```
+
+**Future Helpers**: For signal-based branching (Epic 4), a `wait_condition()` helper will be available for workflows that wait on external signals.
+
 ### Advanced Usage with Custom Configuration
 
 Customize node labels and output location:

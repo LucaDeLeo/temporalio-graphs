@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-id>3-2-implement-to-decision-helper-function</story-id>
+    <story-file>docs/sprint-artifacts/stories/3-2-implement-to-decision-helper-function.md</story-file>
+    <epic-id>3</epic-id>
+    <epic-name>Decision Node Support (Branching Workflows)</epic-name>
+    <tech-spec>docs/sprint-artifacts/tech-spec-epic-3.md</tech-spec>
+    <created>2025-11-18</created>
+    <status>ready-for-dev</status>
+  </metadata>
+
+  <story-summary>
+    <title>Implement to_decision() Helper Function</title>
+    <description>
+      Create the to_decision() helper function that workflow developers use to mark decision points
+      in their Temporal workflows. This function is a transparent async passthrough that returns
+      boolean values unchanged while serving as a marker for static analysis (DecisionDetector from
+      Story 3.1). The function must be fully typed, documented with examples, and exported from the
+      public API alongside analyze_workflow and GraphBuildingContext.
+    </description>
+    <user-value>
+      Python developers writing Temporal workflows can mark conditional logic with to_decision() calls,
+      enabling the library to generate complete graph visualizations showing all possible execution
+      paths through decision points.
+    </user-value>
+  </story-summary>
+
+  <acceptance-criteria>
+    <criterion id="AC-1">
+      <title>to_decision() function exists in correct module</title>
+      <details>
+        - Function exists in src/temporalio_graphs/helpers.py
+        - Implements complete API per FR11 (decision point marker function)
+        - Type hints are complete and mypy strict compatible
+        - Documentation is comprehensive with usage examples
+      </details>
+    </criterion>
+    <criterion id="AC-2">
+      <title>Function signature and async compatibility (FR43)</title>
+      <details>
+        - Signature: async def to_decision(result: bool, name: str) -> bool
+        - Function is async-compatible for use in async workflows
+        - Returns the input boolean value unchanged (transparent passthrough)
+        - No side effects (pure function)
+      </details>
+    </criterion>
+    <criterion id="AC-3">
+      <title>Type hints and safety (FR40)</title>
+      <details>
+        - All parameters have type annotations: result: bool, name: str
+        - Return type annotation: -> bool
+        - Function passes mypy strict mode with zero errors
+        - Compatible with type checking tools
+      </details>
+    </criterion>
+    <criterion id="AC-4">
+      <title>Documentation and examples (FR41)</title>
+      <details>
+        - Google-style docstring with Args, Returns, Example sections
+        - Example shows typical usage: if await to_decision(amount > 1000, "HighValue"):
+        - Example shows alternative assignment pattern: needs_approval = await to_decision(...)
+        - Docstring explains purpose and transparent passthrough behavior
+        - Docstring clarifies name must be string literal for static analysis
+      </details>
+    </criterion>
+    <criterion id="AC-5">
+      <title>Public API export (FR37)</title>
+      <details>
+        - Function exported from src/temporalio_graphs/__init__.py
+        - Included in __all__ declaration
+        - Available via: from temporalio_graphs import to_decision
+        - Part of public API alongside analyze_workflow and GraphBuildingContext
+      </details>
+    </criterion>
+    <criterion id="AC-6">
+      <title>Unit tests for passthrough behavior</title>
+      <details>
+        - test_to_decision_returns_true() - True value passes through
+        - test_to_decision_returns_false() - False value passes through
+        - test_to_decision_with_various_conditions() - Complex boolean expressions
+        - All tests pass with 100% success rate
+      </details>
+    </criterion>
+    <criterion id="AC-7">
+      <title>Integration test with workflow</title>
+      <details>
+        - Integration test demonstrates to_decision() in actual workflow context
+        - Test creates sample workflow using to_decision() helper
+        - Workflow also uses execute_activity() to verify multiple patterns work together
+        - Test validates both DecisionDetector (Story 3.1) and to_decision() (this story) work together
+      </details>
+    </criterion>
+    <criterion id="AC-8">
+      <title>Documentation in README</title>
+      <details>
+        - README explains when to use to_decision()
+        - README shows example of to_decision() in workflow code
+        - README clarifies that name argument must be string literal
+        - README cross-references other helpers (wait_condition for Epic 4)
+      </details>
+    </criterion>
+  </acceptance-criteria>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/prd.md</path>
+      <description>
+        Product Requirements Document defining functional requirements for temporalio-graphs.
+        FR11 specifies the to_decision() helper function requirement.
+      </description>
+      <relevant-sections>
+        - FR11: Users can mark boolean expressions as decision nodes using to_decision() helper function
+        - FR37: Library exports clean public API including to_decision
+        - FR40: All public APIs have complete type hints (mypy strict compatible)
+        - FR41: All public functions have docstrings with usage examples
+        - FR43: Library can handle async workflow methods
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/architecture.md</path>
+      <description>
+        Architecture document with ADR decisions, implementation patterns, and API specifications.
+        Defines workflow helper function patterns and async compatibility requirements.
+      </description>
+      <relevant-sections>
+        - ADR-005: Explicit Decision Marking with to_decision() (rationale for user-controlled markers)
+        - ADR-006: mypy Strict Mode for Type Safety (requirement for all public APIs)
+        - Section "Workflow Helper Functions" (lines 712-763): API design for to_decision()
+        - Section "API Contracts" (lines 679-709): Public API entry point patterns
+        - Section "Format Patterns": Google-style docstrings (lines 352-377)
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/epics.md</path>
+      <description>
+        Epic breakdown with story details. Epic 3 covers decision node support, Story 3.2
+        is this implementation.
+      </description>
+      <relevant-sections>
+        - Epic 3: Decision Node Support (Branching Workflows) (lines 642-879)
+        - Story 3.2: Implement to_decision() Helper Function (lines 691-738)
+        - Story acceptance criteria and implementation notes
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+      <description>
+        Technical specification for Epic 3 with detailed API design, data models, and
+        implementation guidance for decision support.
+      </description>
+      <relevant-sections>
+        - Section "APIs and Interfaces" - Public API to_decision() (lines 240-271)
+        - Section "Workflows and Sequencing" - Decision detection workflow (lines 431-509)
+        - Section "Dependencies and Integrations" - User workflow integration (lines 632-636)
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/sprint-artifacts/stories/3-1-implement-decision-point-detection-in-ast.md</path>
+      <description>
+        Story 3.1 implementation creates DecisionDetector which finds to_decision() calls.
+        This story (3.2) provides the function that Story 3.1 detects.
+      </description>
+      <relevant-sections>
+        - Section "Learnings from Previous Story" - API simplicity, type safety, documentation patterns
+        - Section "Implementation Notes" - Relationship to Story 3.1 (lines 98-114)
+        - Acceptance criteria showing what DecisionDetector expects from to_decision()
+      </relevant-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/detector.py</file>
+      <description>
+        DecisionDetector class from Story 3.1 that identifies to_decision() calls in workflow AST.
+        This is the consumer of the to_decision() function - it detects these calls during static analysis.
+      </description>
+      <relevant-code>
+        - Method _is_to_decision_call(node: ast.Call) -> bool (lines 120-141)
+          Checks if Call node is to_decision() by matching function name
+        - Method _extract_decision_name(node: ast.Call) -> str (lines 143-191)
+          Expects second argument to be string literal name
+        - DecisionDetector expects: to_decision(bool_expr, "DecisionName") pattern
+      </relevant-code>
+      <integration-notes>
+        The to_decision() function signature must match what DecisionDetector expects:
+        - Two arguments: (result: bool, name: str)
+        - Name must be string literal (not variable) for static analysis
+        - Can be called as: to_decision(expr, "Name") or to_decision(expr, name="Name")
+      </integration-notes>
+    </interface>
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <description>
+        DecisionPoint dataclass stores metadata extracted by DecisionDetector from to_decision() calls.
+        Shows the data structure that results from detecting to_decision() usage.
+      </description>
+      <relevant-code>
+        - @dataclass(frozen=True) class DecisionPoint (lines 206-244)
+        - Fields: id: str, name: str, line_number: int, true_label: str, false_label: str
+        - The "name" field comes from second argument of to_decision()
+      </relevant-code>
+      <integration-notes>
+        When user writes: to_decision(amount > 1000, "HighValue")
+        DecisionDetector extracts "HighValue" and creates DecisionPoint with name="HighValue"
+      </integration-notes>
+    </interface>
+    <interface>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <description>
+        Public API module that exports analyze_workflow and GraphBuildingContext.
+        to_decision() will be added to __all__ list here.
+      </description>
+      <relevant-code>
+        - Current __all__ = ["GraphBuildingContext", "analyze_workflow"] (line 22)
+        - Import pattern: from temporalio_graphs.module import function
+        - All exports must have complete type hints and docstrings
+      </relevant-code>
+      <integration-notes>
+        After implementing to_decision() in helpers.py:
+        1. Import: from temporalio_graphs.helpers import to_decision
+        2. Add to __all__: ["GraphBuildingContext", "analyze_workflow", "to_decision"]
+        3. Users can then: from temporalio_graphs import to_decision
+      </integration-notes>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint>
+      <category>Type Safety</category>
+      <requirement>
+        Function must pass mypy --strict with zero errors. All parameters and return types
+        must be explicitly annotated. No implicit Any types allowed.
+      </requirement>
+      <source>ADR-006, NFR-QUAL-1</source>
+    </constraint>
+    <constraint>
+      <category>Async Compatibility</category>
+      <requirement>
+        Function must be async-compatible (defined with async def) to work in Temporal workflows.
+        Users must be able to call: await to_decision(condition, "Name")
+      </requirement>
+      <source>FR43, Tech Spec Epic 3</source>
+    </constraint>
+    <constraint>
+      <category>Transparent Passthrough</category>
+      <requirement>
+        Function must return input boolean unchanged with no side effects. It's a marker for
+        static analysis only - workflow execution should be unaffected.
+      </requirement>
+      <source>ADR-005, Epic 3 design notes</source>
+    </constraint>
+    <constraint>
+      <category>Documentation Standards</category>
+      <requirement>
+        Google-style docstring required with Args, Returns, Example sections. Must include
+        usage examples showing both if-statement and assignment patterns.
+      </requirement>
+      <source>ADR-009, NFR-USE-3</source>
+    </constraint>
+    <constraint>
+      <category>String Literal Requirement</category>
+      <requirement>
+        Docstring must clarify that "name" parameter must be a string literal (not f-string,
+        not variable) for static analysis to extract it from AST.
+      </requirement>
+      <source>Story 3.1 learnings, UnsupportedPatternError for dynamic names</source>
+    </constraint>
+    <constraint>
+      <category>Public API Contract</category>
+      <requirement>
+        Function signature cannot change after Epic 3 release. It's part of public API contract.
+        Signature: async def to_decision(result: bool, name: str) -> bool
+      </requirement>
+      <source>FR37, API stability requirement</source>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <name>Python stdlib (no imports needed)</name>
+      <version>3.10+</version>
+      <purpose>to_decision() is a pure async function with no external dependencies</purpose>
+    </dependency>
+    <dependency>
+      <name>Story 3.1 (DecisionDetector)</name>
+      <status>Complete</status>
+      <purpose>
+        DecisionDetector already implemented and expects to_decision() calls.
+        Integration test (AC-7) will verify both work together.
+      </purpose>
+    </dependency>
+    <dependency>
+      <name>pytest-asyncio</name>
+      <version>>=0.21.0</version>
+      <purpose>Required for testing async functions in unit tests</purpose>
+    </dependency>
+  </dependencies>
+
+  <testing-requirements>
+    <test-coverage-target>100% for helpers.py</test-coverage-target>
+    <test-strategy>
+      Unit tests verify passthrough behavior (AC-6):
+      - test_to_decision_returns_true: await to_decision(True, "Test") == True
+      - test_to_decision_returns_false: await to_decision(False, "Test") == False
+      - test_to_decision_with_complex_expression: Boolean algebra expressions pass through
+
+      Integration tests (AC-7):
+      - Create workflow file with to_decision() and execute_activity() calls
+      - Run analyze_workflow() on the file
+      - Verify DecisionDetector finds to_decision() calls
+      - Verify WorkflowMetadata.decision_points populated correctly
+    </test-strategy>
+    <test-ideas>
+      - Test with simple boolean: True, False
+      - Test with comparison: amount > 1000
+      - Test with complex logic: (a > 100) and (b < 50)
+      - Test with ternary: x if condition else y
+      - Test in actual workflow context with activities
+      - Verify no side effects (call function multiple times, same result)
+    </test-ideas>
+  </testing-requirements>
+
+  <implementation-notes>
+    <design-approach>
+      The to_decision() helper is a transparent passthrough function that serves as a marker
+      for static analysis. At runtime, it has zero overhead - simply returns the input boolean.
+      During analysis, DecisionDetector (Story 3.1) identifies calls to this function and
+      extracts the name argument, creating decision nodes in the graph.
+
+      This design maintains clear separation of concerns:
+      - Runtime behavior: Transparent passthrough (no impact on workflow execution)
+      - Static analysis: Marker for DecisionDetector to identify decision points
+      - User experience: Simple, intuitive API that reads naturally in workflow code
+    </design-approach>
+    <file-placement>
+      Create new module: src/temporalio_graphs/helpers.py
+      This is the natural home for workflow helper functions (to_decision, wait_condition).
+      Keeps helpers separate from core analysis logic (analyzer, detector, generator, renderer).
+    </file-placement>
+    <relationship-to-story-3-1>
+      Story 3.1 (DecisionDetector) and this story work together as a pair:
+
+      User writes workflow:
+        if await to_decision(amount > 1000, "HighValue"):
+            await workflow.execute_activity(special_handling)
+
+      Story 3.1 (DecisionDetector) detects this call
+      ↓
+      Creates DecisionPoint with name="HighValue"
+      ↓
+      Story 3.3+ (PathPermutationGenerator) uses decision_points to generate paths
+      ↓
+      Story 3.4+ (MermaidRenderer) renders decision nodes in graph
+    </relationship-to-story-3-1>
+    <performance-characteristics>
+      - Execution time: < 1 microsecond per call (just return statement)
+      - Memory: Negligible (no allocation)
+      - Zero GC pressure (no object creation)
+      - No impact on workflow performance
+    </performance-characteristics>
+  </implementation-notes>
+
+  <validation-checklist>
+    <validation id="V-1">
+      <title>mypy strict mode passes</title>
+      <command>uv run mypy src/temporalio_graphs/helpers.py --strict</command>
+      <expected>Success: no issues found in 1 source file</expected>
+    </validation>
+    <validation id="V-2">
+      <title>ruff linting passes</title>
+      <command>uv run ruff check src/temporalio_graphs/helpers.py</command>
+      <expected>All checks passed!</expected>
+    </validation>
+    <validation id="V-3">
+      <title>Unit tests pass</title>
+      <command>uv run pytest tests/test_helpers.py -v</command>
+      <expected>All passthrough tests pass (True, False, complex expressions)</expected>
+    </validation>
+    <validation id="V-4">
+      <title>Integration test passes</title>
+      <command>uv run pytest tests/integration/ -k to_decision -v</command>
+      <expected>Integration with DecisionDetector works correctly</expected>
+    </validation>
+    <validation id="V-5">
+      <title>Public API import works</title>
+      <command>uv run python -c "from temporalio_graphs import to_decision; print(to_decision.__name__)"</command>
+      <expected>to_decision</expected>
+    </validation>
+    <validation id="V-6">
+      <title>Full test suite passes (no regressions)</title>
+      <command>uv run pytest tests/ -v</command>
+      <expected>All existing tests (211+) plus new tests pass</expected>
+    </validation>
+  </validation-checklist>
+
+  <warnings-and-gaps>
+    <gap id="G-1">
+      <title>wait_condition() helper not yet implemented</title>
+      <description>
+        README will cross-reference wait_condition() helper (Epic 4, Story 4.2) which doesn't exist yet.
+        Documentation should note "Coming in Epic 4" for wait_condition.
+      </description>
+      <impact>Low - Documentation clarity only</impact>
+      <mitigation>Add note: "wait_condition() for signal nodes coming in Epic 4"</mitigation>
+    </gap>
+    <warning id="W-1">
+      <title>String literal requirement may confuse users</title>
+      <description>
+        Users may attempt dynamic names: to_decision(expr, f"Check_{variable}")
+        This won't work because DecisionDetector can't extract dynamic strings from AST.
+      </description>
+      <impact>Medium - User confusion, clear error needed</impact>
+      <mitigation>
+        Strong documentation emphasis in docstring and README.
+        Story 3.1 already implements UnsupportedPatternError for this case.
+      </mitigation>
+    </warning>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step order="1">
+      Create src/temporalio_graphs/helpers.py with to_decision() implementation
+    </step>
+    <step order="2">
+      Add comprehensive Google-style docstring with multiple examples
+    </step>
+    <step order="3">
+      Export from __init__.py and update __all__
+    </step>
+    <step order="4">
+      Create tests/test_helpers.py with unit tests for passthrough behavior
+    </step>
+    <step order="5">
+      Create integration test showing to_decision() + DecisionDetector working together
+    </step>
+    <step order="6">
+      Update README with to_decision() usage section and examples
+    </step>
+    <step order="7">
+      Run all validation checks (mypy, ruff, pytest)
+    </step>
+    <step order="8">
+      Verify no regressions in existing 211+ tests
+    </step>
+  </next-steps>
+</story-context>
