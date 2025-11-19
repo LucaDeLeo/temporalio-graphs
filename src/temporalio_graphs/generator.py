@@ -12,6 +12,7 @@ import logging
 
 from temporalio_graphs._internal.graph_models import WorkflowMetadata
 from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.exceptions import GraphGenerationError
 from temporalio_graphs.path import GraphPath
 
 logger = logging.getLogger(__name__)
@@ -141,10 +142,19 @@ class PathPermutationGenerator:
             context = GraphBuildingContext()
 
         # Check for decision points (Epic 3 feature)
-        if len(metadata.decision_points) > 0:
+        num_decisions = len(metadata.decision_points)
+        if num_decisions > 0:
+            # Check if number of decisions exceeds configured limit
+            if num_decisions > context.max_decision_points:
+                paths_count = 2**num_decisions
+                raise GraphGenerationError(
+                    f"Too many decision points ({num_decisions}) - would generate "
+                    f"{paths_count} paths (limit: {context.max_decision_points}). "
+                    f"Consider refactoring workflow or increasing max_decision_points."
+                )
             raise NotImplementedError(
                 f"Decision point support not in Epic 2. Workflow has "
-                f"{len(metadata.decision_points)} decision points. "
+                f"{num_decisions} decision points. "
                 f"Decision handling will be added in Epic 3 (Story 3.3)."
             )
 

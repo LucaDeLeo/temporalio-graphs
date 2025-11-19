@@ -80,6 +80,124 @@ result = analyze_workflow("my_workflow.py", context)
 
 See `/examples/simple_linear/` for complete working examples.
 
+## Configuration
+
+All configuration options are provided via the `GraphBuildingContext` dataclass. The context is immutable and flows through the entire analysis pipeline. Default values support typical use cases; customize for specific requirements.
+
+### Configuration Options
+
+| Option | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `split_names_by_words` | bool | True | Convert camelCase activity names to "camel Case" in labels |
+| `start_node_label` | str | "Start" | Custom label for workflow start node |
+| `end_node_label` | str | "End" | Custom label for workflow end node |
+| `suppress_validation` | bool | False | Disable validation warnings (e.g., path explosion) |
+| `max_decision_points` | int | 10 | Maximum allowed decision points (prevents 2^n path explosion) |
+| `max_paths` | int | 1024 | Maximum allowed total execution paths |
+| `graph_output_file` | Path \| None | None | Write output to file instead of returning string |
+
+### Configuration Examples
+
+#### Example 1: Disable Word Splitting for Acronyms
+
+When your activities use acronyms or prefer exact naming:
+
+```python
+from temporalio_graphs import analyze_workflow, GraphBuildingContext
+
+context = GraphBuildingContext(split_names_by_words=False)
+result = analyze_workflow("workflow.py", context)
+# Output: "fetchAPIData" stays as "fetchAPIData", not "fetch A P I Data"
+```
+
+#### Example 2: Custom Domain Terminology
+
+Use domain-specific labels for start/end nodes:
+
+```python
+context = GraphBuildingContext(
+    start_node_label="Initiate",
+    end_node_label="Complete"
+)
+result = analyze_workflow("workflow.py", context)
+# Output: "i((Initiate)) --> ... --> e((Complete))"
+```
+
+#### Example 3: Complex Workflows with Many Decisions
+
+Increase limits for workflows with many decision points (Epic 3+):
+
+```python
+context = GraphBuildingContext(
+    max_decision_points=15,  # Allows up to 32,768 paths (2^15)
+    max_paths=32768
+)
+result = analyze_workflow("workflow.py", context)
+# Note: May generate large diagrams; consider breaking into sub-workflows
+```
+
+#### Example 4: File Output for CI/CD Integration
+
+Automatically write generated diagrams to files:
+
+```python
+from pathlib import Path
+
+context = GraphBuildingContext(
+    graph_output_file=Path("docs/workflow_diagram.md")
+)
+result = analyze_workflow("workflow.py", context)
+# File is created at docs/workflow_diagram.md
+# Result is still returned and can be printed/processed
+```
+
+#### Example 5: Quick Analysis Without Validation
+
+Suppress validation warnings for rapid iteration:
+
+```python
+context = GraphBuildingContext(suppress_validation=True)
+result = analyze_workflow("workflow.py", context)
+# No validation warnings printed, only diagram output
+```
+
+#### Example 6: Combined Configuration
+
+Use multiple options together for full control:
+
+```python
+from pathlib import Path
+
+context = GraphBuildingContext(
+    split_names_by_words=False,
+    start_node_label="WORKFLOW_START",
+    end_node_label="WORKFLOW_END",
+    suppress_validation=True,
+    max_decision_points=10,
+    graph_output_file=Path("output/diagram.md")
+)
+result = analyze_workflow("complex_workflow.py", context)
+```
+
+### Performance Implications
+
+- **Word Splitting**: O(n) where n = activity name length. Negligible performance impact.
+- **Max Decision Points**: Prevents path explosion. Default (10) generates up to 1024 paths. Epic 3 will support decision-based path generation; larger limits increase generation time exponentially (2^n).
+- **File Output**: Adds I/O time proportional to diagram size. Minimal impact (<5ms typical).
+
+### Configuration Validation
+
+Invalid configuration raises `ValueError` with clear error messages:
+
+```python
+# Negative max_decision_points raises ValueError
+context = GraphBuildingContext(max_decision_points=-1)
+# ValueError: max_decision_points must be positive, got -1.
+# Consider increasing this value (default: 10)
+```
+
+All configuration is validated when `analyze_workflow()` is called.
+
 ## Features
 
 ### Completed (Epic 2: Basic Graph Generation)

@@ -21,3 +21,15 @@ class WorkflowParseError(TemporalioGraphsError):
     """
 
     pass
+
+
+class GraphGenerationError(TemporalioGraphsError):
+    """Raised when graph generation fails.
+
+    This exception is raised when:
+    - Workflow has too many decision points for path generation
+    - Path explosion would exceed configured limits
+    - Other graph generation constraints are violated
+    """
+
+    pass

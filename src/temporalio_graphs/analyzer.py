@@ -21,10 +21,15 @@ Example:
 
 import ast
 import logging
+import warnings
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from temporalio_graphs._internal.graph_models import WorkflowMetadata
 from temporalio_graphs.exceptions import WorkflowParseError
+
+if TYPE_CHECKING:
+    from temporalio_graphs.context import GraphBuildingContext
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +70,30 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._activities: list[tuple[str, int]] = []
         self._activity_name_cache: dict[int, str] = {}
 
-    def analyze(self, workflow_file: Path | str) -> WorkflowMetadata:
+    def analyze(
+        self, workflow_file: Path | str, context: "GraphBuildingContext | None" = None
+    ) -> WorkflowMetadata:
         """Analyze a workflow source file and extract workflow metadata.
 
         This method parses the workflow source file using Python's AST parser,
         traverses the syntax tree to find @workflow.defn classes and @workflow.run
         methods, and returns a WorkflowMetadata object with the extracted structure.
 
+        Validation warnings may be emitted during analysis if context.suppress_validation
+        is False (default). Warnings include empty workflows or potential rendering issues.
+
         Args:
             workflow_file: Path to workflow source file (relative or absolute).
                 Can be a Path object or string path.
+            context: Optional GraphBuildingContext with configuration options including
+                suppress_validation flag to control warning emission. If None, uses default
+                configuration (suppress_validation=False).
 
         Returns:
             WorkflowMetadata object containing:
                 - workflow_class: Name of the workflow class
                 - workflow_run_method: Name of the run method
-                - activities: Empty list (populated in Story 2.3)
+                - activities: List of activity names (populated in Story 2.3)
                 - decision_points: Empty list (populated in Epic 3)
                 - signal_points: Empty list (populated in Epic 4)
                 - source_file: Absolute path to analyzed file
@@ -93,11 +106,19 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                 or workflow structure is invalid.
 
         Example:
+            >>> from temporalio_graphs.context import GraphBuildingContext
             >>> analyzer = WorkflowAnalyzer()
-            >>> metadata = analyzer.analyze("workflows/my_workflow.py")
+            >>> context = GraphBuildingContext()
+            >>> metadata = analyzer.analyze("workflows/my_workflow.py", context)
             >>> print(metadata.workflow_class)
             MyWorkflow
         """
+        # Use default context if none provided
+        if context is None:
+            from temporalio_graphs.context import GraphBuildingContext
+
+            context = GraphBuildingContext()
+
         # Reset state for new analysis
         self._workflow_class = None
         self._workflow_run_method = None
@@ -162,6 +183,32 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         # Build and return WorkflowMetadata
         # Extract activity names from tuples (name, line_number)
         activities = [name for name, _ in self._activities]
+
+        # Emit validation warnings if not suppressed
+        if not context.suppress_validation:
+            # Warn about empty workflows (no activity calls)
+            if len(activities) == 0:
+                warnings.warn(
+                    f"No activity calls detected in workflow '{self._workflow_class}'. "
+                    f"The generated graph will only contain Start and End nodes. "
+                    f"Consider adding execute_activity() calls or suppress this warning "
+                    f"with context.suppress_validation=True.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+            # Warn about very long activity names that may render poorly
+            for activity_name in activities:
+                if len(activity_name) > 100:
+                    warnings.warn(
+                        f"Activity name '{activity_name[:50]}...' is very long "
+                        f"({len(activity_name)} chars). "
+                        f"Long names may render poorly in Mermaid diagrams. "
+                        f"Consider using shorter, descriptive names or suppress this warning "
+                        f"with context.suppress_validation=True.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
 
         return WorkflowMetadata(
             workflow_class=self._workflow_class,

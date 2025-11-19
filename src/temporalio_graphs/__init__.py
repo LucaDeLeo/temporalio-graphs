@@ -22,6 +22,39 @@ __version__ = "0.1.0"
 __all__ = ["GraphBuildingContext", "analyze_workflow"]
 
 
+def _validate_context(context: GraphBuildingContext) -> None:
+    """Validate GraphBuildingContext configuration options.
+
+    Args:
+        context: GraphBuildingContext to validate.
+
+    Raises:
+        ValueError: If any configuration value is invalid.
+        TypeError: If any configuration field has wrong type.
+    """
+    if context.max_decision_points <= 0:
+        raise ValueError(
+            f"max_decision_points must be positive, got {context.max_decision_points}. "
+            f"Consider increasing this value (default: 10)"
+        )
+
+    if context.max_paths <= 0:
+        raise ValueError(
+            f"max_paths must be positive, got {context.max_paths}. "
+            f"Consider increasing this value (default: 1024)"
+        )
+
+    if not isinstance(context.start_node_label, str):
+        raise TypeError(
+            f"start_node_label must be string, got {type(context.start_node_label).__name__}"
+        )
+
+    if not isinstance(context.end_node_label, str):
+        raise TypeError(
+            f"end_node_label must be string, got {type(context.end_node_label).__name__}"
+        )
+
+
 def analyze_workflow(
     workflow_file: Path | str,
     context: GraphBuildingContext | None = None,
@@ -98,9 +131,12 @@ def analyze_workflow(
     if context is None:
         context = GraphBuildingContext()
 
+    # Validate context configuration
+    _validate_context(context)
+
     # Analyze workflow (file validation happens in analyzer)
     analyzer = WorkflowAnalyzer()
-    metadata = analyzer.analyze(workflow_path)
+    metadata = analyzer.analyze(workflow_path, context)
 
     # Generate execution paths
     generator = PathPermutationGenerator()

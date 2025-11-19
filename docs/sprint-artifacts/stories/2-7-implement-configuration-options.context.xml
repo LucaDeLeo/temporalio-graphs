@@ -1,0 +1,323 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>7</storyId>
+    <title>Implement Configuration Options</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/2-7-implement-configuration-options.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>to customize graph generation behavior</iWant>
+    <soThat>I can control output format and validation</soThat>
+    <tasks>
+      <task id="1" status="pending">Audit GraphBuildingContext field usage</task>
+      <task id="2" status="pending">Implement word splitting in MermaidRenderer</task>
+      <task id="3" status="pending">Wire node label customization in MermaidRenderer</task>
+      <task id="4" status="pending">Implement validation suppression</task>
+      <task id="5" status="pending">Implement max_decision_points limit in PathPermutationGenerator</task>
+      <task id="6" status="pending">Implement configuration validation</task>
+      <task id="7" status="pending">Add unit tests for split_names_by_words</task>
+      <task id="8" status="pending">Add unit tests for label customization</task>
+      <task id="9" status="pending">Add unit tests for validation suppression</task>
+      <task id="10" status="pending">Add unit tests for max_decision_points</task>
+      <task id="11" status="pending">Add unit tests for configuration validation</task>
+      <task id="12" status="pending">Create integration test with multiple options</task>
+      <task id="13" status="pending">Update README with Configuration section</task>
+      <task id="14" status="pending">Run mypy and ruff validation</task>
+      <task id="15" status="pending">Run complete test suite</task>
+      <task id="16" status="pending">Verify no breaking changes</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <description>GraphBuildingContext already exists from Story 2.1</description>
+      <details>Context is frozen dataclass with all configuration fields (split_names_by_words, suppress_validation, start_node_label, end_node_label, max_decision_points, max_paths, graph_output_file)</details>
+    </criterion>
+    <criterion id="2">
+      <description>split_names_by_words option controls camelCase splitting (FR29, FR35)</description>
+      <details>When True: "withdrawFunds" renders as "Withdraw Funds". When False: unchanged. MermaidRenderer respects setting. Word splitting regex: r'([a-z])([A-Z])' → r'\1 \2'</details>
+    </criterion>
+    <criterion id="3">
+      <description>suppress_validation option disables validation warnings (FR32)</description>
+      <details>Default False. When True: validation warnings suppressed. analyze_workflow() honors setting</details>
+    </criterion>
+    <criterion id="4">
+      <description>start_node_label customizes start node label (FR33)</description>
+      <details>Default "Start". Custom label used in rendering: {label}(({label}))</details>
+    </criterion>
+    <criterion id="5">
+      <description>end_node_label customizes end node label (FR34)</description>
+      <details>Default "End". Custom label used in rendering</details>
+    </criterion>
+    <criterion id="6">
+      <description>max_decision_points limits permutation explosion (FR36, NFR-PERF-2)</description>
+      <details>Default 10. PathPermutationGenerator checks before generating paths. Raises GraphGenerationError with suggestion if exceeded</details>
+    </criterion>
+    <criterion id="7">
+      <description>graph_output_file path enables writing to file (FR30)</description>
+      <details>Default None. When set: analyze_workflow() writes to file, creates parent directories. Result always returned</details>
+    </criterion>
+    <criterion id="8">
+      <description>all configuration options work correctly in analyze_workflow() (FR31)</description>
+      <details>Configuration passed to all components (analyzer, generator, renderer). Immutable during pipeline execution</details>
+    </criterion>
+    <criterion id="9">
+      <description>configuration is passed through entire pipeline (FR31)</description>
+      <details>WorkflowAnalyzer, PathPermutationGenerator, MermaidRenderer all respect context settings. Configuration is read-only</details>
+    </criterion>
+    <criterion id="10">
+      <description>invalid configuration raises clear error (FR31)</description>
+      <details>Negative max_decision_points/max_paths raise ValueError. None for required params raise ValueError. All error messages include suggestions</details>
+    </criterion>
+    <criterion id="11">
+      <description>unit tests cover each configuration option independently</description>
+      <details>12+ tests: split_names true/false, suppress_validation true/false, custom labels, max_decision_points limit/error, graph_output_file, validation errors</details>
+    </criterion>
+    <criterion id="12">
+      <description>integration test demonstrates multiple options working together</description>
+      <details>test_multiple_options_combined() with 4+ custom options. End-to-end pipeline validation</details>
+    </criterion>
+    <criterion id="13">
+      <description>documentation examples show common configuration patterns</description>
+      <details>README Configuration section with 5+ examples: word splitting, custom labels, max_decision_points, file output, validation suppression</details>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic Technical Specification: Basic Graph Generation</title>
+        <section>Configuration &amp; Context Management</section>
+        <snippet>GraphBuildingContext dataclass (frozen) with all configuration fields defined. Immutable configuration pattern ensures consistent behavior across pipeline. Section lines 252-263 detail all context fields.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic Technical Specification: Basic Graph Generation</title>
+        <section>Path Explosion Management</section>
+        <snippet>max_decision_points default 10, preventing DoS from complex workflows. PathPermutationGenerator validates before generation. Discussed in ADR-008 and implementation section.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>ADR-008: Path Explosion Limit</section>
+        <snippet>Default max_decision_points = 10 (1024 paths max), configurable via GraphBuildingContext. Prevents path explosion DoS. Rationale: NFR-PERF-1 targets &lt;5s for 10 decisions. Lines 1425-1447.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Configuration &amp; Control (FR31-FR36)</section>
+        <snippet>Users configure via GraphBuildingContext dataclass. Enables/disables validation warnings, customizes node labels, controls word-splitting. Lines 149-150.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>temporalio-graphs-python-port - Epic Breakdown</title>
+        <section>Epic 2: Story 2.7</section>
+        <snippet>Story 2.7 wires all GraphBuildingContext options through pipeline ensuring functionality. Configuration flows from analyze_workflow() through all components immutably.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/2-6-implement-public-api-entry-point.md</path>
+        <title>Story 2.6: Implement Public API Entry Point</title>
+        <section>Learnings Applied to Story 2.7</section>
+        <snippet>Context flows through entire pipeline from analyze_workflow(). All components have stable interfaces accepting context parameter. Error handling uses clear ValueError with suggestions.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>module</kind>
+        <symbol>analyze_workflow</symbol>
+        <lines>25-119</lines>
+        <reason>Public API entry point that accepts context parameter and orchestrates pipeline. Already passes context to all components. Lines 114-117 handle graph_output_file writing.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>11-89</lines>
+        <reason>Immutable configuration dataclass defining all configuration options. All fields already defined (Story 2.1). This story ensures they're actually used.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>class</kind>
+        <symbol>MermaidRenderer.to_mermaid</symbol>
+        <lines>38-188</lines>
+        <reason>Mermaid rendering implementation. Must respect split_names_by_words (lines 145-147), start_node_label (line 119, 129), end_node_label (line 120, 163). Word splitting regex at line 147.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>class</kind>
+        <symbol>PathPermutationGenerator.generate_paths</symbol>
+        <lines>59-161</lines>
+        <reason>Path generation implementation. Must implement max_decision_points check before path generation (Epic 3 feature but validation framework needed now).</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>class</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>32-414</lines>
+        <reason>AST analysis implementation. May need to respect context settings for validation suppression (suppress_validation flag).</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" scope="required">Temporal SDK for workflow type definitions</package>
+        <package name="pytest" version=">=8.0.0" scope="dev">Test framework for unit and integration tests</package>
+        <package name="pytest-cov" version=">=4.1.0" scope="dev">Coverage measurement, 80% minimum requirement</package>
+        <package name="mypy" version=">=1.8.0" scope="dev">Type checking in strict mode</package>
+        <package name="ruff" version=">=0.2.0" scope="dev">Linting and formatting</package>
+      </python>
+      <builtin>
+        <module>re</module>
+        <module>pathlib</module>
+        <module>dataclasses</module>
+      </builtin>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architectural">
+      <description>Immutable Configuration Pattern</description>
+      <details>GraphBuildingContext is frozen dataclass. MUST NOT be modified during pipeline execution. All components receive context as read-only parameter.</details>
+      <source>ADR-004, Architecture lines 526-541</source>
+    </constraint>
+    <constraint type="architectural">
+      <description>Configuration Flow Pattern</description>
+      <details>Configuration flows: analyze_workflow() → WorkflowAnalyzer → PathPermutationGenerator → MermaidRenderer. Each component uses context fields appropriately without passing modified copies.</details>
+      <source>Story 2.7 Implementation Notes</source>
+    </constraint>
+    <constraint type="technical">
+      <description>Word Splitting Regex</description>
+      <details>Must use regex r'([a-z])([A-Z])' → r'\1 \2' for camelCase splitting. Applied only when context.split_names_by_words is True.</details>
+      <source>AC 2, FR29, FR35</source>
+    </constraint>
+    <constraint type="technical">
+      <description>Type Safety Requirement</description>
+      <details>All configuration validation must use proper type hints. Must pass mypy --strict with zero errors. Configuration errors raise ValueError with clear messages.</details>
+      <source>ADR-006, NFR-QUAL-1</source>
+    </constraint>
+    <constraint type="testing">
+      <description>Coverage Requirement</description>
+      <details>&gt;80% test coverage required. Each configuration option must have independent unit tests. Integration test must combine multiple options.</details>
+      <source>ADR-010, NFR-QUAL-2</source>
+    </constraint>
+    <constraint type="performance">
+      <description>Path Explosion Prevention</description>
+      <details>max_decision_points default 10 prevents path explosion (2^n). Must validate before permutation generation. Error message must include calculation (2^n paths) and suggestion.</details>
+      <source>ADR-008, NFR-PERF-2</source>
+    </constraint>
+    <constraint type="compatibility">
+      <description>No Breaking Changes</description>
+      <details>Cannot modify analyze_workflow() signature or GraphBuildingContext interface. Only wire existing options to ensure they work. All 137+ existing tests must still pass.</details>
+      <source>Story 2.7 AC 8, 9</source>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>analyze_workflow</name>
+      <kind>function signature</kind>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <usage>Public API entry point. Accepts context parameter and passes to all components. Lines 114-117 handle graph_output_file writing.</usage>
+    </interface>
+    <interface>
+      <name>MermaidRenderer.to_mermaid</name>
+      <kind>method signature</kind>
+      <signature>def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <usage>Renders paths to Mermaid syntax. Must respect context.split_names_by_words, context.start_node_label, context.end_node_label for node rendering.</usage>
+    </interface>
+    <interface>
+      <name>PathPermutationGenerator.generate_paths</name>
+      <kind>method signature</kind>
+      <signature>def generate_paths(self, metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]</signature>
+      <path>src/temporalio_graphs/generator.py</path>
+      <usage>Generates execution paths. Must check context.max_decision_points and raise GraphGenerationError if exceeded (Epic 3 feature but validation framework needed).</usage>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) with fields: is_building_graph, exit_after_building_graph, graph_output_file, split_names_by_words, suppress_validation, start_node_label, end_node_label, max_decision_points, max_paths, decision_true_label, decision_false_label, signal_success_label, signal_timeout_label</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <usage>Immutable configuration object. All fields already defined. This story ensures they're wired and functional.</usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      <framework>pytest >=8.0.0</framework>
+      <coverage>pytest-cov with --cov-fail-under=80 enforced in pyproject.toml</coverage>
+      <type_checking>mypy --strict mode with zero errors required</type_checking>
+      <linting>ruff check with E, F, I, N, W, UP rule sets</linting>
+      <patterns>Test files mirror src structure: test_renderer.py tests renderer.py. Fixtures in tests/fixtures/. Integration tests demonstrate end-to-end functionality.</patterns>
+      <conventions>Test function names: test_&lt;feature&gt;_&lt;scenario&gt;(). Use descriptive assertions with clear error messages. Test both valid and invalid inputs.</conventions>
+    </standards>
+    <locations>
+      <location>tests/test_context.py</location>
+      <location>tests/test_renderer.py</location>
+      <location>tests/test_generator.py</location>
+      <location>tests/test_public_api.py</location>
+      <location>tests/integration/ (future)</location>
+    </locations>
+    <ideas>
+      <idea criterion_id="2">
+        <description>test_split_names_by_words_true()</description>
+        <approach>Create context with split_names_by_words=True. Create path with camelCase activity "withdrawFunds". Call renderer.to_mermaid(). Assert output contains "Withdraw Funds" (with space).</approach>
+      </idea>
+      <idea criterion_id="2">
+        <description>test_split_names_by_words_false()</description>
+        <approach>Create context with split_names_by_words=False. Create path with camelCase activity "withdrawFunds". Call renderer.to_mermaid(). Assert output contains "withdrawFunds" (no space).</approach>
+      </idea>
+      <idea criterion_id="3">
+        <description>test_suppress_validation_true()</description>
+        <approach>Create context with suppress_validation=True. Trigger scenario that would generate validation warning. Assert no warnings in output.</approach>
+      </idea>
+      <idea criterion_id="3">
+        <description>test_suppress_validation_false()</description>
+        <approach>Create context with suppress_validation=False (default). Trigger validation scenario. Assert warnings are generated.</approach>
+      </idea>
+      <idea criterion_id="4">
+        <description>test_start_node_label_custom()</description>
+        <approach>Create context with start_node_label="BEGIN". Generate graph. Assert output contains "s((BEGIN))" not "s((Start))".</approach>
+      </idea>
+      <idea criterion_id="5">
+        <description>test_end_node_label_custom()</description>
+        <approach>Create context with end_node_label="FINISH". Generate graph. Assert output contains "e((FINISH))" not "e((End))".</approach>
+      </idea>
+      <idea criterion_id="6">
+        <description>test_max_decision_points_limit()</description>
+        <approach>Create metadata with 9 decision points (under limit). Call generator.generate_paths(). Assert no error raised.</approach>
+      </idea>
+      <idea criterion_id="6">
+        <description>test_max_decision_points_error()</description>
+        <approach>Create metadata with 11 decision points (over limit of 10). Call generator.generate_paths(). Assert GraphGenerationError raised with message about 2^11 paths and suggestion.</approach>
+      </idea>
+      <idea criterion_id="7">
+        <description>test_graph_output_file_creates_file()</description>
+        <approach>Create context with graph_output_file=temp_path. Call analyze_workflow(). Assert file exists and contains valid Mermaid output.</approach>
+      </idea>
+      <idea criterion_id="7">
+        <description>test_graph_output_file_none()</description>
+        <approach>Create context with graph_output_file=None. Call analyze_workflow(). Assert no file created, result returned as string.</approach>
+      </idea>
+      <idea criterion_id="10">
+        <description>test_invalid_max_decision_points_negative()</description>
+        <approach>Try to create GraphBuildingContext with max_decision_points=-1. Assert ValueError raised with message "must be positive".</approach>
+      </idea>
+      <idea criterion_id="10">
+        <description>test_invalid_max_paths_negative()</description>
+        <approach>Try to create GraphBuildingContext with max_paths=-1. Assert ValueError raised with message "must be positive".</approach>
+      </idea>
+      <idea criterion_id="12">
+        <description>test_multiple_options_combined()</description>
+        <approach>Create context with 4+ custom options: split_names_by_words=False, start_node_label="BEGIN", end_node_label="FINISH", suppress_validation=True. Call analyze_workflow() with workflow containing camelCase activities. Assert all customizations reflected in output.</approach>
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
