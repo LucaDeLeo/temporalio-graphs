@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>3-5</story-key>
+    <story-title>Add Integration Test with MoneyTransfer Example</story-title>
+    <epic-key>epic-3</epic-key>
+    <epic-title>Decision Node Support (Branching Workflows)</epic-title>
+    <generated-date>2025-11-19</generated-date>
+    <context-version>1.0</context-version>
+  </metadata>
+
+  <story-reference>
+    <file-path>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md</file-path>
+    <description>Complete story specification with acceptance criteria, tasks, and dev notes. Story 3-5 validates end-to-end decision node implementation through MoneyTransfer example ported from .NET reference.</description>
+  </story-reference>
+
+  <epic-context>
+    <epic-file>docs/epics.md</epic-file>
+    <tech-spec-file>docs/sprint-artifacts/tech-spec-epic-3.md</tech-spec-file>
+    <description>Epic 3 delivers decision node support with 2^n path permutation generation. MoneyTransfer example demonstrates feature parity with .NET Temporalio.Graphs - 2 decisions creating 4 execution paths.</description>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <file-path>docs/prd.md</file-path>
+      <description>Product requirements defining success criteria: feature parity with .NET version, MoneyTransfer example produces expected output, 80%+ test coverage, sub-second performance for 5 decisions</description>
+      <relevance>Defines what "feature parity" means for MoneyTransfer example validation</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/architecture.md</file-path>
+      <description>Static analysis architecture using Python AST. Decision Summary table shows all component choices. Project structure defines examples/ directory layout for MoneyTransfer</description>
+      <relevance>Guides MoneyTransfer workflow structure and example organization patterns</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/tech-spec-epic-3.md</file-path>
+      <description>Complete Epic 3 technical specification with MoneyTransfer workflow structure (lines 275-336), 4 expected execution paths (lines 232-237), golden file format (lines 303-336), and regression test strategy (lines 337-360). Includes data flow diagram showing decision detection through rendering pipeline</description>
+      <relevance>CRITICAL - Defines exact MoneyTransfer workflow implementation, expected paths, and golden file validation approach</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/stories/3-1-implement-decision-point-detection-in-ast.md</file-path>
+      <description>Story 3-1 implemented DecisionDetector class that identifies to_decision() calls in AST. Provides pattern for what MoneyTransfer workflow should use</description>
+      <relevance>Shows how to use to_decision() helper in workflow code for decision marking</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/stories/3-2-implement-to-decision-helper-function.md</file-path>
+      <description>Story 3-2 implemented to_decision() async helper function. Shows proper usage pattern and signature</description>
+      <relevance>MoneyTransfer workflow must import and use to_decision() helper correctly</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/stories/3-3-implement-path-permutation-generator-for-decisions.md</file-path>
+      <description>Story 3-3 implemented PathPermutationGenerator with 2^n path generation using itertools.product. Shows how 2 decisions create 4 paths</description>
+      <relevance>MoneyTransfer integration test validates this 2^2=4 path formula</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/stories/3-4-implement-decision-node-rendering-in-mermaid.md</file-path>
+      <description>Story 3-4 implemented decision diamond rendering with yes/no branch labels. Established integration test patterns and golden file comparison approach</description>
+      <relevance>CRITICAL - MoneyTransfer output must use diamond syntax for decision nodes with yes/no labels. Story 3-4 established golden file regression testing pattern to follow</relevance>
+    </artifact>
+    <artifact>
+      <file-path>docs/sprint-artifacts/stories/2-8-add-integration-test-with-simple-linear-workflow-example.md</file-path>
+      <description>Story 2-8 created first integration test with example structure: workflow.py, run.py, expected_output.md. Established example directory pattern</description>
+      <relevance>MoneyTransfer follows same example structure pattern but adds decision complexity</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file-path>src/temporalio_graphs/__init__.py</file-path>
+      <description>Public API exports analyze_workflow() function and to_decision() helper. Lines 59-157 show complete analyze_workflow signature, parameters, returns, and usage examples. MoneyTransfer integration test calls this function</description>
+      <relevance>PRIMARY ENTRY POINT - Integration test imports and calls analyze_workflow() with MoneyTransfer workflow path</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/helpers.py</file-path>
+      <description>to_decision() helper function implementation (lines 19-77). Async function with signature: async def to_decision(result: bool, name: str) -> bool. Transparent passthrough for workflow execution, marker for static analysis</description>
+      <relevance>CRITICAL - MoneyTransfer workflow MUST import and use: from temporalio_graphs import to_decision</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/analyzer.py</file-path>
+      <description>WorkflowAnalyzer class performs AST parsing and decision detection. Lines 185-192 show integration with DecisionDetector. Returns WorkflowMetadata with decision_points list</description>
+      <relevance>Validates MoneyTransfer workflow structure has 2 decision points detected</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/detector.py</file-path>
+      <description>DecisionDetector class identifies to_decision() calls in AST (lines 35-238). visit_Call method extracts decision names from second argument. Returns list[DecisionPoint] with id, name, line_number attributes</description>
+      <relevance>Shows what MoneyTransfer decision calls should look like: await to_decision(condition, "DecisionName")</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/generator.py</file-path>
+      <description>PathPermutationGenerator class generates 2^n paths (lines 22-293). _generate_paths_with_decisions method uses itertools.product([False, True], repeat=num_decisions) for efficient permutation. Creates path IDs in binary format: path_0b00, path_0b01, path_0b10, path_0b11</description>
+      <relevance>CRITICAL - MoneyTransfer test validates exactly 4 paths generated for 2 decisions (2^2=4)</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/renderer.py</file-path>
+      <description>MermaidRenderer class converts paths to Mermaid syntax (lines 14-157). to_mermaid() method handles decision nodes with diamond syntax {DecisionName} and branch labels -- yes --> and -- no -->. Returns complete markdown with fenced code blocks</description>
+      <relevance>MoneyTransfer output validation checks for diamond decision nodes and yes/no branch labels</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <description>Core data models: NodeType enum (START, END, ACTIVITY, DECISION, SIGNAL), GraphNode dataclass with to_mermaid() rendering, DecisionPoint dataclass with id/name/line_number/true_label/false_label, WorkflowMetadata with decision_points list</description>
+      <relevance>Defines data structures used throughout pipeline that MoneyTransfer test validates</relevance>
+    </interface>
+    <interface>
+      <file-path>src/temporalio_graphs/context.py</file-path>
+      <description>GraphBuildingContext dataclass with configuration: max_decision_points (default 10), decision_true_label (default "yes"), decision_false_label (default "no"), start_node_label, end_node_label, split_names_by_words</description>
+      <relevance>MoneyTransfer test uses default context which applies yes/no labels to decision branches</relevance>
+    </interface>
+  </existing-code-interfaces>
+
+  <test-patterns-and-fixtures>
+    <pattern>
+      <file-path>tests/integration/test_simple_linear.py</file-path>
+      <description>REFERENCE PATTERN - Complete integration test structure from Story 2-8. Lines 25-62: _generate_test_workflow helper creates temp workflows. Lines 65-79: _extract_mermaid_content extracts from fenced blocks. Lines 82-127: _extract_nodes_from_mermaid and _extract_edges_from_mermaid parse Mermaid syntax. Lines 132-183: Main test validates full pipeline. Lines 454-484: Golden file regression test compares actual vs expected output</description>
+      <relevance>CRITICAL PATTERN - MoneyTransfer test follows this exact structure: create workflow, call analyze_workflow, validate Mermaid output, compare against golden file</relevance>
+    </pattern>
+    <pattern>
+      <file-path>tests/integration/test_decision_rendering.py</file-path>
+      <description>Decision-specific integration test from Story 3-4. Shows how to validate decision diamonds, yes/no branch labels, and decision node IDs in output. Uses similar extraction helpers adapted for decision syntax</description>
+      <relevance>MoneyTransfer test validates decision rendering using similar assertion patterns</relevance>
+    </pattern>
+    <pattern>
+      <file-path>examples/simple_linear/workflow.py</file-path>
+      <description>Simple linear workflow example showing proper Temporal workflow structure: @workflow.defn decorator, async run method with @workflow.run, workflow.execute_activity calls with start_to_close_timeout</description>
+      <relevance>MoneyTransfer workflow follows same structure but adds to_decision() calls for branching</relevance>
+    </pattern>
+    <pattern>
+      <file-path>examples/simple_linear/run.py</file-path>
+      <description>Example runner script showing analyze_workflow usage: imports from temporalio_graphs, resolves paths, calls analyze_workflow, prints result</description>
+      <relevance>MoneyTransfer run.py follows identical pattern</relevance>
+    </pattern>
+    <pattern>
+      <file-path>examples/simple_linear/expected_output.md</file-path>
+      <description>Golden file with expected Mermaid diagram. Contains markdown explanation plus fenced Mermaid code block with complete diagram</description>
+      <relevance>MoneyTransfer expected_output.md follows same format but documents 4 execution paths</relevance>
+    </pattern>
+  </test-patterns-and-fixtures>
+
+  <development-constraints>
+    <constraint>
+      <category>Architecture</category>
+      <description>Static analysis only - MoneyTransfer workflow is analyzed via AST without execution. No runtime mocking or workflow execution needed. Analysis completes in &lt;1 second per NFR-PERF-1</description>
+      <source>docs/architecture.md ADR-001, docs/prd.md Success Criteria</source>
+    </constraint>
+    <constraint>
+      <category>Decision Naming</category>
+      <description>Decision names MUST be string literals (not variables or f-strings). MoneyTransfer uses "NeedToConvert" and "IsTFN_Known" exactly as specified in FR57. Static analysis cannot extract dynamic names</description>
+      <source>docs/sprint-artifacts/tech-spec-epic-3.md lines 189-191, 819-841</source>
+    </constraint>
+    <constraint>
+      <category>Path Count Formula</category>
+      <description>CRITICAL: 2^n paths for n decisions. MoneyTransfer has exactly 2 decisions therefore MUST generate exactly 4 paths. Test must assert len(paths) == 4 explicitly. This validates PathPermutationGenerator correctness</description>
+      <source>docs/sprint-artifacts/tech-spec-epic-3.md lines 12-13, FR16, FR57</source>
+    </constraint>
+    <constraint>
+      <category>Activity Sequence</category>
+      <description>MoneyTransfer workflow has exactly 5 activities in specific order: Withdraw, CurrencyConvert (conditional), NotifyAto (conditional), TakeNonResidentTax (conditional), Deposit. All 5 must appear in generated output. Test must verify all activity names present</description>
+      <source>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC1, AC2</source>
+    </constraint>
+    <constraint>
+      <category>Mermaid Syntax</category>
+      <description>Output MUST use diamond syntax for decisions: 0{NeedToConvert} and 1{IsTFN_Known}. Branch edges use labels: -- yes --> and -- no --> (not "true"/"false"). Start node: s((Start)), End node: e((End)). All syntax must validate in Mermaid Live Editor per FR51</description>
+      <source>docs/sprint-artifacts/tech-spec-epic-3.md FR14, FR15, docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC2</source>
+    </constraint>
+    <constraint>
+      <category>.NET Feature Parity</category>
+      <description>MoneyTransfer output structure must be isomorphic to .NET Temporalio.Graphs for equivalent workflow (FR52, FR55). Use structural equivalence comparison (nodes + edges match) not byte-for-byte. Node naming, decision names, edge labels must match .NET patterns. Reference implementation in Temporalio.Graphs/Samples/MoneyTransferWorker/</description>
+      <source>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC4, docs/sprint-artifacts/tech-spec-epic-3.md FR52, FR55, lines 761-770</source>
+    </constraint>
+    <constraint>
+      <category>Test Quality</category>
+      <description>100% test pass rate required. Tests must use pytest-asyncio for async workflow helpers. Integration test validates complete pipeline: source -> AST -> decisions -> paths -> Mermaid. Coverage must exceed 80% per NFR-QUAL-2. All code passes mypy strict and ruff checks</description>
+      <source>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC7, pyproject.toml lines 38-43</source>
+    </constraint>
+    <constraint>
+      <category>Performance</category>
+      <description>Integration test for MoneyTransfer (2 decisions, 4 paths) must complete in &lt;1 second total. This includes AST parsing, decision detection, path generation, and Mermaid rendering. Test must measure and assert execution time</description>
+      <source>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC2, docs/sprint-artifacts/tech-spec-epic-3.md NFR-PERF-1</source>
+    </constraint>
+    <constraint>
+      <category>Determinism</category>
+      <description>Decision IDs must be deterministic. Same workflow analyzed multiple times produces identical output. Node IDs, edge ordering, decision numbering must be consistent. This enables reliable golden file comparison</description>
+      <source>docs/sprint-artifacts/tech-spec-epic-3.md FR17, lines 552-561, 827-828</source>
+    </constraint>
+    <constraint>
+      <category>Example File Structure</category>
+      <description>MoneyTransfer example MUST include: examples/money_transfer/workflow.py (workflow implementation), examples/money_transfer/run.py (runner script), examples/money_transfer/expected_output.md (golden file). All files must be importable and executable with uv run</description>
+      <source>docs/sprint-artifacts/stories/3-5-add-integration-test-with-moneytransfer-example.md AC1, AC5, AC6, docs/architecture.md lines 88-95</source>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <type>Package</type>
+      <name>temporalio</name>
+      <version>>=1.7.1</version>
+      <description>Temporal Python SDK required for workflow decorators (@workflow.defn, @workflow.run) and workflow.execute_activity calls. MoneyTransfer workflow imports from temporalio</description>
+      <source>pyproject.toml lines 21-23</source>
+    </dependency>
+    <dependency>
+      <type>Package</type>
+      <name>pytest</name>
+      <version>>=8.0.0</version>
+      <description>Test framework for integration test. Provides tmp_path fixture, assertion methods, test discovery</description>
+      <source>pyproject.toml lines 26-32</source>
+    </dependency>
+    <dependency>
+      <type>Package</type>
+      <name>pytest-asyncio</name>
+      <version>>=0.23.0</version>
+      <description>Async test support for testing to_decision() helper in MoneyTransfer workflow (async function)</description>
+      <source>pyproject.toml lines 26-32</source>
+    </dependency>
+    <dependency>
+      <type>Internal Module</type>
+      <name>analyze_workflow</name>
+      <location>src/temporalio_graphs/__init__.py</location>
+      <description>PUBLIC API - Primary entry point function. Integration test calls this with MoneyTransfer workflow path and validates returned Mermaid string</description>
+    </dependency>
+    <dependency>
+      <type>Internal Module</type>
+      <name>to_decision</name>
+      <location>src/temporalio_graphs/helpers.py</location>
+      <description>WORKFLOW HELPER - MoneyTransfer workflow imports and uses this to mark decision points. Must be imported: from temporalio_graphs import to_decision</description>
+    </dependency>
+    <dependency>
+      <type>Internal Module</type>
+      <name>PathPermutationGenerator</name>
+      <location>src/temporalio_graphs/generator.py</location>
+      <description>Generates 2^n execution paths. MoneyTransfer test indirectly validates this produces exactly 4 paths for 2 decisions</description>
+    </dependency>
+    <dependency>
+      <type>Internal Module</type>
+      <name>DecisionDetector</name>
+      <location>src/temporalio_graphs/detector.py</location>
+      <description>Detects to_decision() calls in MoneyTransfer workflow AST. Must find exactly 2 decisions: "NeedToConvert" and "IsTFN_Known"</description>
+    </dependency>
+    <dependency>
+      <type>Internal Module</type>
+      <name>MermaidRenderer</name>
+      <location>src/temporalio_graphs/renderer.py</location>
+      <description>Renders paths to Mermaid with decision diamonds and yes/no labels. MoneyTransfer test validates output syntax</description>
+    </dependency>
+    <dependency>
+      <type>Reference Implementation</type>
+      <name>.NET Temporalio.Graphs MoneyTransfer</name>
+      <location>Temporalio.Graphs/Samples/MoneyTransferWorker/</location>
+      <description>.NET reference implementation showing expected workflow structure and output format. Python port must match structure (FR52)</description>
+    </dependency>
+  </dependencies>
+
+  <testing-requirements>
+    <requirement>
+      <category>Integration Test Structure</category>
+      <description>Create tests/integration/test_money_transfer.py following pattern from test_simple_linear.py. Test class: TestMoneyTransferIntegration. Main test method: test_money_transfer_four_paths validates complete pipeline</description>
+      <validation>Test file exists, imports analyze_workflow, creates MoneyTransfer workflow (temp or references example), calls analyze_workflow, validates output</validation>
+    </requirement>
+    <requirement>
+      <category>Path Count Validation</category>
+      <description>Test MUST extract paths from Mermaid output and assert exactly 4 paths exist. Use helper to parse Mermaid and count unique execution sequences. Assert len(paths) == 4 with clear failure message</description>
+      <validation>Test asserts 4 paths, failure message indicates expected vs actual count</validation>
+    </requirement>
+    <requirement>
+      <category>Activity Presence</category>
+      <description>Test MUST verify all 5 activities appear in output: Withdraw, CurrencyConvert, NotifyAto, TakeNonResidentTax, Deposit. Parse Mermaid to extract activity node labels and assert all 5 present</description>
+      <validation>Test parses activity nodes, checks all 5 activity names found in output</validation>
+    </requirement>
+    <requirement>
+      <category>Decision Validation</category>
+      <description>Test MUST verify exactly 2 decision nodes with correct names: "NeedToConvert" and "IsTFN_Known". Parse Mermaid for decision syntax (curly braces), extract names, assert both present</description>
+      <validation>Test finds 2 decisions with exact names matching FR57 specification</validation>
+    </requirement>
+    <requirement>
+      <category>Decision Rendering</category>
+      <description>Test MUST validate decision nodes use diamond syntax: 0{NeedToConvert} and 1{IsTFN_Known}. Check for curly brace notation, not parentheses or brackets</description>
+      <validation>Test regex matches {DecisionName} pattern for both decisions</validation>
+    </requirement>
+    <requirement>
+      <category>Branch Label Validation</category>
+      <description>Test MUST verify decision edges have yes/no labels: -- yes --> and -- no -->. Parse Mermaid edges, check labels on decision node outputs, assert correct labels used</description>
+      <validation>Test finds edge labels "yes" and "no" in output, not "true"/"false"</validation>
+    </requirement>
+    <requirement>
+      <category>Mermaid Syntax</category>
+      <description>Test MUST validate output is valid Mermaid: contains "flowchart LR", has fenced code block (```mermaid), includes Start/End nodes with correct syntax s((Start)) and e((End))</description>
+      <validation>Test checks for flowchart directive, code fencing, node syntax validity</validation>
+    </requirement>
+    <requirement>
+      <category>Golden File Regression</category>
+      <description>Test MUST compare generated output against examples/money_transfer/expected_output.md. Use structural equivalence (nodes and edges match), not byte-for-byte. Extract and compare node sets and edge sets</description>
+      <validation>Regression test loads golden file, compares structure, asserts equivalence</validation>
+    </requirement>
+    <requirement>
+      <category>Performance Measurement</category>
+      <description>Test MUST measure execution time and assert &lt;1 second total. Use time.perf_counter() before/after analyze_workflow call, calculate duration, assert duration &lt; 1.0</description>
+      <validation>Test includes timing assertion with clear failure message showing actual time</validation>
+    </requirement>
+    <requirement>
+      <category>Workflow Example Validation</category>
+      <description>Separate test validates examples/money_transfer/workflow.py: file exists, is valid Python (ast.parse succeeds), has @workflow.defn and @workflow.run decorators, imports to_decision, has 2 to_decision calls, has 5 execute_activity calls</description>
+      <validation>Test parses workflow file, counts decorators, imports, and calls</validation>
+    </requirement>
+    <requirement>
+      <category>Runner Script Validation</category>
+      <description>Test validates examples/money_transfer/run.py: file exists, is valid Python, imports analyze_workflow, calls analyze_workflow with workflow path, prints or writes output</description>
+      <validation>Test parses run.py, checks for imports and function calls</validation>
+    </requirement>
+  </testing-requirements>
+
+  <implementation-notes>
+    <note>
+      <title>MoneyTransfer Workflow Structure</title>
+      <content>Workflow must follow this exact structure per tech-spec-epic-3.md lines 275-302:
+1. Withdraw activity (always executed)
+2. First decision: if await to_decision(source_currency != dest_currency, "NeedToConvert"):
+3. CurrencyConvert activity (conditional on true branch)
+4. Second decision: if await to_decision(tfn_known, "IsTFN_Known"):
+5. NotifyAto activity (true branch) OR TakeNonResidentTax activity (false branch)
+6. Deposit activity (always executed, reconverges branches)
+
+This creates 4 paths:
+- Path 1 (T,T): Withdraw -> CurrencyConvert -> NotifyAto -> Deposit
+- Path 2 (T,F): Withdraw -> CurrencyConvert -> TakeNonResidentTax -> Deposit
+- Path 3 (F,T): Withdraw -> NotifyAto -> Deposit
+- Path 4 (F,F): Withdraw -> TakeNonResidentTax -> Deposit</content>
+    </note>
+    <note>
+      <title>Golden File Format</title>
+      <content>expected_output.md must contain per tech-spec lines 303-336:
+1. Markdown header: "# MoneyTransfer Workflow - Expected Mermaid Output"
+2. Section: "## Execution Paths" with description of 4 paths
+3. For each path: conditions and activity sequence
+4. Section: "## Mermaid Diagram"
+5. Fenced code block with complete Mermaid flowchart
+Include explanatory text making golden file self-documenting</content>
+    </note>
+    <note>
+      <title>Regression Test Strategy</title>
+      <content>Structural equivalence comparison per tech-spec lines 337-360:
+1. Load expected_output.md golden file
+2. Run analyze_workflow() on MoneyTransfer
+3. Extract nodes from both (using regex or Mermaid parser)
+4. Extract edges from both (with labels)
+5. Assert node sets equal
+6. Assert edge sets equal (ignoring order)
+7. Assert 4 paths generated (2^2 formula)
+NOT byte-for-byte comparison - allows formatting differences</content>
+    </note>
+    <note>
+      <title>Test Helper Functions</title>
+      <content>Reuse helpers from test_simple_linear.py:
+- _extract_mermaid_content(output) - extracts from fenced blocks
+- _extract_nodes_from_mermaid(content) - parses node IDs and types
+- _extract_edges_from_mermaid(content) - parses edges with labels
+Adapt for decision syntax: {DecisionName} and -- label --> patterns</content>
+    </note>
+    <note>
+      <title>Example Directory Organization</title>
+      <content>Create examples/money_transfer/ with:
+- workflow.py: MoneyTransferWorkflow class with 2 decisions, 5 activities
+- run.py: Runner script demonstrating analyze_workflow usage
+- expected_output.md: Golden reference with path documentation
+- __init__.py: Makes directory a package (optional)
+Follow pattern from examples/simple_linear/ structure</content>
+    </note>
+    <note>
+      <title>README Integration</title>
+      <content>Update README.md per AC6:
+- Add MoneyTransfer to Examples section
+- Explain it demonstrates: multiple decisions, path permutations, reconverging branches, .NET feature parity
+- Link to examples/money_transfer/workflow.py
+- Mention it's ported from Temporalio.Graphs reference implementation
+- Show to_decision() usage pattern in code snippet</content>
+    </note>
+    <note>
+      <title>Warnings and Edge Cases</title>
+      <content>Missing documentation/unclear requirements to document:
+- .NET reference implementation may have different Mermaid formatting (whitespace, node ordering) - document as "implementation variation" if needed
+- Decision ID format (d0, d1) is Python choice, .NET may differ - structural equivalence allows this
+- If golden file doesn't exist yet, create it by running analyze_workflow and validating output manually first
+- Performance timing may vary on CI - consider allowing 2s on slower systems</content>
+    </note>
+  </implementation-notes>
+
+  <validation-checklist>
+    <item>MoneyTransfer workflow.py created with @workflow.defn decorator</item>
+    <item>Workflow has 2 to_decision() calls with names "NeedToConvert" and "IsTFN_Known"</item>
+    <item>Workflow has 5 execute_activity() calls in correct order</item>
+    <item>Integration test file created at tests/integration/test_money_transfer.py</item>
+    <item>Test calls analyze_workflow() and validates Mermaid output</item>
+    <item>Test asserts exactly 4 paths generated (2^2)</item>
+    <item>Test validates all 5 activity names present in output</item>
+    <item>Test validates 2 decision nodes with diamond syntax and correct names</item>
+    <item>Test validates yes/no branch labels on decision edges</item>
+    <item>Test compares against golden file with structural equivalence</item>
+    <item>Test measures performance and asserts &lt;1 second execution</item>
+    <item>Golden file expected_output.md created with 4 paths documented</item>
+    <item>Runner script run.py created and executable</item>
+    <item>README updated with MoneyTransfer example link and description</item>
+    <item>All tests pass with 100% success rate</item>
+    <item>Code passes mypy strict mode (0 errors)</item>
+    <item>Code passes ruff linting (0 errors)</item>
+    <item>Test coverage exceeds 80%</item>
+  </validation-checklist>
+
+  <next-steps>
+    <step>Story validation using story-context-validator (if available)</step>
+    <step>Story status update: drafted -> ready-for-dev in sprint-status.yaml</step>
+    <step>Implementation by Dev Agent using dev-story workflow</step>
+    <step>Code review via code-review workflow</step>
+    <step>Epic 3 retrospective after story completion</step>
+  </next-steps>
+</story-context>

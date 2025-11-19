@@ -173,7 +173,7 @@ def test_to_mermaid_activity_nodes_single(
     result = renderer.to_mermaid([path], no_split_context)
 
     assert node_id == "1"
-    assert "1[ValidateInput]" in result
+    assert "ValidateInput[ValidateInput]" in result
 
 
 def test_to_mermaid_activity_nodes_multiple(
@@ -189,9 +189,9 @@ def test_to_mermaid_activity_nodes_multiple(
     result = renderer.to_mermaid([path], no_split_context)
 
     assert id1 == "1" and id2 == "2" and id3 == "3"
-    assert "1[ValidateInput]" in result
-    assert "2[ProcessOrder]" in result
-    assert "3[SendConfirmation]" in result
+    assert "ValidateInput[ValidateInput]" in result
+    assert "ProcessOrder[ProcessOrder]" in result
+    assert "SendConfirmation[SendConfirmation]" in result
 
 
 def test_to_mermaid_activity_names_with_spaces(
@@ -203,7 +203,7 @@ def test_to_mermaid_activity_names_with_spaces(
 
     result = renderer.to_mermaid([path], default_context)
 
-    assert "1[Send Email Notification]" in result
+    assert "Send Email Notification[Send Email Notification]" in result
 
 
 # Test AC5: Edge rendering with arrow syntax
@@ -220,9 +220,9 @@ def test_to_mermaid_edge_syntax(
     # Verify arrow syntax
     assert " --> " in result
     # Verify specific edges
-    assert "s --> 1" in result
-    assert "1 --> 2" in result
-    assert "2 --> e" in result
+    assert "s --> Activity1" in result
+    assert "Activity1 --> Activity2" in result
+    assert "Activity2 --> e" in result
 
 
 def test_to_mermaid_edge_connections_sequence(
@@ -237,10 +237,10 @@ def test_to_mermaid_edge_connections_sequence(
     result = renderer.to_mermaid([path], default_context)
 
     # Extract edges to verify sequence
-    assert "s --> 1" in result  # Start to first activity
-    assert "1 --> 2" in result  # Activity 1 to 2
-    assert "2 --> 3" in result  # Activity 2 to 3
-    assert "3 --> e" in result  # Last activity to End
+    assert "s --> First" in result  # Start to first activity
+    assert "First --> Second" in result  # Activity 1 to 2
+    assert "Second --> Third" in result  # Activity 2 to 3
+    assert "Third --> e" in result  # Last activity to End
 
 
 # Test AC6: Node and edge deduplication
@@ -262,9 +262,9 @@ def test_to_mermaid_node_deduplication(
     # Count node definitions
     start_count = result.count("s((Start))")
     end_count = result.count("e((End))")
-    activity1_count = result.count("1[ValidateInput]")
-    activity2_count = result.count("2[ProcessOrder]")
-    activity3_count = result.count("3[SendConfirmation]")
+    activity1_count = result.count("ValidateInput[ValidateInput]")
+    activity2_count = result.count("ProcessOrder[ProcessOrder]")
+    activity3_count = result.count("SendConfirmation[SendConfirmation]")
 
     # Each should appear exactly once
     assert start_count == 1, "Start node should appear exactly once"
@@ -285,9 +285,9 @@ def test_to_mermaid_edge_deduplication(
     result = renderer.to_mermaid([path], default_context)
 
     # Count edge definitions
-    s_to_1 = result.count("s --> 1")
-    one_to_2 = result.count("1 --> 2")
-    two_to_e = result.count("2 --> e")
+    s_to_1 = result.count("s --> Activity1")
+    one_to_2 = result.count("Activity1 --> Activity2")
+    two_to_e = result.count("Activity2 --> e")
 
     assert s_to_1 == 1, "Edge s --> 1 should appear exactly once"
     assert one_to_2 == 1, "Edge 1 --> 2 should appear exactly once"
@@ -307,8 +307,8 @@ def test_to_mermaid_word_splitting_enabled(
     result = renderer.to_mermaid([path], split_context_true)
 
     # With splitting enabled, should have spaces
-    assert "1[execute Payment]" in result
-    assert "2[validate Output]" in result
+    assert "executePayment[execute Payment]" in result
+    assert "validateOutput[validate Output]" in result
 
 
 def test_to_mermaid_word_splitting_disabled(
@@ -323,8 +323,8 @@ def test_to_mermaid_word_splitting_disabled(
     result = renderer.to_mermaid([path], no_split_context)
 
     # Without splitting, should NOT have split names
-    assert "1[executePayment]" in result
-    assert "2[validateOutput]" in result
+    assert "executePayment[executePayment]" in result
+    assert "validateOutput[validateOutput]" in result
     assert "execute Payment" not in result
 
 
@@ -345,10 +345,10 @@ def test_to_mermaid_word_splitting_edge_cases(
     result = renderer.to_mermaid([path], split_context)
 
     # Verify each case
-    assert "1[CONSTANT]" in result  # All caps unchanged
-    assert "2[Already Spaced]" in result  # Spaced unchanged
-    assert "3[snake_case]" in result  # Underscores unchanged
-    assert "4[Camel Case]" in result  # camelCase split
+    assert "CONSTANT[CONSTANT]" in result  # All caps unchanged
+    assert "Already Spaced[Already Spaced]" in result  # Spaced unchanged
+    assert "snake_case[snake_case]" in result  # Underscores unchanged
+    assert "CamelCase[Camel Case]" in result  # camelCase split
 
 
 # Test AC8: Path iteration and node sequence extraction
@@ -379,10 +379,10 @@ def test_to_mermaid_single_activity(
     result = renderer.to_mermaid([path], no_split_context)
 
     assert "s((Start))" in result
-    assert "1[ProcessPayment]" in result
+    assert "ProcessPayment[ProcessPayment]" in result
     assert "e((End))" in result
-    assert "s --> 1" in result
-    assert "1 --> e" in result
+    assert "s --> ProcessPayment" in result
+    assert "ProcessPayment --> e" in result
 
 
 def test_to_mermaid_multiple_activities(
@@ -397,23 +397,23 @@ def test_to_mermaid_multiple_activities(
 
     result = renderer.to_mermaid([path], no_split_context)
 
-    # Verify sequence
+    # Verify sequence - activity names are used as node IDs
     expected_sequence = [
         "s((Start))",
-        "1[ValidateInput]",
-        "2[ProcessOrder]",
-        "3[SendConfirmation]",
+        "ValidateInput[ValidateInput]",
+        "ProcessOrder[ProcessOrder]",
+        "SendConfirmation[SendConfirmation]",
         "e((End))",
     ]
 
     for node in expected_sequence:
         assert node in result
 
-    # Verify edges in order
-    assert "s --> 1" in result
-    assert "1 --> 2" in result
-    assert "2 --> 3" in result
-    assert "3 --> e" in result
+    # Verify edges in order - using activity names as node IDs
+    assert "s --> ValidateInput" in result
+    assert "ValidateInput --> ProcessOrder" in result
+    assert "ProcessOrder --> SendConfirmation" in result
+    assert "SendConfirmation --> e" in result
 
 
 # Test AC9: Type safety and complete type hints
@@ -529,11 +529,13 @@ def test_to_mermaid_raises_on_none_activity_name(
     renderer: MermaidRenderer, default_context: GraphBuildingContext
 ) -> None:
     """Verify ValueError raised with clear message for None activity names."""
-    path = GraphPath(path_id="path_0")
-    # Manually set None activity (bypassing add_activity validation)
-    path.steps.append(None)  # type: ignore
+    from temporalio_graphs.path import PathStep
 
-    with pytest.raises(ValueError, match="Activity name cannot be None"):
+    path = GraphPath(path_id="path_0")
+    # Create a PathStep with None name to test error handling
+    path.steps.append(PathStep(node_type='activity', name=None))  # type: ignore
+
+    with pytest.raises(ValueError, match="Step name cannot be None or empty"):
         renderer.to_mermaid([path], default_context)
 
 
@@ -541,10 +543,13 @@ def test_to_mermaid_raises_on_empty_activity_name(
     renderer: MermaidRenderer, default_context: GraphBuildingContext
 ) -> None:
     """Verify ValueError raised for empty string activity names."""
-    path = GraphPath(path_id="path_0")
-    path.steps.append("")  # Empty string activity
+    from temporalio_graphs.path import PathStep
 
-    with pytest.raises(ValueError, match="Activity name cannot be None or empty"):
+    path = GraphPath(path_id="path_0")
+    # Create a PathStep with empty string name to test error handling
+    path.steps.append(PathStep(node_type='activity', name=""))
+
+    with pytest.raises(ValueError, match="Step name cannot be None or empty"):
         renderer.to_mermaid([path], default_context)
 
 
@@ -559,10 +564,10 @@ def test_to_mermaid_handles_special_characters(
 
     result = renderer.to_mermaid([path], default_context)
 
-    # Verify special characters preserved in node labels
-    assert "1[Save-to-Database]" in result
-    assert "2[Check_Input_Valid]" in result
-    assert "3[Send/Email]" in result
+    # Verify special characters preserved in node labels - using activity names as node IDs
+    assert "Save-to-Database[Save-to-Database]" in result
+    assert "Check_Input_Valid[Check_Input_Valid]" in result
+    assert "Send/Email[Send/Email]" in result
 
 
 def test_to_mermaid_handles_very_long_names(
@@ -575,8 +580,8 @@ def test_to_mermaid_handles_very_long_names(
 
     result = renderer.to_mermaid([path], default_context)
 
-    # Should contain the full long name
-    assert f"1[{long_name}]" in result
+    # Should contain the full long name - using activity name as node ID
+    assert f"{long_name}[{long_name}]" in result
 
 
 def test_to_mermaid_handles_unicode_names(
@@ -590,10 +595,10 @@ def test_to_mermaid_handles_unicode_names(
 
     result = renderer.to_mermaid([path], default_context)
 
-    # Verify Unicode preserved
-    assert "1[Validar_Entrada]" in result
-    assert "2[Verifier_Entrée]" in result
-    assert "3[验证输入]" in result
+    # Verify Unicode preserved - using activity names as node IDs
+    assert "Validar_Entrada[Validar_Entrada]" in result
+    assert "Verifier_Entrée[Verifier_Entrée]" in result
+    assert "验证输入[验证输入]" in result
 
 
 # Test AC14: Unit test coverage 100% for MermaidRenderer
@@ -695,9 +700,9 @@ def test_to_mermaid_handles_multiple_paths_foundation(
 
     result = renderer.to_mermaid([path1, path2], no_split_context)
 
-    # With deduplication, nodes should appear only once
-    validate_count = result.count("1[ValidateInput]")
-    process_count = result.count("2[ProcessOrder]")
+    # With deduplication, nodes should appear only once - using activity names as node IDs
+    validate_count = result.count("ValidateInput[ValidateInput]")
+    process_count = result.count("ProcessOrder[ProcessOrder]")
 
     # Even with 2 paths, deduplication should keep each node once
     assert (

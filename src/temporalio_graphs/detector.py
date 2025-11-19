@@ -61,6 +61,8 @@ class DecisionDetector(ast.NodeVisitor):
         """Initialize the decision detector with empty state."""
         self._decisions: list[DecisionPoint] = []
         self._decision_counter: int = 0
+        # Map from decision line number to (true_branch_lines, false_branch_lines)
+        self._decision_branches: dict[int, tuple[list[int], list[int]]] = {}
 
     def visit_Call(self, node: ast.Call) -> None:
         """Visit Call nodes to identify to_decision() function calls.
@@ -79,21 +81,64 @@ class DecisionDetector(ast.NodeVisitor):
                 line_number = node.lineno
 
                 decision_id = self._generate_decision_id()
+
+                # Look up branch activities for this decision
+                true_branch_lines = []
+                false_branch_lines = []
+                if line_number in self._decision_branches:
+                    true_branch_lines, false_branch_lines = self._decision_branches[line_number]
+
                 decision = DecisionPoint(
                     id=decision_id,
                     name=name,
                     line_number=line_number,
+                    line_num=line_number,  # For execution order sorting
                     true_label="yes",
                     false_label="no",
+                    true_branch_activities=tuple(true_branch_lines),
+                    false_branch_activities=tuple(false_branch_lines),
                 )
                 self._decisions.append(decision)
-                logger.debug(f"Detected decision '{name}' at line {line_number} (id={decision_id})")
+                logger.debug(
+                    f"Detected decision '{name}' at line {line_number} (id={decision_id}) "
+                    f"with {len(true_branch_lines)} true-branch activities, "
+                    f"{len(false_branch_lines)} false-branch activities"
+                )
             except WorkflowParseError as e:
                 # Re-raise parse errors with full context
                 raise e
 
         # Continue traversal to find nested calls
         self.generic_visit(node)
+
+    def _collect_activity_lines(self, nodes: list[ast.stmt]) -> list[int]:
+        """Collect line numbers of all execute_activity calls in a block.
+
+        Args:
+            nodes: List of AST statement nodes to search.
+
+        Returns:
+            List of line numbers where execute_activity is called.
+        """
+        activity_lines = []
+
+        class ActivityCollector(ast.NodeVisitor):
+            def visit_Await(self, node: ast.Await) -> None:
+                if isinstance(node.value, ast.Call):
+                    call = node.value
+                    # Check for workflow.execute_activity or execute_activity
+                    if isinstance(call.func, ast.Attribute):
+                        if call.func.attr == "execute_activity":
+                            activity_lines.append(node.lineno)
+                    elif isinstance(call.func, ast.Name):
+                        if call.func.id == "execute_activity":
+                            activity_lines.append(node.lineno)
+                self.generic_visit(node)
+
+        collector = ActivityCollector()
+        for stmt in nodes:
+            collector.visit(stmt)
+        return activity_lines
 
     def visit_If(self, node: ast.If) -> None:
         """Visit If nodes to detect elif chains as separate decisions.
@@ -102,9 +147,30 @@ class DecisionDetector(ast.NodeVisitor):
         it identifies to_decision() calls and treats each elif as a separate decision
         point.
 
+        Also tracks which activities are in the true/false branches for control flow.
+
         Args:
             node: AST node representing an if/elif/else structure.
         """
+        # Check if this If node's test contains a to_decision() call
+        # If so, we need to track its branch activities
+        decision_call = None
+        if isinstance(node.test, ast.Await) and isinstance(node.test.value, ast.Call):
+            if self._is_to_decision_call(node.test.value):
+                decision_call = node.test.value
+        elif isinstance(node.test, ast.Call):
+            if self._is_to_decision_call(node.test):
+                decision_call = node.test
+
+        # If this is a decision block, collect branch activities
+        if decision_call:
+            true_activities = self._collect_activity_lines(node.body)
+            false_activities = self._collect_activity_lines(node.orelse)
+
+            # Store branch info keyed by decision line number
+            # This will be looked up when creating the DecisionPoint
+            self._decision_branches[decision_call.lineno] = (true_activities, false_activities)
+
         # Process the if condition
         self.visit(node.test) if hasattr(node, "test") else None
 

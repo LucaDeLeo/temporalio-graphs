@@ -15,14 +15,14 @@ You should see the following diagram:
 ```mermaid
 flowchart LR
 s((Start))
-1[validate_input]
-2[process_data]
-3[save_result]
+process_data[process_data]
+save_result[save_result]
+validate_input[validate_input]
 e((End))
-s --> 1
-1 --> 2
-2 --> 3
-3 --> e
+s --> validate_input
+validate_input --> process_data
+process_data --> save_result
+save_result --> e
 ```
 
 ## Explanation

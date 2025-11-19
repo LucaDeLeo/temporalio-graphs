@@ -224,8 +224,8 @@ class TestAnalyzeWorkflowIntegration:
         assert "flowchart LR" in result
         assert "s((Start))" in result
         assert "e((End))" in result
-        # Single activity should be present
-        assert "1[" in result
+        # Single activity should be present (use activity name as node ID)
+        assert "my_activity[" in result
 
     def test_analyze_workflow_integration_multi_activity(self) -> None:
         """AC4, AC13: Verify pipeline with multi-activity workflow."""
@@ -243,10 +243,10 @@ class TestAnalyzeWorkflowIntegration:
         assert "e((End))" in result
         # Should contain edges
         assert " --> " in result
-        # Should contain at least 3 activity nodes for 3 activities
-        assert "1[" in result
-        assert "2[" in result
-        assert "3[" in result
+        # Should contain at least 3 activity nodes for 3 activities (use activity names as node IDs)
+        assert "activity_one[" in result
+        assert "activity_two[" in result
+        assert "activity_three[" in result
 
     def test_analyze_workflow_integration_valid_mermaid_syntax(self) -> None:
         """AC4: Verify output is valid Mermaid with correct structure."""

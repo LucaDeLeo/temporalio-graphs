@@ -25,7 +25,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from temporalio_graphs._internal.graph_models import WorkflowMetadata
+from temporalio_graphs._internal.graph_models import Activity, WorkflowMetadata
 from temporalio_graphs.detector import DecisionDetector
 from temporalio_graphs.exceptions import WorkflowParseError
 
@@ -68,7 +68,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         self._source_file: Path | None = None
         self._line_numbers: dict[str, int] = {}
         self._inside_workflow_class: bool = False
-        self._activities: list[tuple[str, int]] = []
+        self._activities: list[Activity] = []
         self._activity_name_cache: dict[int, str] = {}
 
     def analyze(
@@ -182,8 +182,8 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             )
 
         # Build and return WorkflowMetadata
-        # Extract activity names from tuples (name, line_number)
-        activities = [name for name, _ in self._activities]
+        # Activities are already Activity objects with line numbers
+        activities = self._activities
 
         # Detect decision points using DecisionDetector
         decision_detector = DecisionDetector()
@@ -204,7 +204,8 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                 )
 
             # Warn about very long activity names that may render poorly
-            for activity_name in activities:
+            for activity in activities:
+                activity_name = activity.name
                 if len(activity_name) > 100:
                     warnings.warn(
                         f"Activity name '{activity_name[:50]}...' is very long "
@@ -349,7 +350,8 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             # Extract activity name from first argument
             if node.args:  # Ensure there is at least one argument
                 activity_name = self._extract_activity_name(node.args[0])
-                self._activities.append((activity_name, node.lineno))
+                activity = Activity(name=activity_name, line_num=node.lineno)
+                self._activities.append(activity)
                 logger.debug(
                     f"Found activity call: {activity_name} at line {node.lineno}"
                 )

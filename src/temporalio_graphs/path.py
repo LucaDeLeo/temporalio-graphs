@@ -6,6 +6,38 @@ along that path.
 """
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+
+@dataclass
+class PathStep:
+    """Represents a single step in a workflow execution path.
+
+    A step can be an activity, decision, or signal (Epic 4). This typed structure
+    eliminates the need for string parsing to determine node types, making the
+    code more robust and type-safe.
+
+    Args:
+        node_type: Type of node ('activity', 'decision', 'signal')
+        name: Human-readable name (e.g., 'withdraw_funds', 'NeedToConvert')
+        decision_id: Unique decision ID (e.g., 'd0', 'd1'), only for decisions
+        decision_value: Boolean value for this path (True/False), only for decisions
+        signal_outcome: Signal result ('Signaled'/'Timeout'), only for signals (Epic 4)
+
+    Example:
+        >>> # Activity step
+        >>> PathStep('activity', 'withdraw_funds')
+        PathStep(node_type='activity', name='withdraw_funds', decision_id=None, decision_value=None)
+
+        >>> # Decision step
+        >>> PathStep('decision', 'NeedToConvert', decision_id='d0', decision_value=True)
+        PathStep(node_type='decision', name='NeedToConvert', decision_id='d0', decision_value=True)
+    """
+    node_type: Literal['activity', 'decision', 'signal']
+    name: str
+    decision_id: str | None = None
+    decision_value: bool | None = None
+    signal_outcome: str | None = None  # Epic 4: 'Signaled' or 'Timeout'
 
 
 @dataclass
@@ -62,7 +94,7 @@ class GraphPath:
     """
 
     path_id: str
-    steps: list[str] = field(default_factory=list)
+    steps: list[PathStep] = field(default_factory=list)
     decisions: dict[str, bool] = field(default_factory=dict)
 
     def add_activity(self, name: str) -> str:
@@ -91,10 +123,11 @@ class GraphPath:
             '2'
             >>> path.add_activity("Deposit")
             '3'
-            >>> path.steps
+            >>> [step.name for step in path.steps]
             ['Withdraw', 'CurrencyConvert', 'Deposit']
         """
-        self.steps.append(name)
+        step = PathStep(node_type='activity', name=name)
+        self.steps.append(step)
         # Generate sequential node ID: count of all steps so far
         node_id = str(len(self.steps))
         return node_id
@@ -126,7 +159,7 @@ class GraphPath:
             >>> node_id = path.add_decision("0", True, "HighValue")
             >>> node_id
             '1'
-            >>> path.steps
+            >>> [step.name for step in path.steps]
             ['HighValue']
             >>> path.decisions
             {'0': True}
@@ -134,8 +167,14 @@ class GraphPath:
         # Record the decision value in the decisions dict
         self.decisions[id] = value
 
-        # Add decision name to the steps list (like add_activity)
-        self.steps.append(name)
+        # Add decision step to the steps list with type information
+        step = PathStep(
+            node_type='decision',
+            name=name,
+            decision_id=id,
+            decision_value=value
+        )
+        self.steps.append(step)
 
         # Generate sequential node ID: count of all steps so far
         node_id = str(len(self.steps))

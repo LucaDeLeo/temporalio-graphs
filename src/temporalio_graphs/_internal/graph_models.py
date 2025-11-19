@@ -204,6 +204,39 @@ class GraphEdge:
 
 
 @dataclass(frozen=True)
+class Activity:
+    """Represents an activity invocation in a workflow.
+
+    An activity is a unit of work executed by Temporal, identified by an
+    execute_activity() call in the workflow code. Activities are tracked
+    with their source line numbers for proper ordering in the graph.
+
+    The frozen=True attribute ensures Activity instances are immutable,
+    preventing accidental modifications to activity metadata once created.
+
+    Args:
+        name: Human-readable name of the activity (extracted from the
+            execute_activity() call argument).
+        line_num: Line number in the workflow source code where the activity
+            is invoked. Used for sorting activities and decisions into correct
+            execution order.
+
+    Example:
+        >>> activity = Activity(
+        ...     name="withdraw_funds",
+        ...     line_num=35,
+        ... )
+        >>> activity.name
+        'withdraw_funds'
+        >>> activity.line_num
+        35
+    """
+
+    name: str
+    line_num: int
+
+
+@dataclass(frozen=True)
 class DecisionPoint:
     """Represents a decision point (branch) in a workflow.
 
@@ -220,6 +253,9 @@ class DecisionPoint:
             the second argument of to_decision()).
         line_number: Line number in the workflow source code where the decision
             is defined. Used for error reporting and debugging.
+        line_num: Line number in the workflow source code where the decision
+            is defined. Used for sorting activities and decisions into correct
+            execution order.
         true_label: Label for the "true" branch (typically "yes").
         false_label: Label for the "false" branch (typically "no").
 
@@ -228,6 +264,7 @@ class DecisionPoint:
         ...     id="d1",
         ...     name="NeedToConvert",
         ...     line_number=42,
+        ...     line_num=42,
         ...     true_label="yes",
         ...     false_label="no",
         ... )
@@ -240,8 +277,12 @@ class DecisionPoint:
     id: str
     name: str
     line_number: int
+    line_num: int
     true_label: str
     false_label: str
+    # Control flow tracking: line numbers of activities in each branch
+    true_branch_activities: tuple[int, ...] = ()
+    false_branch_activities: tuple[int, ...] = ()
 
 
 @dataclass
@@ -260,8 +301,9 @@ class WorkflowMetadata:
         workflow_class: Fully qualified class name of the workflow (e.g.,
             "myapp.workflows.MoneyTransferWorkflow").
         workflow_run_method: Name of the workflow's run method (typically "run").
-        activities: List of activity method names detected in the workflow.
-            Order matches the sequence of activity calls in the source code.
+        activities: List of Activity objects detected in the workflow.
+            Order matches the sequence of activity calls in the source code,
+            including line number information for proper graph topology.
         decision_points: List of decision point identifiers detected in the
             workflow. Each decision creates 2 execution paths (true/false).
         signal_points: List of signal point identifiers detected in the workflow.
@@ -276,8 +318,15 @@ class WorkflowMetadata:
         >>> metadata = WorkflowMetadata(
         ...     workflow_class="MoneyTransferWorkflow",
         ...     workflow_run_method="run",
-        ...     activities=["Withdraw", "CurrencyConvert", "Deposit"],
-        ...     decision_points=["NeedToConvert", "IsTFN_Known"],
+        ...     activities=[
+        ...         Activity("Withdraw", 35),
+        ...         Activity("CurrencyConvert", 42),
+        ...         Activity("Deposit", 55),
+        ...     ],
+        ...     decision_points=[
+        ...         DecisionPoint("d0", "NeedToConvert", 38, 38, "yes", "no"),
+        ...         DecisionPoint("d1", "IsTFN_Known", 48, 48, "yes", "no"),
+        ...     ],
         ...     signal_points=[],
         ...     source_file=Path("workflows.py"),
         ...     total_paths=4,
@@ -295,7 +344,7 @@ class WorkflowMetadata:
 
     workflow_class: str
     workflow_run_method: str
-    activities: list[str]
+    activities: list[Activity]
     decision_points: list[DecisionPoint]
     signal_points: list[str]
     source_file: Path

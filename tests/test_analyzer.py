@@ -441,7 +441,7 @@ def test_analyzer_detects_single_activity(
     metadata = analyzer.analyze(workflow_file)
 
     assert len(metadata.activities) == 1
-    assert metadata.activities[0] == "my_activity"
+    assert metadata.activities[0].name == "my_activity"
 
 
 def test_analyzer_detects_multiple_activities(
@@ -452,9 +452,9 @@ def test_analyzer_detects_multiple_activities(
     metadata = analyzer.analyze(workflow_file)
 
     assert len(metadata.activities) == 3
-    assert metadata.activities[0] == "activity_one"
-    assert metadata.activities[1] == "activity_two"
-    assert metadata.activities[2] == "activity_three"
+    assert metadata.activities[0].name == "activity_one"
+    assert metadata.activities[1].name == "activity_two"
+    assert metadata.activities[2].name == "activity_three"
 
 
 def test_analyzer_detects_duplicate_activities(
@@ -465,8 +465,8 @@ def test_analyzer_detects_duplicate_activities(
     metadata = analyzer.analyze(workflow_file)
 
     assert len(metadata.activities) == 2
-    assert metadata.activities[0] == "my_activity"
-    assert metadata.activities[1] == "my_activity"
+    assert metadata.activities[0].name == "my_activity"
+    assert metadata.activities[1].name == "my_activity"
 
 
 def test_analyzer_no_activities_workflow(analyzer: WorkflowAnalyzer, tmp_path: Path) -> None:
@@ -495,7 +495,7 @@ def test_analyzer_extracts_activity_names(
     workflow_file = fixtures_dir / "single_activity_workflow.py"
     metadata = analyzer.analyze(workflow_file)
 
-    assert "my_activity" in metadata.activities
+    assert any(a.name == "my_activity" for a in metadata.activities)
 
 
 def test_analyzer_handles_string_activity_names(
@@ -506,8 +506,8 @@ def test_analyzer_handles_string_activity_names(
     metadata = analyzer.analyze(workflow_file)
 
     assert len(metadata.activities) == 2
-    assert metadata.activities[0] == "validate_input"
-    assert metadata.activities[1] == "process_data"
+    assert metadata.activities[0].name == "validate_input"
+    assert metadata.activities[1].name == "process_data"
 
 
 def test_analyzer_handles_await_prefix(
@@ -519,7 +519,7 @@ def test_analyzer_handles_await_prefix(
 
     # The single_activity_workflow uses await, so this tests await handling
     assert len(metadata.activities) == 1
-    assert metadata.activities[0] == "my_activity"
+    assert metadata.activities[0].name == "my_activity"
 
 
 def test_analyzer_activity_line_numbers(
@@ -536,11 +536,11 @@ def test_analyzer_activity_line_numbers(
     assert hasattr(analyzer, "_activities")
     assert len(analyzer._activities) >= 1
 
-    # Check that tuples contain (name, line_number)
-    for activity_name, line_no in analyzer._activities:
-        assert isinstance(activity_name, str)
-        assert isinstance(line_no, int)
-        assert line_no > 0
+    # Check that Activity objects contain name and line_num
+    for activity in analyzer._activities:
+        assert isinstance(activity.name, str)
+        assert isinstance(activity.line_num, int)
+        assert activity.line_num > 0
 
 
 def test_analyzer_ignores_non_activity_calls(
@@ -574,7 +574,7 @@ def test_analyzer_activities_in_correct_order(
     workflow_file = fixtures_dir / "multi_activity_workflow.py"
     metadata = analyzer.analyze(workflow_file)
 
-    assert metadata.activities == ["activity_one", "activity_two", "activity_three"]
+    assert [a.name for a in metadata.activities] == ["activity_one", "activity_two", "activity_three"]
 
 
 def test_analyzer_performance_multi_activity(
@@ -641,7 +641,7 @@ class MalformedActivityWorkflow:
 
         # Should detect the malformed activity with placeholder name
         assert len(metadata.activities) == 1
-        assert "<unknown_activity_" in metadata.activities[0]
+        assert any(a.name.startswith("<unknown_activity_") for a in metadata.activities)
 
         # Check that warning was logged
         assert any("Could not extract activity name" in record.message for record in caplog.records)

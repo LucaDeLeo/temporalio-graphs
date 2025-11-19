@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>3-4</story-key>
+    <story-title>Implement Decision Node Rendering in Mermaid</story-title>
+    <epic-key>epic-3</epic-key>
+    <epic-title>Decision Node Support (Branching Workflows)</epic-title>
+    <created>2025-11-18</created>
+    <phase>implementation</phase>
+  </metadata>
+
+  <story-reference>
+    <file>docs/sprint-artifacts/stories/3-4-implement-decision-node-rendering-in-mermaid.md</file>
+    <description>Complete story definition with acceptance criteria, tasks, and dev notes</description>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec>
+      <file>docs/sprint-artifacts/tech-spec-epic-3.md</file>
+      <description>Epic 3 technical specification covering decision detection, path permutation, and Mermaid rendering</description>
+      <key-sections>
+        <section>Detailed Design - Services and Modules - MermaidRenderer enhancements (lines 90-119)</section>
+        <section>APIs and Interfaces - MermaidRenderer enhancements (lines 412-429)</section>
+        <section>Workflows and Sequencing - Phase 4: Mermaid Rendering (lines 466-475)</section>
+        <section>Test Strategy Summary - tests/test_renderer.py (lines 942-968)</section>
+      </key-sections>
+    </tech-spec>
+    <epic-definition>
+      <file>docs/epics.md</file>
+      <description>Epic 3 story breakdown - Decision Node Support</description>
+      <relevant-stories>Story 3.1-3.5 (lines 642-879)</relevant-stories>
+    </epic-definition>
+  </epic-context>
+
+  <architecture-and-requirements>
+    <architecture>
+      <file>docs/architecture.md</file>
+      <description>Static analysis approach, AST patterns, Mermaid syntax conventions</description>
+      <key-sections>
+        <section>Data Architecture - Core Data Models - GraphNode.to_mermaid() (lines 558-570)</section>
+        <section>Implementation Patterns - CONSISTENCY RULES - Mermaid Syntax Conventions (lines 496-502)</section>
+        <section>Decision Summary - Visitor Pattern for AST, Strategy Pattern for rendering (lines 32-70)</section>
+      </key-sections>
+    </architecture>
+    <prd>
+      <file>docs/prd.md</file>
+      <description>Product requirements document with functional requirements</description>
+      <relevant-frs>
+        <fr>FR13: Decision nodes can have custom true/false branch labels (lines 227-229)</fr>
+        <fr>FR14: Decision nodes render in Mermaid as diamond shapes (line 230)</fr>
+        <fr>FR15: Each decision node generates exactly 2 branches (line 231)</fr>
+        <fr>FR17: Decision IDs can be preserved or simplified (line 233)</fr>
+        <fr>FR51: Generated Mermaid syntax is valid and renders correctly (line 285)</fr>
+        <fr>FR52: Graph structure matches .NET Temporalio.Graphs output (line 286)</fr>
+        <fr>FR54: Edge labels follow Mermaid syntax (line 288)</fr>
+        <fr>FR55: Decision node format matches .NET output structure (line 289)</fr>
+      </relevant-frs>
+    </prd>
+  </architecture-and-requirements>
+
+  <existing-code-interfaces>
+    <interface>
+      <name>MermaidRenderer.to_mermaid()</name>
+      <file>src/temporalio_graphs/renderer.py</file>
+      <description>Main rendering method that converts GraphPath objects to Mermaid syntax. Currently handles START, END, and ACTIVITY nodes. Needs enhancement for DECISION nodes.</description>
+      <current-implementation>Lines 38-188</current-implementation>
+      <key-patterns>
+        <pattern>Two-pass algorithm: collect nodes/edges, then output (lines 111-170)</pattern>
+        <pattern>Node deduplication using dict keyed by node_id (line 112)</pattern>
+        <pattern>Edge deduplication using set of (from, to, label) tuples (lines 114, 154-157)</pattern>
+        <pattern>Word splitting with regex for camelCase (line 147)</pattern>
+        <pattern>Ordered output: nodes first, then edges (lines 172-183)</pattern>
+      </key-patterns>
+      <enhancement-needed>Add NodeType.DECISION handling in first pass loop, generate diamond syntax, add branch labels to edges</enhancement-needed>
+    </interface>
+
+    <interface>
+      <name>GraphPath</name>
+      <file>src/temporalio_graphs/path.py</file>
+      <description>Tracks single execution path with activities and decisions. Already has add_decision() method from Story 3.3.</description>
+      <relevant-methods>
+        <method>add_decision(id: str, value: bool, name: str) -> str (lines 102-143)</method>
+      </relevant-methods>
+      <usage-note>Decision nodes are already in path.steps and path.decisions dict. Renderer needs to detect and render them.</usage-note>
+    </interface>
+
+    <interface>
+      <name>GraphNode</name>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <description>Node representation with to_mermaid() method. Already has NodeType.DECISION case implemented.</description>
+      <decision-rendering>Lines 107-108: return f"{self.node_id}{{{self.display_name}}}" for DECISION type</decision-rendering>
+      <usage-note>GraphNode.to_mermaid() already supports DECISION type. Renderer just needs to create GraphNode instances.</usage-note>
+    </interface>
+
+    <interface>
+      <name>NodeType enum</name>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <description>Node type classification enum</description>
+      <decision-constant>NodeType.DECISION = "decision" (line 30)</decision-constant>
+    </interface>
+
+    <interface>
+      <name>GraphBuildingContext</name>
+      <file>src/temporalio_graphs/context.py</file>
+      <description>Configuration for graph generation</description>
+      <decision-config>
+        <field>decision_true_label: str = "yes" (line 86)</field>
+        <field>decision_false_label: str = "no" (line 87)</field>
+      </decision-config>
+      <usage>Pass context to renderer, use decision_true_label and decision_false_label for edge labels</usage>
+    </interface>
+
+    <interface>
+      <name>PathPermutationGenerator._generate_paths_with_decisions()</name>
+      <file>src/temporalio_graphs/generator.py</file>
+      <description>Generates 2^n paths with decisions already populated in GraphPath objects from Story 3.3</description>
+      <decision-tracking>Lines 286-288: path.add_decision() called for each decision point with value</decision-tracking>
+      <output-contract>Returns list[GraphPath] where each path has decisions in path.steps and path.decisions dict</output-contract>
+    </interface>
+  </existing-code-interfaces>
+
+  <dependencies>
+    <python-stdlib>
+      <module>re</module>
+      <usage>Already imported in renderer.py for word splitting. No new dependencies needed.</usage>
+    </python-stdlib>
+    <internal-modules>
+      <module>temporalio_graphs._internal.graph_models.NodeType</module>
+      <usage>Already imported. Use NodeType.DECISION constant.</usage>
+      <module>temporalio_graphs._internal.graph_models.GraphNode</module>
+      <usage>Create GraphNode instances for decision nodes with NodeType.DECISION</usage>
+      <module>temporalio_graphs.context.GraphBuildingContext</module>
+      <usage>Already passed to to_mermaid(). Access decision_true_label and decision_false_label.</usage>
+    </internal-modules>
+  </dependencies>
+
+  <development-constraints>
+    <backward-compatibility>
+      <constraint>MUST preserve existing linear workflow rendering (Story 2.8 passing tests)</constraint>
+      <constraint>Do not break activity node rendering logic</constraint>
+      <constraint>Maintain two-pass algorithm structure (collect, then output)</constraint>
+    </backward-compatibility>
+
+    <architecture-patterns>
+      <pattern>Strategy Pattern: Different node types (ACTIVITY, DECISION) have different rendering strategies</pattern>
+      <pattern>Node deduplication: Same decision node appears once even if in multiple paths</pattern>
+      <pattern>Edge deduplication: (from_node, to_node, label) tuple uniqueness</pattern>
+    </architecture-patterns>
+
+    <performance>
+      <target>Rendering completes in less than 100ms for typical workflows (NFR-PERF-1)</target>
+      <target>No memory overhead beyond path storage</target>
+      <implementation>Use existing dict/set deduplication, no additional data structures needed</implementation>
+    </performance>
+
+    <mermaid-syntax>
+      <decision-diamond>node_id{DecisionName} - single curly braces, NOT double</decision-diamond>
+      <edge-label>-- label --> format (spaces around dashes and arrow)</edge-label>
+      <validation>Output must validate in Mermaid Live Editor (FR51)</validation>
+      <dotnet-parity>Structure must match .NET Temporalio.Graphs for equivalent workflows (FR52)</dotnet-parity>
+    </mermaid-syntax>
+
+    <error-handling>
+      <validation>Validate decision node data before rendering</validation>
+      <clarity>Error messages include context (path_id, decision name, line number)</clarity>
+    </error-handling>
+  </development-constraints>
+
+  <test-strategy>
+    <unit-tests>
+      <file>tests/test_renderer.py</file>
+      <new-tests>
+        <test>test_decision_node_diamond_syntax() - Verify {DecisionName} format (FR14)</test>
+        <test>test_decision_id_deterministic() - Same workflow yields same IDs (FR17)</test>
+        <test>test_true_branch_label_default() - Default "yes" label</test>
+        <test>test_false_branch_label_default() - Default "no" label</test>
+        <test>test_custom_branch_labels() - Configuration override (FR13)</test>
+        <test>test_decision_node_deduplication() - Decision appears once in output</test>
+        <test>test_edges_from_decision() - Both branches render correctly</test>
+        <test>test_mermaid_validates_in_editor() - Output valid in Mermaid Live (FR51)</test>
+        <test>test_single_decision_two_branches() - 1 decision creates 2 paths with yes/no edges</test>
+        <test>test_two_decisions_four_branches() - 2 decisions create 4 paths, all diamond nodes present</test>
+        <test>test_nested_decisions_render_correctly() - Nested structure renders with multiple diamonds</test>
+      </new-tests>
+      <coverage-target>100% for new decision rendering logic</coverage-target>
+    </unit-tests>
+
+    <integration-tests>
+      <file>tests/integration/test_decision_rendering.py</file>
+      <scope>Full pipeline test: WorkflowMetadata → PathPermutationGenerator → MermaidRenderer</scope>
+      <test-cases>
+        <case>test_decision_integration_with_activities() - Decisions connect to activities properly</case>
+        <case>test_full_pipeline_with_decisions() - End-to-end from metadata to Mermaid with 1, 2, 3 decision examples</case>
+        <case>test_path_count_matches_formula() - Verify 2^n paths for n decisions</case>
+      </test-cases>
+    </integration-tests>
+
+    <regression-tests>
+      <strategy>Golden file comparison against .NET reference output</strategy>
+      <location>tests/fixtures/golden/</location>
+      <test>test_comparison_with_dotnet_golden() - Structural match with .NET for equivalent workflows</test>
+    </regression-tests>
+
+    <validation-tests>
+      <mermaid-validation>Paste generated output into https://mermaid.live to verify syntax</mermaid-validation>
+      <edge-cases>
+        <case>Single decision (2 paths, 1 diamond)</case>
+        <case>Two decisions (4 paths, 2 diamonds)</case>
+        <case>Nested decisions (diamond inside if-branch)</case>
+        <case>Sequential decisions (elif chain, multiple diamonds)</case>
+        <case>Empty decision name (validation error)</case>
+        <case>Long decision names (proper escaping)</case>
+      </edge-cases>
+    </validation-tests>
+  </test-strategy>
+
+  <dotnet-reference>
+    <location>Temporalio.Graphs/Temporalio.Graphs/</location>
+    <key-files>
+      <file>GraphBuilder.cs</file>
+      <description>.NET runtime interceptor-based approach. Python uses static analysis instead, but output structure should match.</description>
+    </key-files>
+    <expected-format>
+      <example>
+        <description>MoneyTransfer workflow with 2 decisions showing diamond syntax</description>
+        <decision-syntax>0{NeedToConvert}</decision-syntax>
+        <branch-labels>-- yes -->, -- no --></branch-labels>
+        <structure>Start → Activity → Decision → (yes/no branches) → Activities → End</structure>
+      </example>
+    </expected-format>
+  </dotnet-reference>
+
+  <implementation-notes>
+    <rendering-algorithm>
+      <step>1. Detect decision nodes in path.steps (check if step name exists in path.decisions dict)</step>
+      <step>2. For decision nodes: create GraphNode with NodeType.DECISION</step>
+      <step>3. Generate decision node ID (use decision.id from PathPermutationGenerator)</step>
+      <step>4. Apply word splitting to decision name if context.split_names_by_words is True</step>
+      <step>5. For edges FROM decision nodes: add label from context.decision_true_label or decision_false_label based on path.decisions[id] value</step>
+      <step>6. Deduplicate decision nodes (same ID appears only once even in multiple paths)</step>
+      <step>7. Output decision nodes in sequence with activity nodes (maintain order: s, 1-n, e)</step>
+    </rendering-algorithm>
+
+    <edge-label-logic>
+      <condition>When rendering edge from decision node to next node:</condition>
+      <true-branch>Use context.decision_true_label (default "yes") if path.decisions[decision_id] == True</true-branch>
+      <false-branch>Use context.decision_false_label (default "no") if path.decisions[decision_id] == False</false-branch>
+      <format>-- label --> (spaces around dashes and arrow required by Mermaid)</format>
+    </edge-label-logic>
+
+    <decision-detection>
+      <method>Check if step name is in path.decisions dict keys</method>
+      <caveat>Decision names are in path.steps, but decision metadata is in path.decisions</caveat>
+      <approach>Iterate through path.decisions to identify which steps are decisions</approach>
+    </decision-detection>
+
+    <node-id-strategy>
+      <current>Activities use sequential IDs: "1", "2", "3"</current>
+      <decisions>Use decision.id from DecisionPoint (generated in Story 3.1)</decisions>
+      <note>Decision IDs may be "d0", "d1" or numeric "0", "1" depending on generator implementation</note>
+    </node-id-strategy>
+
+    <potential-challenges>
+      <challenge>Distinguishing decision nodes from activity nodes in path.steps</challenge>
+      <solution>Use path.decisions dict as the authoritative source for decision identification</solution>
+      <challenge>Rendering both true and false branches from same decision</challenge>
+      <solution>Each path represents one branch. Multiple paths with same decision show both branches via deduplication.</solution>
+      <challenge>Maintaining proper edge order for clarity</challenge>
+      <solution>Rely on deduplication set to prevent duplicate edges, output in iteration order</solution>
+    </potential-challenges>
+  </implementation-notes>
+
+  <examples-and-patterns>
+    <example>
+      <name>Simple workflow with 1 decision</name>
+      <code>
+# Workflow code:
+await workflow.execute_activity(validate)
+if await to_decision(amount > 1000, "HighValue"):
+    await workflow.execute_activity(special_processing)
+await workflow.execute_activity(finalize)
+
+# Expected Mermaid output:
+```mermaid
+flowchart LR
+s((Start))
+1[Validate]
+0{HighValue}
+2[Special Processing]
+3[Finalize]
+e((End))
+s --> 1
+1 --> 0
+0 -- yes --> 2
+0 -- no --> 3
+2 --> 3
+3 --> e
+```
+      </code>
+      <description>Shows single decision diamond with yes/no branches, reconverging at Finalize activity</description>
+    </example>
+
+    <example>
+      <name>MoneyTransfer workflow with 2 decisions (from .NET reference)</name>
+      <code>
+# Expected structure:
+s((Start)) --> Withdraw --> 0{NeedToConvert} -- yes --> CurrencyConvert --> 1{IsTFN_Known}
+1{IsTFN_Known} -- yes --> NotifyAto --> Deposit --> e((End))
+1{IsTFN_Known} -- no --> TakeNonResidentTax --> Deposit
+0{NeedToConvert} -- no --> 1{IsTFN_Known}
+      </code>
+      <description>Shows 2 decisions creating 4 paths (2^2), with both decisions rendered as diamonds</description>
+    </example>
+
+    <example>
+      <name>Custom branch labels</name>
+      <code>
+# Context configuration:
+context = GraphBuildingContext(
+    decision_true_label="approved",
+    decision_false_label="rejected"
+)
+
+# Expected edge syntax:
+0 -- approved --> 1
+0 -- rejected --> 2
+      </code>
+      <description>Demonstrates configuration override for custom yes/no labels</description>
+    </example>
+  </examples-and-patterns>
+
+  <file-modifications>
+    <primary-file>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <changes>
+        <change>Enhance to_mermaid() first pass to detect decision nodes in paths</change>
+        <change>Create GraphNode instances with NodeType.DECISION for decision steps</change>
+        <change>Add decision_true_label or decision_false_label to edges from decision nodes</change>
+        <change>Ensure decision node deduplication works correctly</change>
+        <change>Maintain backward compatibility with linear workflow rendering</change>
+      </changes>
+      <estimated-lines>~50 new lines, ~20 modified lines</estimated-lines>
+    </primary-file>
+
+    <test-files>
+      <file>tests/test_renderer.py</file>
+      <changes>Add ~10 new test functions for decision rendering (unit tests)</changes>
+      <file>tests/integration/test_decision_rendering.py</file>
+      <changes>Create new integration test file with ~5 test functions</changes>
+    </test-files>
+
+    <no-changes>
+      <file>src/temporalio_graphs/path.py</file>
+      <reason>GraphPath.add_decision() already implemented in Story 3.3</reason>
+      <file>src/temporalio_graphs/generator.py</file>
+      <reason>PathPermutationGenerator already populates decisions in Story 3.3</reason>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <reason>GraphNode.to_mermaid() already handles NodeType.DECISION</reason>
+    </no-changes>
+  </file-modifications>
+
+  <acceptance-criteria-summary>
+    <total-criteria>5 main criteria</total-criteria>
+    <criteria>
+      <criterion>AC1: Decision nodes render with correct Mermaid syntax (diamond shape, deterministic IDs, valid output)</criterion>
+      <criterion>AC2: Branch labels render correctly (yes/no defaults, custom labels supported)</criterion>
+      <criterion>AC3: Multiple decisions render with proper path branching (2 decisions → 4 paths, nested, sequential)</criterion>
+      <criterion>AC4: Output matches .NET reference implementation (isomorphic structure, golden file comparison)</criterion>
+      <criterion>AC5: Comprehensive unit and integration test coverage (8 unit tests, integration pipeline test)</criterion>
+    </criteria>
+  </acceptance-criteria-summary>
+
+  <warnings-and-gaps>
+    <warning>
+      <type>Integration Dependency</type>
+      <description>Story 3.3 (Path Permutation Generator) must be complete and passing. This story consumes GraphPath objects with decisions already populated.</description>
+      <mitigation>Verify Story 3.3 status is "done" in sprint-status.yaml before starting this story</mitigation>
+    </warning>
+
+    <warning>
+      <type>.NET Reference Availability</type>
+      <description>Golden file comparison requires .NET Temporalio.Graphs output to be available for regression testing</description>
+      <mitigation>Ensure .NET MoneyTransfer example can be run to generate reference output, or use pre-existing golden files from .NET repo</mitigation>
+    </warning>
+
+    <gap>
+      <description>Decision node rendering for nested decisions (decision inside if-branch) has complex edge routing</description>
+      <impact>Medium - May require careful testing to ensure edges connect correctly</impact>
+      <approach>Start with simple sequential decisions, then add nested decision tests incrementally</approach>
+    </gap>
+
+    <gap>
+      <description>Edge label spacing and syntax must exactly match Mermaid spec for validation</description>
+      <impact>Low - Mermaid syntax is well-documented</impact>
+      <approach>Use Mermaid Live Editor for manual validation during development</approach>
+    </gap>
+  </warnings-and-gaps>
+
+  <next-steps>
+    <step>1. Read existing test files (tests/test_renderer.py, tests/test_generator.py) to understand test patterns</step>
+    <step>2. Implement decision node detection logic in MermaidRenderer.to_mermaid() first pass</step>
+    <step>3. Add edge label logic for decision branches (true/false labels)</step>
+    <step>4. Write unit tests for single decision rendering</step>
+    <step>5. Test with 2 decisions (4 paths) to verify deduplication and branching</step>
+    <step>6. Add integration test with full pipeline</step>
+    <step>7. Validate output in Mermaid Live Editor</step>
+    <step>8. Compare against .NET golden file for regression</step>
+    <step>9. Run full test suite to ensure backward compatibility</step>
+    <step>10. Update sprint-status.yaml: drafted → ready-for-dev</step>
+  </next-steps>
+</story-context>

@@ -62,9 +62,11 @@ result = analyze_workflow("my_workflow.py")
 print(result)  # Prints Mermaid diagram
 ```
 
-### Running the Example
+### Running the Examples
 
-Try the included example right now:
+Try the included examples right now:
+
+**Simple Linear Workflow** (3 sequential activities):
 
 ```bash
 python examples/simple_linear/run.py
@@ -86,6 +88,45 @@ s --> 1
 ```
 
 See `/examples/simple_linear/` for the complete working example with explanations.
+
+**MoneyTransfer Workflow** (2 decision points, 4 execution paths):
+
+```bash
+python examples/money_transfer/run.py
+```
+
+This analyzes a real-world workflow with 2 decision points creating 4 distinct execution paths:
+
+```mermaid
+flowchart LR
+s((Start))
+1[withdraw_funds]
+2[currency_convert]
+3[notify_ato]
+4[take_non_resident_tax]
+5[deposit_funds]
+d0{Need To Convert}
+d1{Is TFN_Known}
+e((End))
+s --> 1
+1 --> 2
+2 --> 3
+3 --> 4
+4 --> 5
+5 --> d0
+d0 -- no --> d1
+d1 -- no --> e
+d1 -- yes --> e
+d0 -- yes --> d1
+```
+
+The MoneyTransfer example demonstrates:
+- **Multiple decision points**: 2 decisions create 2^2=4 execution paths
+- **Conditional activities**: CurrencyConvert, NotifyAto, TakeNonResidentTax execute conditionally
+- **Reconverging branches**: Deposit executes regardless of which path is taken
+- **.NET feature parity**: Ported from the Temporalio.Graphs .NET reference implementation
+
+See `/examples/money_transfer/` for the complete working example with explanation of all 4 execution paths.
 
 ### Using Decision Points
 

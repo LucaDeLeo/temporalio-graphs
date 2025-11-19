@@ -198,7 +198,7 @@ class PathPermutationGenerator:
             )
             return paths
 
-    def _create_linear_path(self, activities: list[str]) -> GraphPath:
+    def _create_linear_path(self, activities: list) -> GraphPath:
         """Create a single linear path from activity sequence.
 
         Helper method that constructs a GraphPath with all activities in order.
@@ -206,7 +206,7 @@ class PathPermutationGenerator:
         add each activity sequentially, return the path.
 
         Args:
-            activities: List of activity names in order from workflow analysis.
+            activities: List of Activity objects or strings in order from workflow analysis.
                 May be empty for workflows with no activities.
 
         Returns:
@@ -216,42 +216,57 @@ class PathPermutationGenerator:
         path = GraphPath(path_id="path_0")
 
         # Add all activities in sequence
-        for activity_name in activities:
-            path.add_activity(activity_name)
+        for activity in activities:
+            # Handle both Activity objects and strings for backward compatibility
+            if isinstance(activity, str):
+                path.add_activity(activity)
+            else:
+                path.add_activity(activity.name)
 
         return path
 
     def _generate_paths_with_decisions(
         self,
         decisions: list[DecisionPoint],
-        activities: list[str],
+        activities: list,
         context: GraphBuildingContext,
     ) -> list[GraphPath]:
         """Generate 2^n execution paths for workflows with decision points.
 
         Uses itertools.product to efficiently generate all 2^n boolean combinations
         for the given decision points. For each combination, creates a GraphPath
-        that records the decisions and activities in order.
+        that records the decisions and activities in PROPER EXECUTION ORDER by
+        merging and sorting them by source line number.
 
         This method implements the Epic 3 path permutation algorithm using the
         efficient C-optimized itertools.product function, maintaining O(2^n)
         time complexity while avoiding manual recursion.
 
+        CRITICAL: Activities and decisions are interleaved based on their source
+        line numbers to generate correct branching decision-tree topology instead
+        of incorrect sequential linear topology.
+
         Args:
             decisions: List of DecisionPoint objects from workflow analysis.
-            activities: List of activity names from workflow analysis.
+            activities: List of Activity objects from workflow analysis.
             context: GraphBuildingContext for configuration (branch labels, etc.).
 
         Returns:
             List of GraphPath objects, one for each 2^n permutation. Each path
-            contains the activities and decisions for that specific execution path.
+            contains the activities and decisions for that specific execution path
+            in correct source code order.
 
         Example:
+            >>> from temporalio_graphs._internal.graph_models import Activity
             >>> decisions = [
-            ...     DecisionPoint("d0", "NeedConvert", 42, "yes", "no"),
-            ...     DecisionPoint("d1", "HighValue", 55, "yes", "no"),
+            ...     DecisionPoint("d0", "NeedConvert", 42, 42, "yes", "no"),
+            ...     DecisionPoint("d1", "HighValue", 55, 55, "yes", "no"),
             ... ]
-            >>> activities = ["Withdraw", "CurrencyConvert", "Deposit"]
+            >>> activities = [
+            ...     Activity("Withdraw", 35),
+            ...     Activity("CurrencyConvert", 45),
+            ...     Activity("Deposit", 60),
+            ... ]
             >>> context = GraphBuildingContext()
             >>> gen = PathPermutationGenerator()
             >>> paths = gen._generate_paths_with_decisions(decisions, activities, context)
@@ -265,6 +280,22 @@ class PathPermutationGenerator:
         num_decisions = len(decisions)
         paths: list[GraphPath] = []
 
+        # Merge activities and decisions with their positions
+        # Each element is a tuple: (node_type, node_object, line_number)
+        execution_order = []
+        for i, activity in enumerate(activities):
+            # Handle both Activity objects and strings for backward compatibility
+            if isinstance(activity, str):
+                # Use index * 10 as a default line number for string activities
+                execution_order.append(('activity', activity, (i + 1) * 10))
+            else:
+                execution_order.append(('activity', activity, activity.line_num))
+        for decision in decisions:
+            execution_order.append(('decision', decision, decision.line_num))
+
+        # Sort by line number to get execution order
+        execution_order.sort(key=lambda x: x[2])
+
         # Generate all 2^n boolean combinations using itertools.product
         for path_index, decision_values in enumerate(
             product([False, True], repeat=num_decisions)
@@ -277,15 +308,49 @@ class PathPermutationGenerator:
             # Create new path for this permutation
             path = GraphPath(path_id=path_id)
 
-            # Add decisions and activities in sequence
-            # Simplified approach: add all activities first, then decisions
-            # (In a real scenario with nested decisions, this would be more complex)
-            for activity_name in activities:
-                path.add_activity(activity_name)
-
-            # Record decision values in the path
+            # Build decision value lookup dictionary for this permutation
+            decision_value_map = {}
             for decision, value in zip(decisions, decision_values):
-                path.add_decision(decision.id, value, decision.name)
+                decision_value_map[decision.id] = value
+
+            # Track decisions encountered so far in this path (for control flow)
+            decisions_encountered = []
+
+            # Add nodes in correct interleaved order based on source line numbers
+            # Only include activities that match the decision path (control flow aware)
+            for node_type, node, line_num in execution_order:
+                if node_type == 'activity':
+                    # Handle both Activity objects and strings
+                    activity_name = node if isinstance(node, str) else node.name
+                    activity_line = line_num if isinstance(node, str) else node.line_num
+
+                    # Check if this activity is conditional on any decision
+                    should_include_activity = True
+
+                    for decision in decisions_encountered:
+                        # Check if activity is in this decision's true branch
+                        if activity_line in decision.true_branch_activities:
+                            # Activity is conditional on decision being True
+                            if not decision_value_map[decision.id]:
+                                should_include_activity = False
+                                break
+                        # Check if activity is in this decision's false branch
+                        elif activity_line in decision.false_branch_activities:
+                            # Activity is conditional on decision being False
+                            if decision_value_map[decision.id]:
+                                should_include_activity = False
+                                break
+                        # If not in either branch, activity is unconditional relative to this decision
+
+                    # Only add activity if it should execute in this path
+                    if should_include_activity:
+                        path.add_activity(activity_name)
+
+                elif node_type == 'decision':
+                    value = decision_value_map[node.id]
+                    path.add_decision(node.id, value, node.name)
+                    # Track this decision for checking future activities
+                    decisions_encountered.append(node)
 
             paths.append(path)
 

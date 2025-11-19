@@ -2,7 +2,7 @@
 
 import pytest
 
-from temporalio_graphs.path import GraphPath
+from temporalio_graphs.path import GraphPath, PathStep
 
 
 def test_add_activity() -> None:
@@ -12,7 +12,9 @@ def test_add_activity() -> None:
     node_id = path.add_activity("MyActivity")
 
     assert node_id == "1"
-    assert "MyActivity" in path.steps
+    assert len(path.steps) == 1
+    assert path.steps[0].node_type == 'activity'
+    assert path.steps[0].name == "MyActivity"
 
 
 def test_activity_node_id_generation() -> None:
@@ -41,8 +43,12 @@ def test_add_decision_implementation() -> None:
     # Decision should be recorded
     assert path.decisions["0"] is True
 
-    # Decision name should be added to steps
-    assert "HighValue" in path.steps
+    # Decision should be added to steps with correct type
+    assert len(path.steps) == 1
+    assert path.steps[0].node_type == 'decision'
+    assert path.steps[0].name == "HighValue"
+    assert path.steps[0].decision_id == "0"
+    assert path.steps[0].decision_value is True
 
 
 def test_add_signal_placeholder() -> None:
@@ -73,5 +79,8 @@ def test_path_steps_tracking() -> None:
     path.add_activity("CurrencyConvert")
     path.add_activity("Deposit")
 
-    assert path.steps == ["Withdraw", "CurrencyConvert", "Deposit"]
     assert len(path.steps) == 3
+    assert path.steps[0].name == "Withdraw"
+    assert path.steps[1].name == "CurrencyConvert"
+    assert path.steps[2].name == "Deposit"
+    assert all(step.node_type == 'activity' for step in path.steps)

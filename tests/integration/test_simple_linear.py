@@ -86,7 +86,7 @@ def _extract_nodes_from_mermaid(mermaid_content: str) -> set[str]:
         mermaid_content: Mermaid flowchart content
 
     Returns:
-        Set of node IDs (e.g., {'s', '1', '2', '3', 'e'})
+        Set of node IDs (e.g., {'s', 'validate_input', 'process_data', 'save_result', 'e'})
     """
     node_ids = set()
 
@@ -94,9 +94,13 @@ def _extract_nodes_from_mermaid(mermaid_content: str) -> set[str]:
     if re.search(r's\(\(Start\)\)', mermaid_content):
         node_ids.add('s')
 
-    # Match activity nodes: 1[Activity Name]
-    for match in re.finditer(r'(\d+)\[', mermaid_content):
-        node_ids.add(match.group(1))
+    # Match activity nodes: activity_name[activity_name] or 1[Activity Name]
+    # Updated to support both activity names and numeric IDs
+    for match in re.finditer(r'(\w+)\[', mermaid_content):
+        node_id = match.group(1)
+        # Skip if it's a start/end node
+        if node_id not in ('s', 'e'):
+            node_ids.add(node_id)
 
     # Match end node: e((End))
     if re.search(r'e\(\(End\)\)', mermaid_content):
@@ -137,7 +141,7 @@ class TestSimpleLinearWorkflowEndToEnd:
         2. Calls analyze_workflow() on the file
         3. Validates Mermaid output syntax and structure
         4. Validates all nodes and edges are present
-        5. Validates node IDs follow convention (s, 1, 2, 3, e)
+        5. Validates node IDs follow convention (s, activity_1, activity_2, activity_3, e)
         6. Validates edges connect in sequence
         """
         # Arrange: Create temporary workflow file
@@ -165,21 +169,22 @@ class TestSimpleLinearWorkflowEndToEnd:
         # Extract and validate nodes
         nodes = _extract_nodes_from_mermaid(mermaid_content)
         assert 's' in nodes, "Start node ID 's' should be present"
-        assert '1' in nodes, "Activity 1 node ID should be present"
-        assert '2' in nodes, "Activity 2 node ID should be present"
-        assert '3' in nodes, "Activity 3 node ID should be present"
+        assert 'activity_1' in nodes, "Activity 1 node ID should be present"
+        assert 'activity_2' in nodes, "Activity 2 node ID should be present"
+        assert 'activity_3' in nodes, "Activity 3 node ID should be present"
         assert 'e' in nodes, "End node ID 'e' should be present"
 
         # Extract and validate edges
         edges = _extract_edges_from_mermaid(mermaid_content)
         edge_dict = {src: tgt for src, tgt in edges}
 
-        # Verify edge sequence: s -> 1 -> 2 -> 3 -> e
+        # Verify edge sequence: s -> activity_1 -> activity_2 -> activity_3 -> e
+        # Note: Activity names are now used as node IDs
         assert 's' in edge_dict, "Start node should have outgoing edge"
-        assert edge_dict.get('s') == '1', "Start should connect to activity 1"
-        assert edge_dict.get('1') == '2', "Activity 1 should connect to activity 2"
-        assert edge_dict.get('2') == '3', "Activity 2 should connect to activity 3"
-        assert edge_dict.get('3') == 'e', "Activity 3 should connect to End"
+        assert edge_dict.get('s') == 'activity_1', "Start should connect to activity_1"
+        assert edge_dict.get('activity_1') == 'activity_2', "activity_1 should connect to activity_2"
+        assert edge_dict.get('activity_2') == 'activity_3', "activity_2 should connect to activity_3"
+        assert edge_dict.get('activity_3') == 'e', "activity_3 should connect to End"
 
     def test_validate_mermaid_syntax_valid(self, tmp_path: Path) -> None:
         """AC4: Validate Mermaid output syntax is valid.
@@ -234,11 +239,11 @@ class TestSimpleLinearWorkflowEndToEnd:
         assert 'e' in nodes, "End node ID should be 'e'"
 
     def test_validate_node_ids_follow_convention(self, tmp_path: Path) -> None:
-        """AC6: Verify node IDs follow convention (s, 1, 2, 3, e).
+        """AC6: Verify node IDs follow convention using activity names.
 
         Ensures:
         - Start node ID is 's'
-        - Activity nodes use sequential numbers: 1, 2, 3, etc.
+        - Activity nodes use activity names as IDs: activity_1, activity_2, etc.
         - End node ID is 'e'
         - All IDs match Mermaid syntax
         """
@@ -253,25 +258,25 @@ class TestSimpleLinearWorkflowEndToEnd:
         # Assert
         nodes = _extract_nodes_from_mermaid(mermaid_content)
 
-        # Verify specific node IDs
-        assert nodes == {'s', '1', '2', '3', '4', 'e'}, \
-            f"Expected nodes {{s, 1, 2, 3, 4, e}}, got {nodes}"
+        # Verify specific node IDs (activity names are now used as node IDs)
+        assert nodes == {'s', 'activity_1', 'activity_2', 'activity_3', 'activity_4', 'e'}, \
+            f"Expected nodes {{s, activity_1, activity_2, activity_3, activity_4, e}}, got {nodes}"
 
         # Verify each node appears correctly in Mermaid syntax
         assert re.search(r's\(\(', mermaid_content), "Start node should use ((...)) syntax"
-        assert re.search(r'1\[', mermaid_content), "Activity 1 should use [...] syntax"
-        assert re.search(r'2\[', mermaid_content), "Activity 2 should use [...] syntax"
-        assert re.search(r'3\[', mermaid_content), "Activity 3 should use [...] syntax"
-        assert re.search(r'4\[', mermaid_content), "Activity 4 should use [...] syntax"
+        assert re.search(r'activity_1\[', mermaid_content), "activity_1 should use [...] syntax"
+        assert re.search(r'activity_2\[', mermaid_content), "activity_2 should use [...] syntax"
+        assert re.search(r'activity_3\[', mermaid_content), "activity_3 should use [...] syntax"
+        assert re.search(r'activity_4\[', mermaid_content), "activity_4 should use [...] syntax"
         assert re.search(r'e\(\(', mermaid_content), "End node should use ((...)) syntax"
 
     def test_validate_edge_connections_in_sequence(self, tmp_path: Path) -> None:
         """AC7: Verify edges connect nodes in correct sequence.
 
         Ensures proper linear connectivity:
-        - s --> 1 (start to first activity)
-        - 1 --> 2, 2 --> 3, etc. (activity to activity)
-        - 3 --> e (or 4 --> e) (last activity to end)
+        - s --> activity_1 (start to first activity)
+        - activity_1 --> activity_2, activity_2 --> activity_3, etc. (activity to activity)
+        - activity_3 --> e (or activity_4 --> e) (last activity to end)
         """
         # Arrange
         workflow_file = tmp_path / "test_workflow.py"
@@ -285,7 +290,8 @@ class TestSimpleLinearWorkflowEndToEnd:
         edges = _extract_edges_from_mermaid(mermaid_content)
 
         # Verify all expected edges exist
-        expected_edges = [('s', '1'), ('1', '2'), ('2', '3'), ('3', 'e')]
+        # Note: Activity names are now used as node IDs
+        expected_edges = [('s', 'activity_1'), ('activity_1', 'activity_2'), ('activity_2', 'activity_3'), ('activity_3', 'e')]
         for src, tgt in expected_edges:
             assert (src, tgt) in edges, \
                 f"Expected edge {src} --> {tgt} not found. Found edges: {edges}"

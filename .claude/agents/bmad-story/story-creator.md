@@ -1,7 +1,7 @@
 ---
 name: bmm-story-creator
 description: Creates user stories from epics/PRD/architecture. use PROACTIVELY when creating the next story in the backlog
-model: haiku
+model: sonnet
 color: red
 ---
 

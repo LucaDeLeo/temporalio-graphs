@@ -1,7 +1,7 @@
 ---
 name: bmm-story-context-validator
 description: Validates Story Context XML against completeness checklist. use PROACTIVELY when verifying story context before implementation
-model: haiku
+model: sonnet
 color: yellow
 ---
 

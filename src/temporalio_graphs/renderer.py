@@ -121,36 +121,15 @@ class MermaidRenderer:
         edges: list[str] = []
         seen_edges: set[tuple[str, str, str]] = set()
 
-        # Build mapping of decision IDs to their names by analyzing all paths
-        # The first path gives us the decision order
+        # Build mapping of decision IDs to their names from PathStep objects
+        # With typed steps, we can directly identify decisions without heuristics
         decision_id_to_name: dict[str, str] = {}
         if paths and paths[0].decisions:
-            # Get the first path to determine decision names in order
+            # Use the first path to build the mapping
             first_path = paths[0]
-            # All decisions come after all activities in the generator output
-            # We need to map decision IDs to their names
-            # The path.decisions dict has ID->value, but we need ID->name
-            # We can infer this from the step order
-
-            # For now, we'll map by matching the order of decisions in the path
-            # The generator adds decisions in the order they appear in metadata.decision_points
-            # So first path.decisions key (in iteration order) corresponds to first decision name
-            # and so on
-
-            # Better approach: iterate through the steps and identify decision names
-            # by checking which are NOT in the metadata.activities list
-            # Since we don't have metadata here, we'll use a heuristic:
-            # The generator adds activities first, then decisions
-            # So we can identify decisions by the fact that there are
-            # len(path.steps) - len(path.decisions) activities
-
-            num_activities = len(first_path.steps) - len(first_path.decisions)
-            decision_step_names = first_path.steps[num_activities:]
-
-            # Now map decision IDs to these names in order
-            for i, decision_id in enumerate(sorted(first_path.decisions.keys())):
-                if i < len(decision_step_names):
-                    decision_id_to_name[decision_id] = decision_step_names[i]
+            for step in first_path.steps:
+                if step.node_type == 'decision' and step.decision_id:
+                    decision_id_to_name[step.decision_id] = step.name
 
         # First pass: collect all nodes and edges
         # Handle empty paths (edge case: Start -> End only)
@@ -167,54 +146,34 @@ class MermaidRenderer:
                 if "s" not in node_definitions:
                     node_definitions["s"] = f"s(({context.start_node_label}))"
 
-                # Build a mapping of decision names in this path
-                # to identify which steps are decisions
-                decision_names_in_path = (
-                    set(decision_id_to_name.values())
-                    if decision_id_to_name
-                    else set()
-                )
-
                 # Process activities and decisions in path
+                # With typed PathStep objects, we can directly check node_type
                 prev_node_id = "s"
-                activity_counter = 0  # CRITICAL FIX: Separate counter for activities only
-                for step_index, step_name in enumerate(path.steps, 1):
-                    # Validate step name
-                    if step_name is None:
+                activity_counter = 0  # Separate counter for activities only
+                for step_index, step in enumerate(path.steps, 1):
+                    # Validate step
+                    if step.name is None or step.name == "":
                         raise ValueError(
-                            f"Activity name cannot be None or empty string in path "
-                            f"{path.path_id} at step index {step_index}"
-                        )
-                    if step_name == "":
-                        raise ValueError(
-                            f"Activity name cannot be None or empty string in path "
+                            f"Step name cannot be None or empty string in path "
                             f"{path.path_id} at step index {step_index}"
                         )
 
-                    # Determine if this is a decision or activity
-                    is_decision = step_name in decision_names_in_path
+                    # Determine node type directly from PathStep
+                    is_decision = step.node_type == 'decision'
 
                     if is_decision:
-                        # Find the decision ID for this decision name
-                        found_decision_id: str | None = None
-                        for dec_id, dec_name in decision_id_to_name.items():
-                            if dec_name == step_name:
-                                found_decision_id = dec_id
-                                break
-
-                        if found_decision_id is None:
-                            # Shouldn't happen, but handle gracefully
+                        # Get decision ID directly from PathStep
+                        if step.decision_id is None:
                             raise ValueError(
-                                f"Could not find decision ID for decision name '{step_name}' "
-                                f"in path {path.path_id}"
+                                f"Decision step '{step.name}' missing decision_id in path {path.path_id}"
                             )
 
-                        node_id = found_decision_id
+                        node_id = step.decision_id
 
                         # Apply word splitting if enabled
-                        display_name = step_name
+                        display_name = step.name
                         if context.split_names_by_words:
-                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step_name)
+                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step.name)
 
                         # Add decision node definition (deduplicated by dict key)
                         if node_id not in node_definitions:
@@ -244,14 +203,14 @@ class MermaidRenderer:
                         prev_node_id = node_id
                     else:
                         # This is an activity node
-                        # CRITICAL FIX: Use separate activity_counter instead of step_index
-                        activity_counter += 1
-                        node_id = str(activity_counter)
+                        # Use activity NAME as node ID for natural reconvergence (.NET pattern)
+                        # This makes the same activity across paths become the same node
+                        node_id = step.name
 
                         # Apply word splitting if enabled
-                        display_name = step_name
+                        display_name = step.name
                         if context.split_names_by_words:
-                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step_name)
+                            display_name = re.sub(r"([a-z])([A-Z])", r"\1 \2", step.name)
 
                         # Add activity node definition (deduplicated by dict key)
                         if node_id not in node_definitions:

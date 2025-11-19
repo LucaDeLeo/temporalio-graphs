@@ -33,24 +33,24 @@ The diagram below shows the complete workflow structure with all 4 execution pat
 ```mermaid
 flowchart LR
 s((Start))
-1[withdraw_funds]
-2[currency_convert]
-3[notify_ato]
-4[take_non_resident_tax]
-5[deposit_funds]
+currency_convert[currency_convert]
 d0{Need To Convert}
 d1{Is TFN_Known}
+deposit_funds[deposit_funds]
+notify_ato[notify_ato]
+take_non_resident_tax[take_non_resident_tax]
+withdraw_funds[withdraw_funds]
 e((End))
-s --> 1
-1 --> 2
-2 --> 3
-3 --> 4
-4 --> 5
-5 --> d0
+s --> withdraw_funds
+withdraw_funds --> d0
 d0 -- no --> d1
-d1 -- no --> e
-d1 -- yes --> e
-d0 -- yes --> d1
+d1 -- no --> take_non_resident_tax
+take_non_resident_tax --> deposit_funds
+deposit_funds --> e
+d1 -- yes --> notify_ato
+notify_ato --> deposit_funds
+d0 -- yes --> currency_convert
+currency_convert --> d1
 ```
 
 ## Graph Analysis Notes
@@ -60,10 +60,11 @@ d0 -- yes --> d1
 - **Total Execution Paths**: 4 (2^2 combinations)
 - **Node IDs**:
   - Start: s
-  - Activities: 1-5 (numbered sequentially)
+  - Activities: Activity names used as node IDs (withdraw_funds, currency_convert, notify_ato, take_non_resident_tax, deposit_funds)
   - Decisions: d0, d1
   - End: e
 - **Branch Labels**: yes/no for all decision branches (standard Mermaid decision labels)
+- **Reconvergence**: The deposit_funds node appears once and all paths reconverge to it (demonstrated through edges from both notify_ato and take_non_resident_tax to deposit_funds)
 
 ## Reference Implementation
 
@@ -71,4 +72,10 @@ This workflow is ported from the .NET Temporalio.Graphs reference implementation
 
 ## Notes on Graph Structure
 
-The current graph representation shows the analysis-time structure of the workflow, with all activities listed sequentially. This represents the complete set of activities that may execute across all 4 paths (some activities are conditional and may not appear in all individual execution flows). The decision nodes indicate where branching occurs, and the yes/no labels on edges indicate the decision outcomes that lead to each branch.
+The graph structure correctly represents the workflow control flow with decision-based branching:
+- **Sequential execution**: withdraw_funds always executes first
+- **Conditional branching**: Decision d0 (NeedToConvert) creates two branches - if true, currency_convert executes; if false, it's skipped
+- **Nested decisions**: Decision d1 (IsTFN_Known) creates two more branches - if true, notify_ato executes; if false, take_non_resident_tax executes
+- **Reconvergence**: Both tax branches reconverge at deposit_funds, which always executes last
+
+This structure matches the .NET Temporalio.Graphs reference implementation and correctly shows only the activities that execute in each decision path, rather than listing all activities sequentially.

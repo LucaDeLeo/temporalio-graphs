@@ -342,7 +342,7 @@ class TestDecisionMetadata:
     def test_decision_point_immutability(self) -> None:
         """Test that DecisionPoint is frozen (immutable)."""
         decision = DecisionPoint(
-            id="d0", name="Test", line_number=42, true_label="yes", false_label="no"
+            id="d0", name="Test", line_number=42, line_num=42, true_label="yes", false_label="no"
         )
 
         # Attempting to modify should raise error
