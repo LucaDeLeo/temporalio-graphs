@@ -35,6 +35,7 @@ __version__ = "0.1.0"
 __all__ = [
     "GraphBuildingContext",
     "analyze_workflow",
+    "analyze_workflow_graph",
     "to_decision",
     "wait_condition",
     "ValidationWarning",
@@ -44,6 +45,7 @@ __all__ = [
     "UnsupportedPatternError",
     "GraphGenerationError",
     "InvalidDecisionError",
+    "MultiWorkflowPath",
 ]
 
 

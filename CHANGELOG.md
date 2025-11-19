@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loop detection and warnings for advanced control flow
 - IDE plugins and editor integrations
 
-## [0.1.0] - 2025-01-19
+## [0.1.0] - 2025-11-19
 
 ### Added
 
@@ -62,37 +62,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation warning system for workflow quality issues
 - Unreachable activity detection (activities after all paths converge)
 - Path explosion warnings with actionable recommendations
-- Comprehensive exception hierarchy with 5 exception types:
+- Comprehensive exception hierarchy with 7 exception types:
   - `TemporalioGraphsError` (base exception)
   - `WorkflowParseError` (parsing failures, missing decorators)
   - `UnsupportedPatternError` (patterns beyond MVP scope)
   - `GraphGenerationError` (path explosion, rendering failures)
   - `InvalidDecisionError` (incorrect helper usage)
   - `InvalidSignalError` (invalid wait_condition usage)
+  - `ChildWorkflowNotFoundError` (Epic 6, child workflow resolution failures)
+  - `CircularWorkflowError` (Epic 6, circular workflow dependencies)
 - Actionable error messages with file paths, line numbers, and suggestions
 - Path list output format (text-based alternative to Mermaid)
 - Multiple output format modes: "mermaid", "paths", "full"
 - `suppress_validation` option to disable warnings
 - `include_validation_report` option for validation output control
-- Comprehensive example gallery with 4 examples:
+- Comprehensive example gallery with 5 working examples:
   - Simple Linear (1 path, beginner)
   - MoneyTransfer (4 paths, intermediate)
   - Signal Workflow (2 paths, intermediate)
   - Multi-Decision (8 paths, advanced)
+  - Parent-Child Workflow (multi-workflow, advanced)
 - Production-grade documentation (README, API reference, this CHANGELOG)
 - MIT License matching .NET Temporalio.Graphs
 - Makefile with `run-examples` target for CI integration
 - Integration tests for all example workflows with golden file validation
 
+#### Epic 6: Cross-Workflow Visualization (MVP Extension)
+- Child workflow call detection via `workflow.execute_child_workflow()` AST analysis
+- Multi-workflow analysis pipeline with `analyze_workflow_graph()` public API
+- Three child workflow expansion modes:
+  - **Reference mode** (default): Child workflows as atomic nodes `[[ChildWorkflow]]`
+  - **Inline mode**: Complete end-to-end paths spanning parent and child workflows
+  - **Subgraph mode**: Structural visualization with Mermaid subgraph blocks
+- Workflow call graph construction with circular dependency detection
+- Cross-workflow path generation with path explosion prevention
+- Automatic child workflow discovery in search paths
+- `MultiWorkflowPath` data model for cross-workflow execution paths
+- `ChildWorkflowNotFoundError` and `CircularWorkflowError` exception types
+- Parent-Child Workflow example demonstrating all three expansion modes
+- Path count calculation: Reference (parent paths only), Inline (parent × child paths)
+- `max_expansion_depth` configuration to prevent infinite recursion
+- Integration tests for multi-workflow analysis scenarios
+
 ### Technical Details
 - Python 3.10+ support (3.11+ recommended)
 - Dependency: temporalio >= 1.7.1
-- Test coverage: 95% (547 tests passing)
-- Performance: <1ms analysis time for simple workflows
+- Test coverage: 92% (547 tests passing, 100% pass rate)
+- Performance: <1ms analysis time for simple workflows, <2s full test suite
 - Static analysis approach: No workflow execution required
 - Zero runtime overhead in helper functions
-- Public API: 11 symbols in `__all__` (minimal, stable surface)
-- API stability: Epic 6 features (cross-workflow) available via direct import, public export deferred to v0.2.0 pending stabilization
+- Public API: 13 symbols in `__all__` (stable, minimal surface)
+  - Core: `analyze_workflow`, `GraphBuildingContext`
+  - Helpers: `to_decision`, `wait_condition`
+  - Multi-workflow: `analyze_workflow_graph`, `MultiWorkflowPath`
+  - Validation: `ValidationWarning`, `ValidationReport`
+  - Exceptions: 7 exception types (base + 6 specialized)
+- Mypy strict mode: 100% passing
+- Ruff linting: 100% passing
 
 ### Documentation
 - Complete README with quick start (<10 lines per FR60)
@@ -115,6 +141,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - No runtime overhead
 - Same conceptual model: 2^n path permutations for complete coverage
 - Compatible Mermaid output syntax
+- **Python enhancements beyond .NET version:**
+  - Cross-workflow visualization (Epic 6) - not available in .NET version
+  - Multiple expansion modes for child workflows (reference, inline, subgraph)
+  - Comprehensive validation system with actionable warnings
+  - Path list output format for CI/CD integration
+  - Superior error handling with 7 exception types
 
 [Unreleased]: https://github.com/yourusername/temporalio-graphs/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/yourusername/temporalio-graphs/releases/tag/v0.1.0
