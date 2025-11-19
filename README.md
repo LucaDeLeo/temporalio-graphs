@@ -70,103 +70,218 @@ result = analyze_workflow("my_workflow.py")
 print(result)  # Prints Mermaid diagram
 ```
 
-### Running the Examples
+## Examples
 
-Try the included examples right now:
+The library includes comprehensive examples demonstrating different workflow patterns and visualization capabilities. Examples are ordered by complexity to provide a clear learning path.
 
-**Simple Linear Workflow** (3 sequential activities):
+### Running All Examples
+
+Run all examples at once using the Makefile:
+
+```bash
+make run-examples
+```
+
+Or run individual examples as shown below.
+
+### 1. Simple Linear Workflow (Beginner)
+
+**Pattern**: Sequential activities with no branching
+**Path Count**: 1 path (no decisions)
+**Use Case**: Basic workflow pipelines, ETL processes, simple data transformations
 
 ```bash
 python examples/simple_linear/run.py
 ```
 
-This analyzes a simple workflow with 3 sequential activities and outputs:
+This demonstrates the simplest workflow pattern with 3 sequential activities:
 
-```mermaid
-flowchart LR
-s((Start))
-1[validate_input]
-2[process_data]
-3[save_result]
-e((End))
-s --> 1
-1 --> 2
-2 --> 3
-3 --> e
+```python
+@workflow.defn
+class SimpleWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        await workflow.execute_activity(validate_input, ...)
+        await workflow.execute_activity(process_data, ...)
+        await workflow.execute_activity(save_result, ...)
+        return "complete"
 ```
 
-See `/examples/simple_linear/` for the complete working example with explanations.
+**Output**: Linear flowchart showing validate_input → process_data → save_result
 
-**MoneyTransfer Workflow** (2 decision points, 4 execution paths):
+**Learn More**: See [`examples/simple_linear/`](examples/simple_linear/) for complete code and documentation.
+
+---
+
+### 2. MoneyTransfer Workflow (Intermediate)
+
+**Pattern**: Multiple decision points with conditional branches
+**Path Count**: 4 paths (2 decisions = 2^2)
+**Use Case**: Business workflows with conditional logic, approval processes, branching pipelines
 
 ```bash
 python examples/money_transfer/run.py
 ```
 
-This analyzes a real-world workflow with 2 decision points creating 4 distinct execution paths:
+This demonstrates decision-based branching with 2 decision points creating 4 execution paths:
 
-```mermaid
-flowchart LR
-s((Start))
-1[withdraw_funds]
-2[currency_convert]
-3[notify_ato]
-4[take_non_resident_tax]
-5[deposit_funds]
-d0{Need To Convert}
-d1{Is TFN_Known}
-e((End))
-s --> 1
-1 --> 2
-2 --> 3
-3 --> 4
-4 --> 5
-5 --> d0
-d0 -- no --> d1
-d1 -- no --> e
-d1 -- yes --> e
-d0 -- yes --> d1
+```python
+from temporalio_graphs import to_decision
+
+@workflow.defn
+class MoneyTransferWorkflow:
+    @workflow.run
+    async def run(self, source_currency: str, dest_currency: str, tfn_known: bool) -> str:
+        await workflow.execute_activity(withdraw_funds, ...)
+
+        # Decision 1: Currency conversion needed?
+        if await to_decision(source_currency != dest_currency, "NeedToConvert"):
+            await workflow.execute_activity(currency_convert, ...)
+
+        # Decision 2: Tax file number known?
+        if await to_decision(tfn_known, "IsTFN_Known"):
+            await workflow.execute_activity(notify_ato, ...)
+        else:
+            await workflow.execute_activity(take_non_resident_tax, ...)
+
+        await workflow.execute_activity(deposit_funds, ...)
+        return "transfer_complete"
 ```
 
-The MoneyTransfer example demonstrates:
-- **Multiple decision points**: 2 decisions create 2^2=4 execution paths
-- **Conditional activities**: CurrencyConvert, NotifyAto, TakeNonResidentTax execute conditionally
-- **Reconverging branches**: Deposit executes regardless of which path is taken
-- **.NET feature parity**: Ported from the Temporalio.Graphs .NET reference implementation
+**Key Features**:
+- Decision nodes rendered as diamonds: `d0{Need To Convert}`, `d1{Is TFN_Known}`
+- Yes/No branch labels on decision edges
+- Conditional activities execute only on specific paths
+- Reconverging branches (deposit_funds executes on all paths)
 
-See `/examples/money_transfer/` for the complete working example with explanation of all 4 execution paths.
+**Learn More**: See [`examples/money_transfer/`](examples/money_transfer/) for complete code and all 4 execution paths.
 
-**Approval Workflow with Signals** (1 signal point, 2 execution paths):
+---
+
+### 3. Signal Workflow (Intermediate)
+
+**Pattern**: Asynchronous wait conditions with timeouts
+**Path Count**: 2 paths (Signaled vs Timeout)
+**Use Case**: Approval workflows, event-driven processes, human-in-the-loop patterns
 
 ```bash
 python examples/signal_workflow/run.py
 ```
 
-This analyzes a workflow with a wait condition demonstrating signal/timeout patterns:
+This demonstrates signal/wait condition patterns with timeout handling:
 
-```mermaid
-flowchart LR
-s((Start))
-WaitForApproval{{Wait For Approval}}
-handle_timeout[handle_timeout]
-process_approved[process_approved]
-submit_request[submit_request]
-e((End))
-s --> submit_request
-submit_request --> WaitForApproval
-WaitForApproval -- Timeout --> handle_timeout
-handle_timeout --> e
-WaitForApproval -- Signaled --> process_approved
-process_approved --> e
+```python
+from temporalio_graphs import wait_condition
+from datetime import timedelta
+
+@workflow.defn
+class ApprovalWorkflow:
+    def __init__(self) -> None:
+        self.approved = False
+
+    @workflow.run
+    async def run(self, request_id: str) -> str:
+        await workflow.execute_activity(submit_request, ...)
+
+        # Wait for signal with timeout
+        if await wait_condition(
+            lambda: self.approved,
+            timedelta(hours=24),
+            "WaitForApproval"
+        ):
+            # Signaled branch
+            await workflow.execute_activity(process_approved, ...)
+            return "approved"
+        else:
+            # Timeout branch
+            await workflow.execute_activity(handle_timeout, ...)
+            return "timeout"
+
+    @workflow.signal
+    async def approve(self) -> None:
+        self.approved = True
 ```
 
-The ApprovalWorkflow example demonstrates:
-- **Signal node visualization**: Hexagon shape with `{{NodeName}}` syntax
-- **Two execution paths**: Signaled (approval received) vs Timeout (no approval)
-- **Conditional activities**: process_approved only on Signaled, handle_timeout only on Timeout
-- **Asynchronous wait patterns**: Common in approval workflows and event-driven processes
+**Key Features**:
+- Signal nodes rendered as hexagons: `{{Wait For Approval}}`
+- Two execution paths: Signaled (approval received) and Timeout (no approval)
+- Conditional activities based on signal outcome
+- Models asynchronous wait patterns common in real workflows
 
-See `/examples/signal_workflow/` for the complete working example with explanation of signal/wait condition patterns.
+**Learn More**: See [`examples/signal_workflow/`](examples/signal_workflow/) for complete code and explanation.
+
+---
+
+### 4. Multi-Decision Workflow (Advanced)
+
+**Pattern**: Multiple independent decision points with complex path permutations
+**Path Count**: 8 paths (3 decisions = 2^3)
+**Use Case**: Complex approval workflows, multi-criteria evaluation, loan processing, risk assessment
+
+```bash
+python examples/multi_decision/run.py
+```
+
+This demonstrates complex workflows with 3 independent decision points creating 8 execution paths:
+
+```python
+from temporalio_graphs import to_decision
+
+@workflow.defn
+class LoanApprovalWorkflow:
+    @workflow.run
+    async def run(self, amount: float, credit_score: int, has_existing_loans: bool) -> str:
+        await workflow.execute_activity(validate_application, ...)
+
+        # Decision 1: High-value loan? (>$10,000)
+        if await to_decision(amount > 10000, "HighValue"):
+            await workflow.execute_activity(manager_review, ...)
+
+        # Decision 2: Low credit score? (<600)
+        if await to_decision(credit_score < 600, "LowCredit"):
+            await workflow.execute_activity(require_collateral, ...)
+
+        # Decision 3: Existing loans?
+        if await to_decision(has_existing_loans, "ExistingLoans"):
+            await workflow.execute_activity(debt_ratio_check, ...)
+
+        await workflow.execute_activity(approve_loan, ...)
+        return "loan_approved"
+```
+
+**Key Features**:
+- Three independent decision points creating 8 distinct execution paths
+- Path permutations: each combination of yes/no decisions generates a unique path
+- Demonstrates real-world business logic (loan approval criteria)
+- Shows how 2^n path explosion works (3 decisions = 2³ = 8 paths)
+
+**All 8 Execution Paths**:
+1. No special checks (fast-track approval)
+2. Debt ratio check only
+3. Collateral required only
+4. Collateral + debt ratio check
+5. Manager review only
+6. Manager review + debt ratio check
+7. Manager review + collateral
+8. All checks (manager + collateral + debt ratio)
+
+**Learn More**: See [`examples/multi_decision/`](examples/multi_decision/) for complete code and detailed path analysis.
+
+---
+
+### Example Structure
+
+Each example follows a consistent structure:
+- `workflow.py` - Complete Temporal workflow with proper decorators and type hints
+- `run.py` - Script demonstrating `analyze_workflow()` API usage
+- `expected_output.md` - Golden file with complete Mermaid diagram and path list
+
+### When to Use Each Example
+
+- **Simple Linear**: Learning the basics, testing library installation, simple pipelines
+- **MoneyTransfer**: Understanding decision nodes, learning conditional branching
+- **Signal Workflow**: Implementing approval flows, event-driven patterns, timeout handling
+- **Multi-Decision**: Complex business logic, multi-criteria evaluation, understanding path explosion
 
 ### Using Decision Points
 

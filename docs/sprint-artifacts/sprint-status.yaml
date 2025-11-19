@@ -1,4 +1,4 @@
-# generated: 2025-11-18
+# generated: 2025-11-19
 # project: temporalio-graphs-python-port
 # project_key: temporalio-graphs-python-port
 # tracking_system: file-system
@@ -29,7 +29,7 @@
 # - SM typically drafts next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
 
-generated: 2025-11-18
+generated: 2025-11-19
 project: temporalio-graphs-python-port
 project_key: temporalio-graphs-python-port
 tracking_system: file-system
@@ -75,6 +75,15 @@ development_status:
   5-1-implement-validation-warnings-for-graph-quality: done  # APPROVED - Senior Developer Review Complete 2025-11-19
   5-2-implement-comprehensive-error-handling-hierarchy: done  # APPROVED WITH IMPROVEMENTS - Senior Developer Review Complete 2025-11-19
   5-3-implement-path-list-output-format: review
-  5-4-create-comprehensive-example-gallery: backlog
+  5-4-create-comprehensive-example-gallery: done  # APPROVED - Senior Developer Review Complete 2025-11-19
   5-5-create-production-grade-documentation: backlog
   epic-5-retrospective: optional
+
+  # Epic 6: Cross-Workflow Visualization (MVP Extension)
+  epic-6: contexted
+  6-1-detect-child-workflow-calls-in-ast: backlog
+  6-2-implement-child-workflow-node-rendering-in-mermaid: backlog
+  6-3-implement-multi-workflow-analysis-pipeline: backlog
+  6-4-implement-end-to-end-path-generation-across-workflows: backlog
+  6-5-add-integration-test-with-parent-child-workflow-example: backlog
+  epic-6-retrospective: optional
