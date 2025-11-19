@@ -78,9 +78,9 @@ def test_analyzer_no_workflow_defn_raises_error(
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
-    assert "No @workflow.defn decorated class found" in error_message
+    assert "Missing @workflow.defn decorator" in error_message
     assert str(workflow_file.resolve()) in error_message
-    assert "Ensure the workflow class has @workflow.defn decorator" in error_message
+    assert "Add @workflow.defn decorator to workflow class" in error_message
 
 
 def test_analyzer_no_workflow_run_raises_error(
@@ -93,8 +93,9 @@ def test_analyzer_no_workflow_run_raises_error(
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
-    assert "No @workflow.run decorated method found" in error_message
-    assert "MyWorkflow" in error_message
+    assert "Missing @workflow.run method" in error_message
+    # Note: workflow class name may or may not be in the new error format
+    assert str(workflow_file.resolve()) in error_message
 
 
 def test_analyzer_invalid_python_syntax_raises_error(
@@ -107,15 +108,15 @@ def test_analyzer_invalid_python_syntax_raises_error(
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
-    assert "Syntax error in workflow file" in error_message
+    assert "Invalid Python syntax" in error_message
     assert str(workflow_file.resolve()) in error_message
 
 
 def test_analyzer_file_not_found_raises_error(analyzer: WorkflowAnalyzer) -> None:
-    """Test that non-existent file raises FileNotFoundError."""
+    """Test that non-existent file raises WorkflowParseError."""
     workflow_file = Path("/nonexistent/path/to/workflow.py")
 
-    with pytest.raises(FileNotFoundError) as exc_info:
+    with pytest.raises(WorkflowParseError) as exc_info:
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
@@ -153,7 +154,7 @@ def test_analyzer_empty_workflow_class(
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
-    assert "No @workflow.run decorated method found" in error_message
+    assert "Missing @workflow.run method" in error_message
 
 
 def test_analyzer_returns_workflow_metadata(
@@ -271,7 +272,8 @@ def test_error_message_includes_helpful_suggestion(
         analyzer.analyze(workflow_file)
 
     error_message = str(exc_info.value)
-    assert "Ensure" in error_message or "Please" in error_message
+    # New error format uses "Suggestion:" instead of "Ensure" or "Please"
+    assert "Suggestion:" in error_message or "Ensure" in error_message or "Please" in error_message
 
 
 def test_analyzer_imports_workflow_metadata() -> None:

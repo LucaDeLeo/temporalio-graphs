@@ -134,16 +134,22 @@ class WorkflowAnalyzer(ast.NodeVisitor):
 
         # Validate file exists
         if not path.exists():
-            raise FileNotFoundError(
-                f"Workflow file not found: {path}\nPlease check the file path and try again."
-            )
+            raise WorkflowParseError(
+                file_path=path,
+                line=0,
+                message="Workflow file not found",
+                suggestion="Verify file path is correct and file exists",
+            ) from FileNotFoundError(f"File not found: {path}")
 
         # Validate file is readable
         try:
             source = path.read_text(encoding="utf-8")
         except PermissionError as e:
-            raise PermissionError(
-                f"Cannot read workflow file: {path}\nPermission denied: {e}"
+            raise WorkflowParseError(
+                file_path=path,
+                line=0,
+                message="Cannot read file (permission denied)",
+                suggestion="Check file permissions and ensure file is readable",
             ) from e
 
         # Warn if file extension is not .py
@@ -158,9 +164,10 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             tree = ast.parse(source, filename=str(path))
         except SyntaxError as e:
             raise WorkflowParseError(
-                f"Syntax error in workflow file: {path}\n"
-                f"Line {e.lineno}: {e.msg}\n"
-                f"Please fix the syntax error and try again."
+                file_path=path,
+                line=e.lineno or 0,
+                message=f"Invalid Python syntax: {e.msg}",
+                suggestion="Check workflow file for syntax errors",
             ) from e
 
         # Traverse AST to find workflow elements
@@ -169,16 +176,19 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         # Check if workflow class was found
         if self._workflow_class is None:
             raise WorkflowParseError(
-                f"No @workflow.defn decorated class found in {path}\n"
-                f"Ensure the workflow class has @workflow.defn decorator from temporalio"
+                file_path=path,
+                line=0,
+                message="Missing @workflow.defn decorator",
+                suggestion="Add @workflow.defn decorator to workflow class",
             )
 
         # Check if run method was found
         if self._workflow_run_method is None:
             raise WorkflowParseError(
-                f"No @workflow.run decorated method found in workflow class "
-                f"'{self._workflow_class}'\n"
-                f"Ensure the workflow class has a @workflow.run decorated method"
+                file_path=path,
+                line=self._line_numbers.get("workflow_class", 0),
+                message="Missing @workflow.run method",
+                suggestion="Add @workflow.run method to workflow class",
             )
 
         # Build and return WorkflowMetadata

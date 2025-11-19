@@ -177,10 +177,19 @@ class PathPermutationGenerator:
         if total_branch_points > context.max_decision_points:
             paths_count = 2**total_branch_points
             raise GraphGenerationError(
-                f"Too many branch points ({total_branch_points}) would generate "
-                f"{paths_count} paths (limit: {context.max_decision_points}). "
-                f"Branch points: {num_decisions} decisions + {num_signals} signals. "
-                f"Suggestion: Refactor workflow or increase max_decision_points limit"
+                reason=(
+                    f"Too many branch points ({total_branch_points}) would generate "
+                    f"{paths_count} paths (limit: {context.max_decision_points}). "
+                    f"Branch points: {num_decisions} decisions + {num_signals} signals. "
+                    f"Suggestion: Refactor workflow or increase max_decision_points limit"
+                ),
+                context={
+                    "decision_count": num_decisions,
+                    "signal_count": num_signals,
+                    "total_branch_points": total_branch_points,
+                    "limit": context.max_decision_points,
+                    "paths": paths_count,
+                },
             )
 
         # Log path generation start

@@ -172,13 +172,18 @@ class TestAnalyzeWorkflowErrorHandling:
     """Test AC2, AC11: Error handling and clear error messages."""
 
     def test_analyze_workflow_error_file_not_found(self) -> None:
-        """AC2, AC11: Verify FileNotFoundError for missing file."""
+        """AC2, AC11: Verify WorkflowParseError for missing file."""
         # Arrange
         nonexistent_file = "tests/fixtures/nonexistent_workflow.py"
 
-        # Act & Assert
-        with pytest.raises(FileNotFoundError):
+        # Act & Assert - now raises WorkflowParseError instead of FileNotFoundError
+        from temporalio_graphs.exceptions import WorkflowParseError
+
+        with pytest.raises(WorkflowParseError) as exc_info:
             analyze_workflow(nonexistent_file)
+
+        # Verify error message is helpful
+        assert "Workflow file not found" in str(exc_info.value)
 
     def test_analyze_workflow_error_invalid_format(self) -> None:
         """AC11: Verify ValueError for unsupported output_format."""
@@ -345,6 +350,7 @@ class TestAnalyzeWorkflowSignature:
 
         # Assert
         # Updated in Story 5.1 to include validation APIs
+        # Updated in Story 5.2 to include exception classes
         assert set(exported) == {
             "GraphBuildingContext",
             "analyze_workflow",
@@ -352,6 +358,11 @@ class TestAnalyzeWorkflowSignature:
             "wait_condition",
             "ValidationWarning",
             "ValidationReport",
+            "TemporalioGraphsError",
+            "WorkflowParseError",
+            "UnsupportedPatternError",
+            "GraphGenerationError",
+            "InvalidDecisionError",
         }
         # Verify internal components not exported
         assert "WorkflowAnalyzer" not in exported

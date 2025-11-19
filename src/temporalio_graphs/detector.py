@@ -25,6 +25,7 @@ Example:
 
 import ast
 import logging
+from pathlib import Path
 
 from temporalio_graphs._internal.graph_models import DecisionPoint, SignalPoint
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
@@ -227,19 +228,22 @@ class DecisionDetector(ast.NodeVisitor):
                 if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
                     return keyword.value.value
                 else:
+                    type_name = type(keyword.value).__name__
                     raise WorkflowParseError(
-                        f"Line {node.lineno}: to_decision() name argument must be a string. "
-                        f"Got {type(keyword.value).__name__}. "
-                        f"Please use: to_decision(condition, name='MyDecision')"
+                        file_path=Path("unknown"),
+                        line=node.lineno,
+                        message=f"to_decision() name argument must be a string. Got {type_name}",
+                        suggestion="Use: to_decision(condition, name='MyDecision')",
                     )
 
         # Check that we have at least 2 positional arguments (expr, name)
         if len(node.args) < 2:
+            msg = "to_decision() requires 2 arguments: to_decision(condition, 'name')"
             raise WorkflowParseError(
-                f"Line {node.lineno}: to_decision() requires 2 arguments: "
-                f"to_decision(condition, 'name'). "
-                f"Missing name argument. "
-                f"Please provide a string name for this decision point."
+                file_path=Path("unknown"),
+                line=node.lineno,
+                message=f"{msg}. Missing name argument",
+                suggestion="Provide a string name for this decision point",
             )
 
         # Get the second argument (name)
@@ -250,10 +254,12 @@ class DecisionDetector(ast.NodeVisitor):
             return name_arg.value
 
         # Name argument is not a string constant
+        type_name = type(name_arg).__name__
         raise WorkflowParseError(
-            f"Line {node.lineno}: to_decision() name argument must be a string constant. "
-            f"Got {type(name_arg).__name__}. "
-            f"Please use: to_decision(condition, 'MyDecision')"
+            file_path=Path("unknown"),
+            line=node.lineno,
+            message=f"to_decision() name argument must be a string constant. Got {type_name}",
+            suggestion="Use: to_decision(condition, 'MyDecision')",
         )
 
     def _extract_decision_expression(self, node: ast.Call) -> ast.expr:
@@ -274,9 +280,10 @@ class DecisionDetector(ast.NodeVisitor):
         """
         if len(node.args) < 1:
             raise WorkflowParseError(
-                f"Line {node.lineno}: to_decision() requires at least 1 argument "
-                f"(the boolean expression). "
-                f"Please use: to_decision(condition, 'name')"
+                file_path=Path("unknown"),
+                line=node.lineno,
+                message="to_decision() requires at least 1 argument (the boolean expression)",
+                suggestion="Use: to_decision(condition, 'name')",
             )
 
         return node.args[0]

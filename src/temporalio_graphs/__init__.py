@@ -14,6 +14,13 @@ from typing import Literal
 
 from temporalio_graphs.analyzer import WorkflowAnalyzer
 from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.exceptions import (
+    GraphGenerationError,
+    InvalidDecisionError,
+    TemporalioGraphsError,
+    UnsupportedPatternError,
+    WorkflowParseError,
+)
 from temporalio_graphs.generator import PathPermutationGenerator
 from temporalio_graphs.helpers import to_decision, wait_condition
 from temporalio_graphs.renderer import MermaidRenderer
@@ -28,6 +35,11 @@ __all__ = [
     "wait_condition",
     "ValidationWarning",
     "ValidationReport",
+    "TemporalioGraphsError",
+    "WorkflowParseError",
+    "UnsupportedPatternError",
+    "GraphGenerationError",
+    "InvalidDecisionError",
 ]
 
 
