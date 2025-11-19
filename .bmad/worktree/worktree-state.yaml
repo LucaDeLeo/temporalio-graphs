@@ -1,0 +1,14 @@
+# Worktree State Tracking
+# Automatically maintained by worktree manager workflows
+
+worktrees:
+  # Example format:
+  # feature-name:
+  #   path: /Users/luca/dev/bounty-wt/feature-name
+  #   branch: feature/feature-name
+  #   base_branch: main
+  #   created: 2025-11-19T12:00:00Z
+  #   last_sync: 2025-11-19T14:30:00Z
+  #   env_setup: true
+  #   status: active  # active, stale, merged
+  #   story_key: "1-2-feature-name"  # Optional BMM integration

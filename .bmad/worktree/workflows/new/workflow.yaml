@@ -1,0 +1,35 @@
+# Worktree New Workflow
+name: worktree-new
+description: "Create a new git worktree for parallel feature development with automatic environment setup and BMM story integration"
+author: "BMad"
+
+# Configuration sources
+config_source: "{project-root}/.bmad/worktree/config.yaml"
+bmm_config: "{project-root}/.bmad/bmm/config.yaml"
+
+# Critical variables from config
+worktree_root: "{config_source}:worktree_root"
+default_base_branch: "{config_source}:default_base_branch"
+auto_setup_env: "{config_source}:auto_setup_env"
+python_env_tool: "{config_source}:python_env_tool"
+auto_sync_on_create: "{config_source}:auto_sync_on_create"
+state_file: "{config_source}:state_file"
+sprint_status: "{config_source}:sprint_status"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+project_name: "{bmm_config}:project_name"
+date: system-generated
+
+# Workflow components
+installed_path: "{project-root}/.bmad/worktree/workflows/new"
+instructions: "{installed_path}/instructions.md"
+
+# Variables and inputs
+variables:
+  feature_name: null  # User provided or auto-generated from story
+  branch_name: null   # User provided or auto-generated
+  base_branch: "{default_base_branch}"
+  story_key: null     # Optional: link to BMM story
+  worktree_path: null  # Calculated from worktree_root + feature_name
+
+standalone: true
