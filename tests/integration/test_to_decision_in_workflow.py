@@ -268,52 +268,67 @@ class TestToDecisionIntegrationWithAnalyzeWorkflow:
     """Test to_decision() integration through analyze_workflow pipeline.
 
     Note: These tests validate that workflows with to_decision() calls are
-    recognized by the analyzer. Full path generation for decision workflows
-    will be implemented in Story 3.3 (PathPermutationGenerator).
+    now properly analyzed end-to-end. Decision path generation is fully
+    implemented in Story 3.3 (PathPermutationGenerator).
 
-    Currently, analyze_workflow() raises NotImplementedError for workflows
-    with decision points because decision path generation is deferred to
-    Epic 3. This is expected behavior per the implementation plan.
+    analyze_workflow() now successfully generates path permutations for
+    workflows with decision points. This is Epic 3 scope.
     """
 
     def test_analyze_workflow_with_single_decision(self, tmp_path: Path) -> None:
-        """Test that analyze_workflow detects to_decision() calls.
+        """Test that analyze_workflow generates mermaid for single decision.
 
-        Currently, workflows with decision points raise NotImplementedError
-        because path generation for decisions is Story 3.3. This validates
-        that to_decision() is properly recognized by the analyzer.
+        Validates that to_decision() is detected and 2 paths are generated
+        (one for True branch, one for False branch).
         """
         workflow_file = tmp_path / "test_workflow.py"
         workflow_file.write_text(_generate_workflow_with_decision())
 
-        # Decision path generation not yet implemented (Story 3.3)
-        with pytest.raises(NotImplementedError):
-            analyze_workflow(str(workflow_file))
+        # Decision path generation now implemented (Story 3.3)
+        result = analyze_workflow(str(workflow_file))
+
+        # Should return valid Mermaid string
+        assert isinstance(result, str)
+        assert "flowchart" in result.lower() or "graph" in result.lower()
+        assert "Start" in result
+        assert "End" in result
 
     def test_analyze_workflow_with_multiple_decisions(self, tmp_path: Path) -> None:
-        """Test analyze_workflow detects multiple decision points.
+        """Test analyze_workflow generates paths for multiple decisions.
 
-        Currently raises NotImplementedError - full support in Story 3.3.
+        Validates that multiple to_decision() calls generate 2^n paths.
+        For 2 decisions, should generate 4 paths.
         """
         workflow_file = tmp_path / "test_workflow.py"
         workflow_file.write_text(_generate_workflow_with_multiple_decisions())
 
-        # Decision path generation not yet implemented (Story 3.3)
-        with pytest.raises(NotImplementedError):
-            analyze_workflow(str(workflow_file))
+        # Decision path generation now implemented (Story 3.3)
+        result = analyze_workflow(str(workflow_file))
+
+        # Should return valid Mermaid string
+        assert isinstance(result, str)
+        assert "flowchart" in result.lower() or "graph" in result.lower()
+        assert "Start" in result
+        assert "End" in result
 
     def test_analyze_workflow_with_decision_and_activities(self, tmp_path: Path) -> None:
         """Test analyze_workflow detects mixed decision + activity patterns.
 
-        This validates that to_decision() is properly recognized in complex
-        workflows. Full path generation comes in Story 3.3.
+        Validates that to_decision() and execute_activity() are both
+        properly recognized and paths generated correctly.
         """
         workflow_file = tmp_path / "test_workflow.py"
         workflow_file.write_text(_generate_workflow_with_decision())
 
-        # Decision path generation not yet implemented (Story 3.3)
-        with pytest.raises(NotImplementedError):
-            analyze_workflow(str(workflow_file))
+        # Decision path generation now implemented (Story 3.3)
+        result = analyze_workflow(str(workflow_file))
+
+        # Should return valid Mermaid string with activities
+        assert isinstance(result, str)
+        assert "flowchart" in result.lower() or "graph" in result.lower()
+        assert "validate_amount" in result.lower()
+        assert "Start" in result
+        assert "End" in result
 
 
 class TestToDecisionDocumentationExamples:

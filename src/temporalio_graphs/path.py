@@ -100,32 +100,47 @@ class GraphPath:
         return node_id
 
     def add_decision(self, id: str, value: bool, name: str) -> str:
-        """Add a decision point to this execution path (Epic 3 stub).
+        """Add a decision point to this execution path.
 
-        This method is a placeholder for Epic 3 implementation. In Epic 3, it
-        will record the decision ID and its value (true/false) for this path,
-        and generate a node ID for the decision diamond in the graph.
+        Records the decision ID and its boolean value for this path, adds the
+        decision name to the steps list, and generates a unique node ID for the
+        decision diamond in the graph.
+
+        This method is called during path generation in PathPermutationGenerator
+        to track decisions encountered along each execution path. A decision point
+        with value=True represents the "yes" branch; value=False represents
+        the "no" branch.
 
         Args:
             id: Unique identifier for the decision point (e.g., "0", "1").
             value: Boolean value of the decision for this path (True or False).
+                True = "yes" branch, False = "no" branch.
             name: Human-readable decision name (e.g., "HighValue", "NeedToConvert").
 
         Returns:
-            Node ID for the decision node (to be implemented in Epic 3).
-
-        Raises:
-            NotImplementedError: This method is not implemented in Epic 2.
+            Node ID for the decision node. Follows same sequential format as
+            add_activity(): "1", "2", "3", etc.
 
         Example:
             >>> path = GraphPath(path_id="0b01")
-            >>> # This will raise NotImplementedError in Epic 2
-            >>> # path.add_decision("0", True, "HighValue")
+            >>> node_id = path.add_decision("0", True, "HighValue")
+            >>> node_id
+            '1'
+            >>> path.steps
+            ['HighValue']
+            >>> path.decisions
+            {'0': True}
         """
-        raise NotImplementedError(
-            "Decision point tracking is not implemented in Epic 2. "
-            "This will be added in Epic 3 (Story 3.3)."
-        )
+        # Record the decision value in the decisions dict
+        self.decisions[id] = value
+
+        # Add decision name to the steps list (like add_activity)
+        self.steps.append(name)
+
+        # Generate sequential node ID: count of all steps so far
+        node_id = str(len(self.steps))
+
+        return node_id
 
     def add_signal(self, name: str, outcome: str) -> str:
         """Add a signal point to this execution path (Epic 4 stub).

@@ -28,15 +28,21 @@ def test_activity_node_id_generation() -> None:
     assert id3 == "3"
 
 
-def test_add_decision_placeholder() -> None:
-    """Call add_decision, verify it's a stub (NotImplementedError)."""
+def test_add_decision_implementation() -> None:
+    """Call add_decision, verify it records decision and returns node ID."""
     path = GraphPath(path_id="0b00")
 
-    with pytest.raises(NotImplementedError) as exc_info:
-        path.add_decision("0", True, "HighValue")
+    # add_decision should now work (Epic 3 implementation)
+    node_id = path.add_decision("0", True, "HighValue")
 
-    assert "Epic 2" in str(exc_info.value)
-    assert "Epic 3" in str(exc_info.value)
+    # Should return a node ID
+    assert node_id == "1"
+
+    # Decision should be recorded
+    assert path.decisions["0"] is True
+
+    # Decision name should be added to steps
+    assert "HighValue" in path.steps
 
 
 def test_add_signal_placeholder() -> None:

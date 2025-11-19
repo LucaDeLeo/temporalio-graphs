@@ -1,0 +1,354 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>3</storyId>
+    <title>Implement Path Permutation Generator for Decisions</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/3-3-implement-path-permutation-generator-for-decisions.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>to generate all possible execution paths through decision points</iWant>
+    <soThat>the graph shows complete workflow coverage for branching workflows</soThat>
+    <tasks>
+      - Task 1: Enhance PathPermutationGenerator class structure (AC: 1)
+      - Task 2: Implement core permutation logic using itertools.product (AC: 2, AC: 3)
+      - Task 3: Implement explosion limit checking (AC: 5)
+      - Task 4: Handle nested and sequential decisions (AC: 4)
+      - Task 5: Add error handling and validation (AC: 6)
+      - Task 6: Implement branch label support (AC: 3)
+      - Task 7: Create comprehensive unit test suite (AC: 8)
+      - Task 8: Performance testing (AC: 7)
+      - Task 9: Integration testing (AC: 9)
+      - Task 10: Code quality validation (AC: 1, AC: 6)
+      - Task 11: Documentation updates (AC: 9)
+      - Task 12: Final validation (AC: 1-9)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. PathPermutationGenerator enhanced with decision support (FR6, FR16)
+       - New method: generate_paths_with_decisions(decisions, workflow_metadata, context) -> list[GraphPath]
+       - Complete type hints matching mypy strict mode
+       - Maintains backward compatibility with linear workflows (0 decisions)
+
+    2. Generates 2^n path permutations for n independent decisions (FR6, FR16)
+       - Uses itertools.product([True, False], repeat=num_decisions)
+       - All permutations generated (no missing paths)
+       - Validated by unit tests with explicit path count assertions
+
+    3. Decision nodes render in generated paths with branch labels (FR13, FR15)
+       - Each GraphPath contains decision nodes with correct boolean choice
+       - Branch labels default to "yes" for True, "no" for False
+       - Custom branch labels supported via context configuration
+
+    4. Handles nested and sequential decisions correctly (FR16, FR46, FR49)
+       - Nested decisions (decision within branches) handled correctly
+       - elif chains detected as multiple sequential decisions
+       - Reconverging branches (multiple paths merging) handled properly
+
+    5. Explosion limit checked before generation (FR36, NFR-PERF-2)
+       - Checks len(decisions) &lt;= context.max_decision_points before permutation
+       - Default max_decision_points = 10 (2^10 = 1024 paths)
+       - Raises GraphGenerationError if limit exceeded with helpful message
+
+    6. Efficient implementation with proper error handling (FR44)
+       - Uses C-optimized itertools.product for O(2^n) complexity
+       - Raises GraphGenerationError with clear context
+       - All exceptions have descriptive messages
+
+    7. Performance meets requirements (NFR-PERF-1, NFR-PERF-2)
+       - 5 decision points (32 paths): generates in &lt; 1 second
+       - 10 decision points (1024 paths): generates in &lt; 5 seconds
+
+    8. Comprehensive unit test coverage (FR6, FR16)
+       - test_generate_zero_decisions_returns_linear_path()
+       - test_generate_one_decision_two_paths()
+       - test_generate_two_decisions_four_paths()
+       - test_generate_three_decisions_eight_paths()
+       - test_generate_custom_branch_labels()
+       - test_explosion_limit_exceeds_default()
+       - test_explosion_limit_custom()
+       - test_all_permutations_complete()
+
+    9. Integration with existing components and workflows (FR43)
+       - Works seamlessly with WorkflowMetadata from Story 3.1
+       - Generated paths consumed by MermaidRenderer (Story 3.4)
+       - Compatible with async workflow analysis
+       - No breaking changes to existing linear workflow path generation
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>Functional Requirements FR6, FR13, FR15, FR16, FR36, FR43, FR44, FR46, FR49</section>
+        <snippet>FR6: Library can generate 2^n execution path permutations for n independent decision points. FR13: Decision nodes can have custom true/false branch labels (default: "yes"/"no"). FR15: Each decision node generates exactly 2 branches (true/false paths). FR16: Nested decisions create proper path permutations (2^n total paths). FR36: Users can control decision ID preservation (hash vs numeric). FR43: Library can handle async workflow methods. FR44: Library raises clear exceptions for unsupported workflow patterns. FR46: Library can handle elif chains (multiple decision points). FR49: Library can handle parallel branches that reconverge (linearized for MVP).</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>Non-Functional Requirements NFR-PERF-1, NFR-PERF-2</section>
+        <snippet>NFR-PERF-1: Analysis Speed - AST parsing and graph generation completes in &lt; 1 second for workflows with up to 5 decision points (32 paths). Target: &lt; 5 seconds for complex workflows (10 decision points, 1024 paths). NFR-PERF-2: Memory Efficiency - Library uses &lt; 100MB memory for analyzing typical workflows. Path explosion safeguards prevent runaway memory use (max paths limit).</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Path Explosion Management (lines 901-931)</section>
+        <snippet>Uses itertools.product for efficient generation. Early exit for linear workflows. Explosion check BEFORE generation. Default max_decision_points = 10 (1024 paths max). Raises GraphGenerationError with helpful message including suggestions. Early exit prevents memory exhaustion.</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Performance Targets from NFR-PERF-1 (lines 887-892)</section>
+        <snippet>Simple workflows: &lt; 0.001s (1ms). 5 decision points (32 paths): &lt; 1 second. 10 decision points (1024 paths): &lt; 5 seconds. Memory usage: &lt; 100MB for typical workflows.</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Detailed Design - PathPermutationGenerator Enhancements</section>
+        <snippet>Enhanced PathPermutationGenerator enhancements: Handles workflows with decision points (extends Epic 2 linear logic). Generates 2^n paths for n decisions using itertools.product. Early validation: checks len(decisions) less than or equal to context.max_decision_points. Raises GraphGenerationError if limit exceeded. Maintains O(2^n) time complexity, optimized via C-based itertools. New Methods: _build_path_with_decisions(decisions, choices, context) -> GraphPath, _check_explosion_limit(num_decisions, context) -> None.</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Data Models and Contracts - DecisionPoint</section>
+        <snippet>DecisionPoint dataclass represents a decision point detected in workflow code. Attributes: decision_id (deterministic identifier), name (user-provided decision name), line_number (source code line number), true_label (branch label for True path, default "yes"), false_label (branch label for False path, default "no").</snippet>
+      </artifact>
+
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>APIs and Interfaces - PathPermutationGenerator Enhancements (FR6, FR15, FR16)</section>
+        <snippet>generate_paths() method generates 2^n paths for n decisions. Args: metadata (WorkflowMetadata with activities and decision_points), context (GraphBuildingContext configuration). Returns: List of GraphPath objects, one per unique execution path. Raises: GraphGenerationError if decision count exceeds max_decision_points. Uses itertools.product for efficient permutation generation.</snippet>
+      </artifact>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>module</kind>
+        <symbol>PathPermutationGenerator</symbol>
+        <lines>21-195</lines>
+        <reason>Existing PathPermutationGenerator class that needs enhancement for decision support. Currently handles linear workflows (0 decisions) and raises NotImplementedError for workflows with decision points. This is the primary class to be enhanced in Story 3.3.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>method</kind>
+        <symbol>PathPermutationGenerator.generate_paths</symbol>
+        <lines>60-171</lines>
+        <reason>Main entry point method that currently validates inputs and creates linear paths. Will be enhanced to call new permutation logic when decisions are present. Currently contains explosion limit check (lines 146-154) that validates decision count before raising NotImplementedError.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>method</kind>
+        <symbol>PathPermutationGenerator._create_linear_path</symbol>
+        <lines>173-194</lines>
+        <reason>Helper method that creates single linear path for Epic 2 workflows. Will serve as baseline for building paths with decision nodes. Shows pattern for path creation and activity addition.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>DecisionPoint</symbol>
+        <lines>206-245</lines>
+        <reason>DecisionPoint dataclass from Story 3.1 that represents decision metadata. Contains id, name, line_number, true_label, false_label fields. This is the input type for the permutation generator - list[DecisionPoint] comes from WorkflowMetadata.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>247-330</lines>
+        <reason>WorkflowMetadata dataclass that contains decision_points list (line 299). This is the primary input to PathPermutationGenerator.generate_paths(). Also contains calculate_total_paths() static method (lines 304-329) showing 2^n formula for path count calculation.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>11-90</lines>
+        <reason>Configuration dataclass with decision-related fields: max_decision_points (line 84, default 10), max_paths (line 85, default 1024), decision_true_label (line 86, default "yes"), decision_false_label (line 87, default "no"). These fields control explosion limits and branch label customization.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphPath</symbol>
+        <lines>11-156</lines>
+        <reason>GraphPath class that represents single execution path. Currently has add_activity() method (lines 68-100) implemented. Has add_decision() stub (lines 102-128) that raises NotImplementedError. This stub needs to be implemented in Story 3.3 to track decision nodes in paths.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>method</kind>
+        <symbol>GraphPath.add_decision</symbol>
+        <lines>102-128</lines>
+        <reason>Currently a stub that raises NotImplementedError with message "Decision point tracking is not implemented in Epic 2. This will be added in Epic 3 (Story 3.3)." Needs implementation to record decision ID, value (True/False), and name in the path.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>class</kind>
+        <symbol>DecisionDetector</symbol>
+        <lines>35-238</lines>
+        <reason>DecisionDetector from Story 3.1 that identifies to_decision() calls in workflow AST. The decisions property (lines 230-237) returns list[DecisionPoint] which is the input to PathPermutationGenerator. Understanding this output format is critical for implementing permutation logic.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/helpers.py</path>
+        <kind>function</kind>
+        <symbol>to_decision</symbol>
+        <lines>19-78</lines>
+        <reason>Helper function from Story 3.2 that workflows use to mark decision points. Transparent passthrough (returns result unchanged) but serves as marker for static analysis. Understanding this function's contract (bool, str) -> bool helps validate the decision detection and path building logic.</reason>
+      </artifact>
+
+      <artifact>
+        <path>src/temporalio_graphs/exceptions.py</path>
+        <kind>module</kind>
+        <symbol>GraphGenerationError</symbol>
+        <lines>all</lines>
+        <reason>Exception hierarchy for graph generation errors. GraphGenerationError is raised when explosion limit is exceeded (referenced in generator.py lines 150-154). Needs to be imported and used for comprehensive error handling in enhanced permutation logic.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" usage="workflow type definitions, decorators" />
+        <package name="itertools" version="stdlib" usage="product() function for combinatorial permutation generation (NEW in Epic 3)" />
+      </python>
+      <dev>
+        <package name="pytest" version=">=7.4.0" usage="test framework for unit and integration tests" />
+        <package name="pytest-cov" version=">=4.1.0" usage="coverage measurement (>80% target)" />
+        <package name="pytest-asyncio" version=">=0.21.0" usage="async test support for workflow helpers" />
+        <package name="mypy" version="latest" usage="type checking in strict mode" />
+        <package name="ruff" version="latest" usage="linting and formatting" />
+      </dev>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Must maintain backward compatibility with linear workflows (0 decisions) from Epic 2
+    - Must handle 0 decisions case by returning single path (existing _create_linear_path logic)
+    - Must validate decision count BEFORE permutation generation (fail fast with helpful error)
+    - Must use itertools.product for efficient O(2^n) permutation (C-optimized, no manual recursion)
+    - Must support custom branch labels via GraphBuildingContext (decision_true_label, decision_false_label)
+    - Must integrate with DecisionPoint dataclass from Story 3.1 (list[DecisionPoint] input)
+    - Must produce GraphPath objects compatible with MermaidRenderer from Story 3.4
+    - Must implement GraphPath.add_decision() method (currently NotImplementedError stub)
+    - Must pass mypy strict mode type checking (all parameters and returns fully typed)
+    - Must follow Python naming conventions (snake_case for methods, PascalCase for classes)
+    - Must use dataclasses where appropriate (immutable DecisionPoint is frozen=True)
+    - Must include comprehensive docstrings with usage examples (Google-style format)
+    - Must log debug information for path generation (number of decisions, total paths created)
+    - Must respect GraphBuildingContext.max_decision_points limit (default 10)
+    - Must calculate total_paths as 2 ** num_decisions for error messages
+    - Must handle nested decisions (decision within if/else branches)
+    - Must handle sequential decisions (elif chains from Story 3.1)
+    - Must handle reconverging branches (activities after decisions present in all paths)
+    - Must not modify WorkflowMetadata input (read-only access to decision_points)
+    - Must not execute workflow code (static analysis only, matches ADR-001)
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>PathPermutationGenerator.generate_paths</name>
+      <kind>method signature</kind>
+      <signature>def generate_paths(self, metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]</signature>
+      <path>src/temporalio_graphs/generator.py</path>
+      <description>Main entry point for path generation. Currently handles linear workflows and validates explosion limits. Will be enhanced to call new permutation logic when len(metadata.decision_points) > 0.</description>
+    </interface>
+
+    <interface>
+      <name>GraphPath.add_decision</name>
+      <kind>method signature</kind>
+      <signature>def add_decision(self, id: str, value: bool, name: str) -> str</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Currently raises NotImplementedError. Needs implementation to record decision in path. Should add decision to steps list, record value in decisions dict, and return decision_id for graph building.</description>
+    </interface>
+
+    <interface>
+      <name>DecisionPoint dataclass</name>
+      <kind>data structure</kind>
+      <signature>@dataclass(frozen=True) DecisionPoint(id: str, name: str, line_number: int, true_label: str, false_label: str)</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Input type for permutation generator. Represents single decision point from workflow analysis. List of these comes from WorkflowMetadata.decision_points.</description>
+    </interface>
+
+    <interface>
+      <name>itertools.product</name>
+      <kind>function</kind>
+      <signature>product(*iterables, repeat=1) -> Iterator[tuple]</signature>
+      <path>Python standard library</path>
+      <description>Combinatorial permutation generator. Use product([True, False], repeat=num_decisions) to generate all 2^n boolean combinations efficiently. C-optimized for performance.</description>
+    </interface>
+
+    <interface>
+      <name>GraphBuildingContext decision fields</name>
+      <kind>configuration</kind>
+      <signature>max_decision_points: int = 10, decision_true_label: str = "yes", decision_false_label: str = "no"</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Configuration for explosion limits and branch label customization. max_decision_points controls when to raise GraphGenerationError. Labels control edge text in Mermaid output.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing follows pytest framework with >80% overall coverage target, 100% coverage for core path permutation logic. Tests organized in tests/ directory mirroring src/ structure. Use pytest-asyncio for async helper function tests. Type checking via mypy strict mode. Performance tests use time.perf_counter() for accurate measurement. Integration tests validate full pipeline from DecisionDetector -> PathPermutationGenerator -> MermaidRenderer.
+    </standards>
+
+    <locations>
+      tests/test_generator.py (enhanced from Epic 2 with decision permutation tests)
+      tests/test_path.py (enhanced to test add_decision() implementation)
+      tests/integration/test_path_generation_with_decisions.py (new integration tests)
+      tests/test_performance_path_generation.py (new performance validation)
+    </locations>
+
+    <ideas>
+      - test_generate_zero_decisions_returns_linear_path: Validate backward compatibility - 0 decisions should return exactly 1 path using existing _create_linear_path logic (regression test for Epic 2 behavior)
+
+      - test_generate_one_decision_two_paths: Single decision generates exactly 2 paths (True branch and False branch). Validate path_id uniqueness, decision values recorded correctly, both paths contain same activities
+
+      - test_generate_two_decisions_four_paths: Two independent decisions generate exactly 4 paths (TT, TF, FT, FF). Validate all permutations present using itertools.product output validation
+
+      - test_generate_three_decisions_eight_paths: Three decisions generate 8 paths (2^3 = 8). Validates exponential growth formula, ensures no duplicate paths
+
+      - test_generate_custom_branch_labels: Create context with custom decision_true_label="T" and decision_false_label="F". Validate labels propagate to GraphPath decision nodes correctly
+
+      - test_explosion_limit_exceeds_default: Create metadata with 11 decision points (exceeds default max of 10). Validate GraphGenerationError raised with helpful message including total_paths calculation (2^11 = 2048)
+
+      - test_explosion_limit_custom: Create context with max_decision_points=5. Validate 5 decisions allowed, 6 decisions raises error. Tests configurable limit override
+
+      - test_all_permutations_complete: For 3 decisions, validate that all 8 combinations are present: check each path's decision values against expected set using itertools.product for reference
+
+      - test_nested_decisions_correct_permutation: Workflow with decision inside if branch (nested structure). Validate paths correctly represent nesting, activities in correct order per path
+
+      - test_sequential_decisions_all_combinations: Multiple decisions in sequence (not nested). Validate 2^n paths with all combinations represented
+
+      - test_reconverging_branches: Activity after decision appears in all paths (both True and False branches converge). Validate activity present in all generated paths
+
+      - test_performance_five_decisions: 5 decisions (32 paths) must complete in &lt; 1 second. Use time.perf_counter() for precise measurement. Assert timing requirement met
+
+      - test_performance_ten_decisions: 10 decisions (1024 paths) must complete in &lt; 5 seconds. Performance boundary test for NFR-PERF-1 compliance
+
+      - test_integration_with_decision_detector: Full pipeline test - create workflow source with to_decision() calls, run DecisionDetector, pass results to PathPermutationGenerator, validate path count matches 2^n formula
+
+      - test_integration_with_mermaid_renderer: Generate paths with decisions, pass to MermaidRenderer (Story 3.4), validate decision nodes appear as diamonds with correct branch labels (integration readiness test)
+
+      - test_add_decision_implementation: Test GraphPath.add_decision() method directly - validate it records decision in decisions dict, adds to steps list, returns decision_id
+
+      - test_error_message_quality: When explosion limit exceeded, validate error message contains: decision count, calculated total_paths, max limit, suggestion to refactor or increase limit
+    </ideas>
+  </tests>
+</story-context>

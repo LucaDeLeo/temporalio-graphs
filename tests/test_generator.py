@@ -2,6 +2,10 @@
 
 Tests for path generation from workflow metadata, including edge cases,
 error handling, and performance validation.
+
+Tests cover:
+- Epic 2: Linear workflows (0 decisions)
+- Epic 3: Decision-based path permutation (2^n paths for n decisions)
 """
 
 import time
@@ -9,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from temporalio_graphs._internal.graph_models import WorkflowMetadata
+from temporalio_graphs._internal.graph_models import DecisionPoint, WorkflowMetadata
 from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.exceptions import GraphGenerationError
 from temporalio_graphs.generator import PathPermutationGenerator
 
 
@@ -247,30 +252,36 @@ def test_generate_paths_node_id_assignment(
     assert path.steps[2] == "ActivityC"
 
 
-def test_generate_paths_raises_not_implemented_for_decisions(
+def test_generate_paths_with_decisions_returns_paths(
     generator: PathPermutationGenerator, default_context: GraphBuildingContext
 ) -> None:
-    """Verify NotImplementedError is raised for workflows with decisions.
+    """Verify decision support is now implemented (Epic 3 feature).
 
-    Validates that decision support (Epic 3 feature) properly raises
-    NotImplementedError with clear message about epic scope.
+    Validates that workflows with decisions are now supported and return
+    the correct number of paths instead of raising an error.
     """
+    decision = DecisionPoint(
+        id="d0",
+        name="CheckAmount",
+        line_number=30,
+        true_label="yes",
+        false_label="no",
+    )
     metadata = WorkflowMetadata(
         workflow_class="DecisionWorkflow",
         workflow_run_method="run",
         activities=["Step1", "Step2"],
-        decision_points=["CheckAmount"],  # This should trigger error
+        decision_points=[decision],
         signal_points=[],
         source_file=Path("workflows.py"),
         total_paths=2,
     )
 
-    with pytest.raises(NotImplementedError) as exc_info:
-        generator.generate_paths(metadata, default_context)
+    # Should now return paths instead of raising NotImplementedError
+    paths = generator.generate_paths(metadata, default_context)
 
-    error_msg = str(exc_info.value)
-    assert "Epic 2" in error_msg or "Epic 3" in error_msg
-    assert "decision" in error_msg.lower()
+    assert len(paths) == 2, f"Expected 2 paths for 1 decision, got {len(paths)}"
+    assert "CheckAmount" in str(paths[0].steps or paths[1].steps)
 
 
 def test_generate_paths_validates_metadata_not_none(
@@ -343,3 +354,368 @@ def test_generate_paths_performance_100_activities(
     assert elapsed_time < 0.0001, f"Performance requirement: <0.1ms, got {elapsed_time*1000:.4f}ms"
     assert len(paths) == 1
     assert len(paths[0].steps) == 100
+
+
+# =============================================================================
+# Epic 3: Decision Support Tests
+# =============================================================================
+
+
+def test_generate_zero_decisions_returns_linear_path(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test backward compatibility: 0 decisions returns 1 linear path.
+
+    Validates Epic 2 behavior is preserved - workflows with no decisions
+    should generate exactly one path using the linear algorithm.
+    This is a regression test for backward compatibility.
+    """
+    metadata = WorkflowMetadata(
+        workflow_class="LinearWorkflow",
+        workflow_run_method="run",
+        activities=["Withdraw", "Deposit"],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=1,
+    )
+
+    paths = generator.generate_paths(metadata, default_context)
+
+    assert len(paths) == 1
+    assert paths[0].path_id == "path_0"
+    assert paths[0].steps == ["Withdraw", "Deposit"]
+    assert len(paths[0].decisions) == 0
+
+
+def test_generate_one_decision_two_paths(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test 1 decision generates exactly 2 paths (True and False branches).
+
+    Validates 2^1 = 2 paths are generated for a single decision point.
+    Each path should have a different decision value.
+    """
+    decision = DecisionPoint(
+        id="d0",
+        name="HighValue",
+        line_number=42,
+        true_label="yes",
+        false_label="no",
+    )
+    metadata = WorkflowMetadata(
+        workflow_class="OneDecisionWorkflow",
+        workflow_run_method="run",
+        activities=["Withdraw", "Deposit"],
+        decision_points=[decision],
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=2,
+    )
+
+    paths = generator.generate_paths(metadata, default_context)
+
+    # Should generate exactly 2 paths
+    assert len(paths) == 2, f"Expected 2 paths for 1 decision, got {len(paths)}"
+
+    # Each path should have the decision recorded with different values
+    decision_values = [path.decisions.get("d0") for path in paths]
+    assert True in decision_values, "Missing path with decision=True"
+    assert False in decision_values, "Missing path with decision=False"
+
+    # Verify path IDs are unique
+    path_ids = {path.path_id for path in paths}
+    assert len(path_ids) == 2, "Path IDs should be unique"
+
+
+def test_generate_two_decisions_four_paths(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test 2 decisions generate exactly 4 paths (2^2 combinations).
+
+    Validates 2^2 = 4 paths are generated with all combinations:
+    (True, True), (True, False), (False, True), (False, False).
+    """
+    decisions = [
+        DecisionPoint("d0", "NeedConvert", 42, "yes", "no"),
+        DecisionPoint("d1", "HighValue", 55, "yes", "no"),
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="TwoDecisionWorkflow",
+        workflow_run_method="run",
+        activities=["Withdraw", "CurrencyConvert", "Deposit"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=4,
+    )
+
+    paths = generator.generate_paths(metadata, default_context)
+
+    # Should generate exactly 4 paths
+    assert len(paths) == 4, f"Expected 4 paths for 2 decisions, got {len(paths)}"
+
+    # Verify all combinations are present
+    decision_combos = [
+        (path.decisions.get("d0"), path.decisions.get("d1")) for path in paths
+    ]
+    expected_combos = [(True, True), (True, False), (False, True), (False, False)]
+
+    for combo in expected_combos:
+        assert combo in decision_combos, f"Missing combination {combo}"
+
+
+def test_generate_three_decisions_eight_paths(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test 3 decisions generate exactly 8 paths (2^3 combinations).
+
+    Validates 2^3 = 8 paths are generated with all combinations.
+    """
+    decisions = [
+        DecisionPoint("d0", "Decision1", 10, "yes", "no"),
+        DecisionPoint("d1", "Decision2", 20, "yes", "no"),
+        DecisionPoint("d2", "Decision3", 30, "yes", "no"),
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="ThreeDecisionWorkflow",
+        workflow_run_method="run",
+        activities=["Activity1", "Activity2"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=8,
+    )
+
+    paths = generator.generate_paths(metadata, default_context)
+
+    # Should generate exactly 8 paths
+    assert len(paths) == 8, f"Expected 8 paths for 3 decisions, got {len(paths)}"
+
+    # Verify all paths have all decisions recorded
+    for path in paths:
+        assert len(path.decisions) == 3, f"Path should have 3 decisions, has {len(path.decisions)}"
+        assert all(isinstance(v, bool) for v in path.decisions.values()), \
+            f"All decision values should be bool, got {path.decisions}"
+
+
+def test_generate_custom_branch_labels(
+    generator: PathPermutationGenerator,
+) -> None:
+    """Test custom decision branch labels via GraphBuildingContext.
+
+    Validates that context.decision_true_label and decision_false_label
+    are respected (though labels are used by renderer, not generator).
+    This test verifies the context is accepted without error.
+    """
+    custom_context = GraphBuildingContext(
+        decision_true_label="T",
+        decision_false_label="F",
+    )
+
+    decision = DecisionPoint("d0", "TestDecision", 50, "yes", "no")
+    metadata = WorkflowMetadata(
+        workflow_class="CustomLabelWorkflow",
+        workflow_run_method="run",
+        activities=["Step1", "Step2"],
+        decision_points=[decision],
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=2,
+    )
+
+    paths = generator.generate_paths(metadata, custom_context)
+
+    assert len(paths) == 2
+    # Labels are used by renderer, not stored in path, so we just verify it didn't error
+
+
+def test_explosion_limit_exceeds_default(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test error when decisions exceed default max_decision_points (10).
+
+    Validates that 11 decisions raises GraphGenerationError because
+    2^11 = 2048 paths exceeds the default limit of max_decision_points=10.
+    """
+    # Create 11 decisions (exceeds default max of 10)
+    decisions = [
+        DecisionPoint(f"d{i}", f"Decision{i}", 10 + i, "yes", "no")
+        for i in range(11)
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="TooManyDecisionsWorkflow",
+        workflow_run_method="run",
+        activities=["Activity1"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=2**11,
+    )
+
+    with pytest.raises(GraphGenerationError) as exc_info:
+        generator.generate_paths(metadata, default_context)
+
+    error_msg = str(exc_info.value)
+    assert "11" in error_msg, "Error should mention 11 decision points"
+    assert "2048" in error_msg, "Error should mention 2048 paths"
+    assert "10" in error_msg, "Error should mention the 10 decision point limit"
+
+
+def test_explosion_limit_custom(
+    generator: PathPermutationGenerator,
+) -> None:
+    """Test custom explosion limit via context.max_decision_points.
+
+    Validates that context.max_decision_points is respected:
+    - 5 decisions allowed when limit=5
+    - 6 decisions raises error when limit=5
+    """
+    custom_context = GraphBuildingContext(max_decision_points=5)
+
+    # Test 5 decisions (should succeed with limit=5)
+    decisions_5 = [
+        DecisionPoint(f"d{i}", f"Decision{i}", 10 + i, "yes", "no")
+        for i in range(5)
+    ]
+    metadata_5 = WorkflowMetadata(
+        workflow_class="FiveDecisionWorkflow",
+        workflow_run_method="run",
+        activities=["Activity1"],
+        decision_points=decisions_5,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=32,
+    )
+
+    paths_5 = generator.generate_paths(metadata_5, custom_context)
+    assert len(paths_5) == 32, "Should allow 5 decisions when limit=5"
+
+    # Test 6 decisions (should fail with limit=5)
+    decisions_6 = [
+        DecisionPoint(f"d{i}", f"Decision{i}", 10 + i, "yes", "no")
+        for i in range(6)
+    ]
+    metadata_6 = WorkflowMetadata(
+        workflow_class="SixDecisionWorkflow",
+        workflow_run_method="run",
+        activities=["Activity1"],
+        decision_points=decisions_6,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=64,
+    )
+
+    with pytest.raises(GraphGenerationError):
+        generator.generate_paths(metadata_6, custom_context)
+
+
+def test_all_permutations_complete(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Test all 2^n permutations are generated with no duplicates.
+
+    For 3 decisions, validates that all 8 combinations are present.
+    """
+    decisions = [
+        DecisionPoint("d0", "Decision1", 10, "yes", "no"),
+        DecisionPoint("d1", "Decision2", 20, "yes", "no"),
+        DecisionPoint("d2", "Decision3", 30, "yes", "no"),
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="PermutationCheckWorkflow",
+        workflow_run_method="run",
+        activities=["Activity1"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=8,
+    )
+
+    paths = generator.generate_paths(metadata, default_context)
+
+    # Collect all unique decision combinations
+    combos = set()
+    for path in paths:
+        combo = tuple(
+            path.decisions[f"d{i}"] for i in range(3)
+        )
+        combos.add(combo)
+
+    # Verify all 8 combinations are present
+    assert len(combos) == 8, f"Should have 8 unique combinations, got {len(combos)}"
+
+    # Verify all expected combinations are there
+    for d0 in [True, False]:
+        for d1 in [True, False]:
+            for d2 in [True, False]:
+                assert (d0, d1, d2) in combos, \
+                    f"Missing combination ({d0}, {d1}, {d2})"
+
+
+def test_performance_five_decisions(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Validate performance requirement: 32 paths (5 decisions) in <1 second.
+
+    NFR-PERF-1 requirement: generation of 32 paths must complete in <1 second.
+    """
+    decisions = [
+        DecisionPoint(f"d{i}", f"Decision{i}", 10 + i, "yes", "no")
+        for i in range(5)
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="FiveDecisionPerf",
+        workflow_run_method="run",
+        activities=["Activity1", "Activity2"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=32,
+    )
+
+    # Measure generation time
+    start_time = time.perf_counter()
+    paths = generator.generate_paths(metadata, default_context)
+    elapsed_time = time.perf_counter() - start_time
+
+    # Should generate 32 paths
+    assert len(paths) == 32, f"Expected 32 paths, got {len(paths)}"
+
+    # Should complete in <1 second
+    assert elapsed_time < 1.0, \
+        f"Performance requirement: <1s for 32 paths, got {elapsed_time:.4f}s"
+
+
+def test_performance_ten_decisions(
+    generator: PathPermutationGenerator, default_context: GraphBuildingContext
+) -> None:
+    """Validate performance requirement: 1024 paths (10 decisions) in <5 seconds.
+
+    NFR-PERF-2 requirement: generation of 1024 paths must complete in <5 seconds.
+    """
+    decisions = [
+        DecisionPoint(f"d{i}", f"Decision{i}", 10 + i, "yes", "no")
+        for i in range(10)
+    ]
+    metadata = WorkflowMetadata(
+        workflow_class="TenDecisionPerf",
+        workflow_run_method="run",
+        activities=["Activity1"],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=1024,
+    )
+
+    # Measure generation time
+    start_time = time.perf_counter()
+    paths = generator.generate_paths(metadata, default_context)
+    elapsed_time = time.perf_counter() - start_time
+
+    # Should generate 1024 paths
+    assert len(paths) == 1024, f"Expected 1024 paths, got {len(paths)}"
+
+    # Should complete in <5 seconds
+    assert elapsed_time < 5.0, \
+        f"Performance requirement: <5s for 1024 paths, got {elapsed_time:.4f}s"
