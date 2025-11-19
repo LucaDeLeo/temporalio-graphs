@@ -87,10 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Details
 - Python 3.10+ support (3.11+ recommended)
 - Dependency: temporalio >= 1.7.1
-- Test coverage: 95% (406 tests passing)
+- Test coverage: 95% (547 tests passing)
 - Performance: <1ms analysis time for simple workflows
 - Static analysis approach: No workflow execution required
 - Zero runtime overhead in helper functions
+- Public API: 11 symbols in `__all__` (minimal, stable surface)
+- API stability: Epic 6 features (cross-workflow) available via direct import, public export deferred to v0.2.0 pending stabilization
 
 ### Documentation
 - Complete README with quick start (<10 lines per FR60)

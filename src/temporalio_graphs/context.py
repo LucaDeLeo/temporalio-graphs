@@ -44,8 +44,9 @@ class GraphBuildingContext:
         max_decision_points: Maximum allowed decision points before emitting a
             validation warning. Helps prevent path explosion (2^n paths).
             Default: 10 (generates up to 1024 paths).
-        max_paths: Maximum allowed total execution paths before emitting a
-            validation warning. Default: 1024.
+        max_paths: Hard cap on total execution paths generated. If the calculated
+            path count exceeds this limit, graph generation raises
+            GraphGenerationError to prevent path explosion. Default: 1024.
         decision_true_label: Edge label for decision branches evaluating to True.
             Used in Epic 3 decision node rendering. Default: "yes".
         decision_false_label: Edge label for decision branches evaluating to False.

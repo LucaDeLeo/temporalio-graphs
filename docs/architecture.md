@@ -514,7 +514,12 @@ output = renderer.render(paths)
 **Path Ordering:**
 - Depth-first traversal for path generation
 - Deterministic ordering (same workflow → same path order)
+- Activities, decisions, signals, and child workflows are interleaved by source line number (verified 2025-11-19)
 - Path IDs: Sequential `"path_0"`, `"path_1"`, etc.
+
+**Execution Order Verification (2025-11-19):**
+- `PathPermutationGenerator` sorts activities, decisions, signals, and child workflows by line number before building each path (see `src/temporalio_graphs/generator.py` around lines 360-385).
+- Regression tests assert correct interleaving (e.g., `tests/test_generator.py::test_generate_paths_with_decisions_returns_paths`).
 
 **Logging Levels:**
 - DEBUG: AST node visits, path generation steps

@@ -7,6 +7,8 @@
 **Estimated Impact:** 3-4 hours
 **Status:** APPROVED
 
+**Status Update (2025-11-19):** Path ordering defect resolved. `PathPermutationGenerator` now interleaves activities, decisions, signals, and child workflows by source line number. This document is retained for historical context.
+
 ---
 
 ## Executive Summary

@@ -175,10 +175,10 @@ class PathPermutationGenerator:
         num_decisions = len(metadata.decision_points)
         num_signals = len(metadata.signal_points)
         total_branch_points = num_decisions + num_signals
+        paths_count = 2**total_branch_points if total_branch_points > 0 else 1
 
         # Validate explosion limit (decisions + signals combined)
         if total_branch_points > context.max_decision_points:
-            paths_count = 2**total_branch_points
             raise GraphGenerationError(
                 reason=(
                     f"Too many branch points ({total_branch_points}) would generate "
@@ -191,7 +191,25 @@ class PathPermutationGenerator:
                     "signal_count": num_signals,
                     "total_branch_points": total_branch_points,
                     "limit": context.max_decision_points,
-                    "paths": paths_count,
+                    "paths_count": paths_count,
+                },
+            )
+
+        # Validate absolute path count ceiling to prevent path explosion
+        if paths_count > context.max_paths:
+            raise GraphGenerationError(
+                reason=(
+                    f"Calculated path count ({paths_count}) exceeds max_paths limit "
+                    f"({context.max_paths}). Total branch points: {total_branch_points} "
+                    f"({num_decisions} decisions + {num_signals} signals). "
+                    f"Suggestion: Reduce decisions/signals or increase context.max_paths"
+                ),
+                context={
+                    "decision_count": num_decisions,
+                    "signal_count": num_signals,
+                    "total_branch_points": total_branch_points,
+                    "paths_count": paths_count,
+                    "max_paths_limit": context.max_paths,
                 },
             )
 
@@ -207,7 +225,7 @@ class PathPermutationGenerator:
             return [path]
         else:
             logger.debug(
-                f"Generating {2**total_branch_points} paths for workflow with "
+                f"Generating {paths_count} paths for workflow with "
                 f"{num_decisions} decision points, {num_signals} signal points, "
                 f"{len(metadata.activities)} activities, and "
                 f"{len(metadata.child_workflow_calls)} child workflows"

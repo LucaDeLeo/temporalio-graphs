@@ -5,6 +5,8 @@
 **Status**: BLOCKING Story 3-5 approval
 **Severity**: CRITICAL - Violates core product requirements (FR52, FR55)
 
+**Status Update (2025-11-19):** Issue resolved. Path generation now interleaves activities, decisions, signals, and child workflows by source line number. This document remains for historical context.
+
 ## Executive Summary
 
 The current implementation generates **sequential linear graphs** instead of **branching decision-tree graphs**. This causes ALL activities to render in a chain BEFORE any decision nodes, which does not represent the actual workflow control flow.

@@ -5,6 +5,8 @@ Author: Luca
 Epic ID: 2
 Status: Draft
 
+Status Update (2025-11-19): Signal/wait_condition support was delivered in Epic 4. Any stub references below are historical to the Epic 2 scope.
+
 ---
 
 ## Overview

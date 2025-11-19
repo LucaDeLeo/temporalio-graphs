@@ -146,6 +146,15 @@ print(paths)
 - Analysis is performed on source code, not bytecode or compiled modules.
 - For best results, use clear activity names and avoid dynamic activity name generation.
 
+### Path Explosion Safeguards
+
+- `max_decision_points` limits the number of branch points (decisions + signals). Exceeding the limit raises `GraphGenerationError` with the projected path count.
+- `max_paths` is a secondary hard cap on total paths (2^(decisions+signals)). If exceeded, generation aborts before allocating paths and raises `GraphGenerationError` with guidance to lower branching or increase the limit.
+
+### .NET Parity Notes
+
+- **MermaidOnly**: Use `output_format="mermaid"` to match the .NET `MermaidOnly=true` behavior. This suppresses path list and validation report output while still enforcing safety checks.
+
 ---
 
 ## GraphBuildingContext
@@ -191,14 +200,14 @@ class GraphBuildingContext:
 | `include_validation_report` | `bool` | `True` | Include validation report in output when warnings exist. Has no effect if `suppress_validation` is True. |
 | `start_node_label` | `str` | `"Start"` | Display label for the workflow start node. |
 | `end_node_label` | `str` | `"End"` | Display label for the workflow end node. |
-| `max_decision_points` | `int` | `10` | Maximum allowed decision points before emitting a validation warning. Helps prevent path explosion (2^n paths). Default generates up to 1024 paths. |
-| `max_paths` | `int` | `1024` | Maximum allowed total execution paths before emitting a validation warning. |
+| `max_decision_points` | `int` | `10` | Guardrail on branch points (decisions + signals). If exceeded, path generation raises `GraphGenerationError` to prevent 2^n explosion (default cap ≈1024 paths). |
+| `max_paths` | `int` | `1024` | Hard cap on generated execution paths. If computed paths exceed this limit, generation aborts early with `GraphGenerationError`. |
 | `decision_true_label` | `str` | `"yes"` | Edge label for decision branches evaluating to True. |
 | `decision_false_label` | `str` | `"no"` | Edge label for decision branches evaluating to False. |
 | `signal_success_label` | `str` | `"Signaled"` | Edge label for successful signal completion. |
 | `signal_timeout_label` | `str` | `"Timeout"` | Edge label for signal timeout paths. |
 | `include_path_list` | `bool` | `True` | Include text path list in output when True. Path list shows all execution paths in text format. |
-| `output_format` | `Literal["mermaid", "paths", "full"]` | `"full"` | Output format mode. Controls which sections are included:<br>- `"mermaid"`: Mermaid diagram only<br>- `"paths"`: Path list only<br>- `"full"`: Mermaid + path list + validation report |
+| `output_format` | `Literal["mermaid", "paths", "full"]` | `"full"` | Output format mode. Controls which sections are included:<br>- `"mermaid"`: Mermaid diagram only (equivalent to .NET `MermaidOnly=true`)<br>- `"paths"`: Path list only<br>- `"full"`: Mermaid + path list + validation report |
 
 ### Examples
 

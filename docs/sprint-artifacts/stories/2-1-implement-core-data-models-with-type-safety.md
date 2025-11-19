@@ -2,6 +2,8 @@
 
 Status: review
 
+Status Update (2025-11-19): Signal and wait_condition features are complete (Epic 4). References to signal stubs in this story reflect the earlier Epic 2 scope only.
+
 ## Story
 
 As a library developer,

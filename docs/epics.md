@@ -162,6 +162,7 @@ Based on natural groupings that deliver incremental user value:
 ### Epic 4: Signal & Wait Condition Support
 **Goal:** Add signal node visualization for wait conditions and timeouts
 **User Value:** Python developers can visualize workflows with wait conditions and signals
+**Status:** ✅ Complete (verified 2025-11-19; `wait_condition()` helper + signal rendering live)
 **Story Count:** 4
 **FRs Covered:** FR18-FR22 (5 FRs)
 

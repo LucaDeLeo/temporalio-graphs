@@ -611,6 +611,41 @@ def test_explosion_limit_custom(
         generator.generate_paths(metadata_6, custom_context)
 
 
+def test_path_explosion_exceeds_max_paths_limit(
+    generator: PathPermutationGenerator,
+) -> None:
+    """Verify max_paths limit is enforced during path generation."""
+
+    # Arrange: 11 decision points = 2048 paths, while max_paths=1024
+    context = GraphBuildingContext(
+        max_decision_points=15,  # Allow decision count so max_paths is the limiting factor
+        max_paths=1024,
+    )
+
+    decisions = [
+        DecisionPoint(f"d{i}", f"Decision{i}", i * 10, i * 10, "yes", "no")
+        for i in range(11)
+    ]
+
+    metadata = WorkflowMetadata(
+        workflow_class="PathExplosionWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=decisions,
+        signal_points=[],
+        source_file=Path("test.py"),
+        total_paths=2 ** 11,
+    )
+
+    # Act & Assert
+    with pytest.raises(GraphGenerationError) as exc_info:
+        generator.generate_paths(metadata, context)
+
+    error_msg = str(exc_info.value)
+    assert "exceeds max_paths limit" in error_msg
+    assert "2048" in error_msg
+    assert "1024" in error_msg
+
 def test_all_permutations_complete(
     generator: PathPermutationGenerator, default_context: GraphBuildingContext
 ) -> None:
