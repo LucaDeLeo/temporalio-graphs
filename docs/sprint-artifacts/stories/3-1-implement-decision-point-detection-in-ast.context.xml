@@ -1,0 +1,284 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>1</storyId>
+    <title>Implement Decision Point Detection in AST</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/3-1-implement-decision-point-detection-in-ast.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>to detect to_decision() helper calls in workflow code</iWant>
+    <soThat>I can identify which boolean expressions should appear as decision nodes</soThat>
+    <tasks>
+      - Task 1: Create DecisionPoint data structure (AC: 8)
+      - Task 2: Create DecisionDetector class (AC: 1)
+      - Task 3: Implement decision name extraction (AC: 3)
+      - Task 4: Implement boolean expression extraction (AC: 4)
+      - Task 5: Implement line number tracking (AC: 5)
+      - Task 6: Implement elif chain detection (AC: 6)
+      - Task 7: Implement ternary operator detection (AC: 7)
+      - Task 8: Add error handling for malformed calls (AC: 13)
+      - Task 9: Update WorkflowMetadata dataclass (AC: 9)
+      - Task 10: Integrate DecisionDetector with WorkflowAnalyzer (AC: 12)
+      - Task 11: Create unit tests for all detection patterns (AC: 10)
+      - Task 12: Create error handling tests (AC: 13)
+      - Task 13: Verify 100% test coverage for DecisionDetector (AC: 11)
+      - Task 14: Create integration tests with activity detection (AC: 12)
+      - Task 15: Verify type safety with mypy strict (AC: 1)
+      - Task 16: Run ruff linting and formatting (AC: 1)
+      - Task 17: Add docstrings and examples to DecisionDetector (AC: 1)
+      - Task 18: Run complete test suite (AC: 10, 11)
+      - Task 19: Verify no breaking changes (AC: 12)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. DecisionDetector class exists in src/temporalio_graphs/detector.py
+    2. Identifies to_decision() function calls in workflow AST (FR11)
+    3. Extracts decision name from function arguments (FR12)
+    4. Extracts boolean expression from first argument
+    5. Records source line number for error reporting
+    6. Identifies elif chains as multiple decisions (FR46)
+    7. Identifies ternary operators wrapped in to_decision() (FR47)
+    8. Stores complete decision metadata (id, name, line_number, true_label, false_label)
+    9. Adds decision_points list to WorkflowMetadata (FR11)
+    10. Unit tests cover all detection patterns (100% pass rate)
+    11. Test coverage is 100% for DecisionDetector class
+    12. Integration with WorkflowAnalyzer is clean
+    13. Proper error handling for malformed to_decision() calls
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Decision Node Support</title>
+        <section>Overview</section>
+        <snippet>Epic 3 extends the temporalio-graphs library from linear workflow visualization to branching workflow visualization with complete path coverage. Implements decision node support, enabling detection of conditional logic (if/else, elif chains, ternary operators) in workflows and generating all possible execution paths (2^n paths for n decisions).</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Decision Node Support</title>
+        <section>System Architecture Alignment</section>
+        <snippet>DecisionDetector extends the existing WorkflowAnalyzer (ast.NodeVisitor) pattern to identify to_decision() function calls during AST traversal. Aligns with ADR-001 (Static Analysis vs Runtime Interceptors) - analyze code structure without executing workflows.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Core Modules - DecisionDetector</section>
+        <snippet>Decision Detection (detector.py): Identifies to_decision() calls, extracts names/branches. Extends AST visitor pattern for identifying decision points in workflow code.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Implementation Patterns - AST Visitor Pattern</section>
+        <snippet>All AST visitors follow this pattern: extend ast.NodeVisitor, implement visit_* methods for specific node types, call generic_visit(node) to continue traversal. DecisionDetector will implement visit_Call() to find to_decision() function calls.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>ADR-005: Explicit Decision Marking with to_decision()</section>
+        <snippet>Require explicit marking with to_decision(condition, "name") helper function. Rationale: Signal vs Noise (not all if statements are workflow decisions), Named Nodes (users provide meaningful names), Intentional (makes decision points explicit, self-documenting).</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Epic 3: Decision Node Support</section>
+        <snippet>Story 3.1: Implement DecisionDetector to identify to_decision() helper calls in workflow AST, extract decision names, boolean expressions, line numbers. Supports elif chains and ternary operators wrapped in to_decision().</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/2-7-implement-configuration-options.md</path>
+        <title>Story 2.7: Configuration Options</title>
+        <section>Learnings Applied to Story 3.1</section>
+        <snippet>Component Architecture Pattern: Pipeline components have focused responsibilities. Error Handling Philosophy: Clear, actionable error messages with GraphParseError. Type Safety: mypy strict mode requires complete type hints. Integration Testing: Show multiple components working together. Immutable Data Structures: Use frozen dataclasses.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>module</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>37-461</lines>
+        <reason>Existing AST visitor that DecisionDetector will integrate with. Provides pattern for visit_Call() method and integration point in analyze() method. DecisionDetector follows same visitor pattern.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>method</kind>
+        <symbol>WorkflowAnalyzer.visit_Call</symbol>
+        <lines>326-358</lines>
+        <reason>Reference implementation showing how to detect specific function calls in AST. DecisionDetector will use similar pattern to identify to_decision() calls instead of execute_activity() calls.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>method</kind>
+        <symbol>WorkflowAnalyzer._extract_activity_name</symbol>
+        <lines>414-460</lines>
+        <reason>Shows pattern for extracting arguments from AST Call nodes with caching. DecisionDetector will use similar approach to extract decision name from second argument of to_decision().</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>206-288</lines>
+        <reason>Must be updated to include decision_points field. DecisionDetector output will populate this field. Shows existing pattern for metadata storage with activities list.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>enum</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-31</lines>
+        <reason>Already includes DECISION node type (line 29). DecisionDetector will create nodes of this type. Reference for understanding graph node classification.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/exceptions.py</path>
+        <kind>class</kind>
+        <symbol>WorkflowParseError</symbol>
+        <lines>13-23</lines>
+        <reason>Exception type for malformed to_decision() calls. DecisionDetector will raise this when decision helper is used incorrectly (missing name, wrong argument types).</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>12-89</lines>
+        <reason>Configuration passed to analyzer. Includes decision_true_label and decision_false_label (lines 86-87) which DecisionDetector will use for branch labels.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_analyzer.py</path>
+        <kind>test_module</kind>
+        <symbol>test_analyzer.py</symbol>
+        <lines>1-500</lines>
+        <reason>Pattern for writing analyzer tests. DecisionDetector tests will follow similar structure with test fixtures for workflow source code and assertions on detected elements.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package>temporalio</package>
+        <version>>=1.7.1</version>
+        <reason>Required for workflow decorators type definitions (@workflow.defn, @workflow.run)</reason>
+      </python>
+      <python>
+        <package>ast</package>
+        <version>stdlib</version>
+        <reason>Built-in Python AST module for parsing and traversing workflow source code. Core dependency for static analysis approach.</reason>
+      </python>
+      <python>
+        <package>pytest</package>
+        <version>>=8.0.0</version>
+        <reason>Test framework for unit and integration tests. Required for AC 10, 11, 12.</reason>
+      </python>
+      <python>
+        <package>pytest-cov</package>
+        <version>>=4.1.0</version>
+        <reason>Coverage measurement tool. Required to verify 100% coverage for DecisionDetector (AC 11).</reason>
+      </python>
+      <python>
+        <package>mypy</package>
+        <version>>=1.8.0</version>
+        <reason>Type checker in strict mode. Required to verify type safety (AC 15).</reason>
+      </python>
+      <python>
+        <package>ruff</package>
+        <version>>=0.2.0</version>
+        <reason>Linter and formatter. Required for code quality checks (AC 16).</reason>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - CRITICAL: DecisionDetector must extend ast.NodeVisitor (same pattern as WorkflowAnalyzer)
+    - CRITICAL: All file paths in code must be project-relative (no absolute paths in logic)
+    - CRITICAL: Must not break existing activity detection in WorkflowAnalyzer
+    - CRITICAL: DecisionPoint dataclass must be frozen (immutable) per Story 2.7 learnings
+    - CRITICAL: Must use mypy strict mode - all methods fully typed with no implicit Any
+    - CRITICAL: All public methods must have Google-style docstrings with examples
+    - CRITICAL: Error messages must include line numbers and actionable suggestions
+    - NAMING: Use snake_case for functions/methods, PascalCase for classes
+    - NAMING: Private helpers use _leading_underscore convention
+    - NAMING: Test files follow test_*.py pattern, test functions test_* pattern
+    - STRUCTURE: One primary class per file (DecisionDetector in detector.py)
+    - STRUCTURE: DecisionPoint dataclass goes in _internal/graph_models.py with other models
+    - TESTING: 100% coverage required for DecisionDetector class (AC 11)
+    - TESTING: Integration tests must verify both activities AND decisions detected together
+    - TESTING: Error handling tests must verify clear error messages for each malformed case
+    - PERFORMANCE: Decision detection should not slow down WorkflowAnalyzer (single AST pass)
+    - ARCHITECTURE: Follow ADR-001 (Static Analysis) - no workflow execution
+    - ARCHITECTURE: Follow ADR-003 (Visitor Pattern) - use ast.NodeVisitor
+    - ARCHITECTURE: Follow ADR-006 (mypy strict mode) - complete type hints
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>DecisionDetector.visit_Call</name>
+      <kind>method</kind>
+      <signature>def visit_Call(self, node: ast.Call) -> None</signature>
+      <path>src/temporalio_graphs/detector.py</path>
+      <description>Visit Call nodes in AST to identify to_decision() function calls. Extracts decision metadata and stores in internal list.</description>
+    </interface>
+    <interface>
+      <name>DecisionDetector.decisions</name>
+      <kind>property</kind>
+      <signature>@property def decisions(self) -> list[DecisionPoint]</signature>
+      <path>src/temporalio_graphs/detector.py</path>
+      <description>Read-only property returning list of detected DecisionPoint objects. Used by WorkflowAnalyzer to populate metadata.decision_points.</description>
+    </interface>
+    <interface>
+      <name>DecisionPoint</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) class DecisionPoint: id: str, name: str, line_number: int, true_label: str, false_label: str</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Immutable dataclass storing decision metadata. Used by both DecisionDetector and PathPermutationGenerator (Epic 3 Story 3).</description>
+    </interface>
+    <interface>
+      <name>WorkflowMetadata.decision_points</name>
+      <kind>field</kind>
+      <signature>decision_points: list[DecisionPoint]</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>New field in WorkflowMetadata dataclass populated by DecisionDetector via WorkflowAnalyzer integration.</description>
+    </interface>
+    <interface>
+      <name>WorkflowParseError</name>
+      <kind>exception</kind>
+      <signature>class WorkflowParseError(TemporalioGraphsError)</signature>
+      <path>src/temporalio_graphs/exceptions.py</path>
+      <description>Exception raised for malformed to_decision() calls (missing name, wrong argument types). Must include line number and suggestion in message.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing follows pytest conventions with 100% coverage requirement (AC 11). All tests must pass (AC 10). Unit tests in tests/test_detector.py focus on isolated DecisionDetector functionality. Integration tests verify both activity and decision detection working together (AC 12). Error handling tests verify clear, actionable error messages with line numbers (AC 13). Coverage measured via pytest-cov with --cov=src/temporalio_graphs/detector flag. Type safety verified via mypy --strict (AC 15). All code must pass ruff check and ruff format (AC 16).
+    </standards>
+    <locations>
+      - tests/test_detector.py (new file for DecisionDetector unit tests)
+      - tests/integration/ (integration tests with WorkflowAnalyzer)
+      - tests/fixtures/sample_workflows/ (test workflow files with to_decision calls)
+    </locations>
+    <ideas>
+      <test id="AC-2">test_single_decision() - basic to_decision() call detection</test>
+      <test id="AC-2">test_multiple_decisions() - 2+ decisions in workflow detected</test>
+      <test id="AC-2">test_nested_decisions() - decisions inside if/else blocks</test>
+      <test id="AC-6">test_elif_chain() - 2+ elif decisions detected separately</test>
+      <test id="AC-7">test_ternary_operator() - ternary wrapped in to_decision()</test>
+      <test id="AC-2">test_wrong_function_ignored() - to_warning() not detected as decision</test>
+      <test id="AC-3">test_decision_name_extraction() - names correctly extracted from arguments</test>
+      <test id="AC-3">test_keyword_argument_name() - name via keyword: to_decision(expr, name="MyDecision")</test>
+      <test id="AC-5">test_line_number_tracking() - line numbers accurate and stored</test>
+      <test id="AC-4">test_simple_expression() - amount > 1000 extracted</test>
+      <test id="AC-4">test_complex_expression() - (a > 100) and (b < 50) extracted</test>
+      <test id="AC-13">test_error_missing_name_argument() - to_decision(expr) raises GraphParseError</test>
+      <test id="AC-13">test_error_non_string_name() - to_decision(expr, 123) raises GraphParseError</test>
+      <test id="AC-13">test_error_no_arguments() - to_decision() raises GraphParseError</test>
+      <test id="AC-13">test_error_messages_include_line_number() - error shows line number</test>
+      <test id="AC-12">test_activities_and_decisions_together() - both detected in same workflow</test>
+      <test id="AC-9">test_metadata_includes_decision_points() - WorkflowMetadata has decision_points field</test>
+      <test id="AC-11">test_coverage_100_percent() - coverage report shows 100% for detector.py</test>
+      <test id="AC-15">test_mypy_strict_passes() - mypy src/temporalio_graphs/detector.py --strict exits 0</test>
+      <test id="AC-19">test_no_breaking_changes() - all Story 2.x tests still pass</test>
+    </ideas>
+  </tests>
+</story-context>

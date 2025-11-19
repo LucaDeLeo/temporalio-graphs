@@ -203,6 +203,47 @@ class GraphEdge:
         )
 
 
+@dataclass(frozen=True)
+class DecisionPoint:
+    """Represents a decision point (branch) in a workflow.
+
+    A decision point is a location in the workflow where execution can branch
+    based on a boolean condition, identified by an explicit to_decision() call.
+    Each decision doubles the number of possible execution paths.
+
+    The frozen=True attribute ensures DecisionPoint instances are immutable,
+    preventing accidental modifications to decision metadata once created.
+
+    Args:
+        id: Unique identifier for this decision point (hash-based or sequential).
+        name: Human-readable display name for the decision point (extracted from
+            the second argument of to_decision()).
+        line_number: Line number in the workflow source code where the decision
+            is defined. Used for error reporting and debugging.
+        true_label: Label for the "true" branch (typically "yes").
+        false_label: Label for the "false" branch (typically "no").
+
+    Example:
+        >>> decision = DecisionPoint(
+        ...     id="d1",
+        ...     name="NeedToConvert",
+        ...     line_number=42,
+        ...     true_label="yes",
+        ...     false_label="no",
+        ... )
+        >>> decision.name
+        'NeedToConvert'
+        >>> decision.line_number
+        42
+    """
+
+    id: str
+    name: str
+    line_number: int
+    true_label: str
+    false_label: str
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.
@@ -255,7 +296,7 @@ class WorkflowMetadata:
     workflow_class: str
     workflow_run_method: str
     activities: list[str]
-    decision_points: list[str]
+    decision_points: list[DecisionPoint]
     signal_points: list[str]
     source_file: Path
     total_paths: int
