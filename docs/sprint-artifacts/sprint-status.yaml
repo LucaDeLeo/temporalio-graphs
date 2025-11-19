@@ -58,8 +58,8 @@ development_status:
   3-1-implement-decision-point-detection-in-ast: done
   3-2-implement-to-decision-helper-function: done
   3-3-implement-path-permutation-generator-for-decisions: done  # APPROVED WITH IMPROVEMENTS - Senior Developer Review Complete
-  3-4-implement-decision-node-rendering-in-mermaid: backlog
-  3-5-add-integration-test-with-moneytransfer-example: backlog
+  3-4-implement-decision-node-rendering-in-mermaid: done  # APPROVED - Re-review complete, all CRITICAL issues resolved
+  3-5-add-integration-test-with-moneytransfer-example: review  # CRITICAL-1 FIX APPLIED: Fixed renderer.py line 247 activity counter, regenerated golden file
   epic-3-retrospective: optional
 
   # Epic 4: Signal & Wait Condition Support
