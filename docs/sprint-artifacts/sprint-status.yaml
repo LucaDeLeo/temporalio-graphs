@@ -50,7 +50,7 @@ development_status:
   2-5-implement-mermaid-renderer-with-format-compliance: done
   2-6-implement-public-api-entry-point: done  # APPROVED - Senior Developer Review Complete
   2-7-implement-configuration-options: done  # APPROVED - Senior Developer Review Complete
-  2-8-add-integration-test-with-simple-linear-workflow-example: backlog
+  2-8-add-integration-test-with-simple-linear-workflow-example: done  # APPROVED - Senior Developer Review Complete
   epic-2-retrospective: optional
 
   # Epic 3: Decision Node Support (Branching Workflows)

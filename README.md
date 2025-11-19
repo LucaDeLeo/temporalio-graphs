@@ -62,6 +62,31 @@ result = analyze_workflow("my_workflow.py")
 print(result)  # Prints Mermaid diagram
 ```
 
+### Running the Example
+
+Try the included example right now:
+
+```bash
+python examples/simple_linear/run.py
+```
+
+This analyzes a simple workflow with 3 sequential activities and outputs:
+
+```mermaid
+flowchart LR
+s((Start))
+1[validate_input]
+2[process_data]
+3[save_result]
+e((End))
+s --> 1
+1 --> 2
+2 --> 3
+3 --> e
+```
+
+See `/examples/simple_linear/` for the complete working example with explanations.
+
 ### Advanced Usage with Custom Configuration
 
 Customize node labels and output location:
@@ -77,8 +102,6 @@ context = GraphBuildingContext(
 )
 result = analyze_workflow("my_workflow.py", context)
 ```
-
-See `/examples/simple_linear/` for complete working examples.
 
 ## Configuration
 

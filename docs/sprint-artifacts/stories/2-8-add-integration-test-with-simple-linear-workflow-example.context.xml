@@ -1,0 +1,270 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>8</storyId>
+    <title>Add Integration Test with Simple Linear Workflow Example</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/2-8-add-integration-test-with-simple-linear-workflow-example.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a library developer</asA>
+    <iWant>comprehensive integration tests</iWant>
+    <soThat>I can ensure the entire pipeline works correctly</soThat>
+    <tasks>
+      - Task 1: Create integration test file (tests/integration/test_simple_linear.py)
+      - Task 2: Implement end-to-end integration test (test_simple_linear_workflow_end_to_end)
+      - Task 3: Create simple_linear example workflow (examples/simple_linear/workflow.py)
+      - Task 4: Create run.py example runner (examples/simple_linear/run.py)
+      - Task 5: Create expected output file (examples/simple_linear/expected_output.md)
+      - Task 6: Update README with quick start section
+      - Task 7: Validate example workflow is importable
+      - Task 8: Add integration test helpers (validate Mermaid syntax, extract nodes/edges)
+      - Task 9: Run integration tests (verify 100% pass rate, &lt;500ms execution)
+      - Task 10: Run full test suite (verify all 167+ tests still pass)
+      - Task 11: Verify mypy and ruff compliance (zero errors)
+      - Task 12: Validate example is runnable (python examples/simple_linear/run.py)
+      - Task 13: Update sprint status and documentation
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">tests/integration/test_simple_linear.py exists and contains comprehensive integration tests</criterion>
+    <criterion id="AC2">Integration test creates a complete workflow file with 3-4 activities</criterion>
+    <criterion id="AC3">Integration test calls analyze_workflow() on the workflow file</criterion>
+    <criterion id="AC4">Integration test validates Mermaid output is valid syntax</criterion>
+    <criterion id="AC5">Integration test checks output contains: Start node, all activities in order, End node</criterion>
+    <criterion id="AC6">Integration test validates node IDs are correct (s, 1, 2, 3, e)</criterion>
+    <criterion id="AC7">Integration test validates edges connect correctly (s→1→2→3→e)</criterion>
+    <criterion id="AC8">examples/simple_linear/workflow.py exists as runnable example (FR58)</criterion>
+    <criterion id="AC9">examples/simple_linear/run.py demonstrates usage of analyze_workflow()</criterion>
+    <criterion id="AC10">examples/simple_linear/expected_output.md contains golden Mermaid diagram</criterion>
+    <criterion id="AC11">Integration test passes with 100% success rate</criterion>
+    <criterion id="AC12">Test runs in &lt;500ms total per NFR-MAINT-2</criterion>
+    <criterion id="AC13">Example is documented in README as quick start</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Test Organization (lines 1819-1906)</section>
+        <snippet>Defines integration test strategy: tests/integration/ directory, end-to-end pipeline validation from source to Mermaid output, tmp_path fixture usage for test isolation</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Module Dependencies and Pipeline Flow</section>
+        <snippet>Complete pipeline: analyze_workflow() → WorkflowAnalyzer.analyze() → PathPermutationGenerator.generate_paths() → MermaidRenderer.to_mermaid(). All components from Stories 2.1-2.7 must function together</snippet>
+      </doc>
+      <doc>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>Examples &amp; Documentation (FR58-FR60)</section>
+        <snippet>FR58: Library includes simple linear workflow example. FR60: README provides quick start guide with &lt;10 lines of example code</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Project Structure (lines 72-139)</section>
+        <snippet>Defines examples/ and tests/integration/ directory structure. Integration tests validate full pipeline end-to-end</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Testing Strategy</section>
+        <snippet>Integration tests use pytest fixtures, validate output at multiple levels (syntax, content, structure), test performance targets &lt;500ms</snippet>
+      </doc>
+      <doc>
+        <path>README.md</path>
+        <title>Project README</title>
+        <section>Usage and Examples</section>
+        <snippet>Current README needs Quick Start section addition referencing examples/simple_linear/ with copy-paste runnable code</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>public_api</kind>
+        <symbol>analyze_workflow</symbol>
+        <lines>58-156</lines>
+        <reason>Main public API entry point. Integration test calls this function to validate end-to-end pipeline. Returns Mermaid diagram string</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>configuration</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>11-90</lines>
+        <reason>Configuration dataclass used to customize graph generation. Integration test may use custom context for specific test scenarios</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>analyzer</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>37-99</lines>
+        <reason>AST-based analyzer (Story 2.2). First stage of pipeline that integration test validates. Parses workflow source files</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>generator</kind>
+        <symbol>PathPermutationGenerator</symbol>
+        <lines>1-100</lines>
+        <reason>Path generation component (Story 2.4). Second stage of pipeline. Generates single linear path for Epic 2 workflows</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>renderer</kind>
+        <symbol>MermaidRenderer</symbol>
+        <lines>1-100</lines>
+        <reason>Mermaid output renderer (Story 2.5). Final stage of pipeline. Converts GraphPath objects to Mermaid syntax. Integration test validates output format</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>data_models</kind>
+        <symbol>NodeType, GraphNode, GraphEdge</symbol>
+        <lines>12-99</lines>
+        <reason>Core data structures (Story 2.1). Defines node types (START, END, ACTIVITY) and Mermaid rendering methods used throughout pipeline</reason>
+      </artifact>
+      <artifact>
+        <path>tests/conftest.py</path>
+        <kind>test_fixtures</kind>
+        <symbol>sample_workflow_code</symbol>
+        <lines>6-20</lines>
+        <reason>Existing pytest fixture pattern. Integration tests should follow similar fixture approach for creating temporary workflow files</reason>
+      </artifact>
+      <artifact>
+        <path>tests/fixtures/sample_workflows/valid_linear_workflow.py</path>
+        <kind>test_fixture</kind>
+        <symbol>ValidLinearWorkflow</symbol>
+        <lines>1-50</lines>
+        <reason>Example of valid workflow file structure. Reference for creating integration test workflow fixture</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_public_api.py</path>
+        <kind>test</kind>
+        <symbol>test_analyze_workflow_basic, test_analyze_workflow_with_context</symbol>
+        <lines>1-100</lines>
+        <reason>Existing tests for analyze_workflow() API (Story 2.6). Integration test extends these with end-to-end validation and example creation</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_renderer.py</path>
+        <kind>test</kind>
+        <symbol>test_mermaid_syntax_validation</symbol>
+        <lines>1-100</lines>
+        <reason>Unit tests for Mermaid rendering (Story 2.5). Integration test validates same Mermaid syntax rules at integration level</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" reason="Temporal SDK for workflow decorators and execute_activity() API" />
+        <package name="pytest" version=">=8.0.0" reason="Test framework for integration tests" />
+        <package name="pytest-asyncio" version=">=0.23.0" reason="Async test support for workflow helper functions" />
+        <package name="pytest-cov" version=">=4.1.0" reason="Coverage measurement, &gt;80% target" />
+        <package name="mypy" version=">=1.8.0" reason="Type checking validation" />
+        <package name="ruff" version=">=0.2.0" reason="Linting and formatting validation" />
+      </python>
+      <stdlib>
+        <module name="ast" reason="Built-in AST parser used by analyzer" />
+        <module name="pathlib" reason="Cross-platform path handling for file operations" />
+        <module name="tempfile" reason="Creating temporary workflow files in integration tests" />
+      </stdlib>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Use pytest tmp_path fixture for creating temporary workflow files (prevent file system pollution)</constraint>
+    <constraint>Integration tests must not hardcode absolute paths (use Path for cross-platform compatibility)</constraint>
+    <constraint>Test execution must complete in &lt;500ms total (NFR-MAINT-2 performance requirement)</constraint>
+    <constraint>All integration tests must pass with 100% success rate on first run (no flaky tests)</constraint>
+    <constraint>Example workflow must be syntactically valid Python and parseable by ast.parse()</constraint>
+    <constraint>Example files must be runnable without external setup or dependencies beyond temporalio-graphs</constraint>
+    <constraint>README Quick Start section must be copy-paste runnable (&lt;10 lines of code per FR60)</constraint>
+    <constraint>Integration tests validate output at multiple levels: syntax validity, content accuracy, structure correctness</constraint>
+    <constraint>No breaking changes to existing tests - all 167+ tests from Stories 2.1-2.7 must still pass</constraint>
+    <constraint>Mermaid output must match expected format: flowchart LR, Start node s((Start)), activity nodes 1[Name], End node e((End))</constraint>
+    <constraint>Node IDs follow convention: s for Start, sequential numbers (1,2,3) for activities, e for End</constraint>
+    <constraint>Edge format follows Mermaid syntax: s --&gt; 1, 1 --&gt; 2, 2 --&gt; 3, 3 --&gt; e</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>analyze_workflow</name>
+      <kind>function</kind>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <description>Primary public API. Integration test calls this function with temporary workflow file path. Returns Mermaid diagram string</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) class GraphBuildingContext with fields: is_building_graph, graph_output_file, split_names_by_words, start_node_label, end_node_label, etc.</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Configuration object for customizing graph generation. Integration test may use custom context to test specific configurations</description>
+    </interface>
+    <interface>
+      <name>WorkflowAnalyzer.analyze</name>
+      <kind>method</kind>
+      <signature>def analyze(self, workflow_file: Path | str, context: GraphBuildingContext | None = None) -> WorkflowMetadata</signature>
+      <path>src/temporalio_graphs/analyzer.py</path>
+      <description>First stage of pipeline. Parses workflow file and extracts metadata. Integration test validates this stage works correctly</description>
+    </interface>
+    <interface>
+      <name>PathPermutationGenerator.generate_paths</name>
+      <kind>method</kind>
+      <signature>def generate_paths(self, metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]</signature>
+      <path>src/temporalio_graphs/generator.py</path>
+      <description>Second stage of pipeline. Generates execution paths from metadata. Integration test validates single linear path generation</description>
+    </interface>
+    <interface>
+      <name>MermaidRenderer.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>Final stage of pipeline. Converts paths to Mermaid syntax. Integration test validates output format and content</description>
+    </interface>
+    <interface>
+      <name>GraphNode.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self) -> str</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Generates Mermaid syntax for individual nodes. Integration test validates node rendering: s((Start)), 1[Activity], e((End))</description>
+    </interface>
+    <interface>
+      <name>pytest.tmp_path</name>
+      <kind>fixture</kind>
+      <signature>tmp_path: Path (pytest built-in fixture)</signature>
+      <path>pytest built-in</path>
+      <description>Pytest fixture providing temporary directory path. Use for creating workflow files during integration tests for isolation</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      All tests use pytest framework with pytest-asyncio for async support. Tests organized in tests/ directory mirroring src/ structure. Integration tests go in tests/integration/ subdirectory. Use tmp_path fixture for file isolation. Test naming convention: test_*.py files, test_* functions. Target &gt;80% coverage (pytest-cov). Type checking with mypy --strict. Linting with ruff. Performance target: integration tests complete in &lt;500ms total.
+    </standards>
+    <locations>
+      - tests/integration/ (NEW - create this directory)
+      - tests/integration/test_simple_linear.py (NEW - main integration test file)
+      - examples/simple_linear/ (NEW - example directory)
+      - examples/simple_linear/workflow.py (NEW - example workflow)
+      - examples/simple_linear/run.py (NEW - example runner)
+      - examples/simple_linear/expected_output.md (NEW - golden file)
+    </locations>
+    <ideas>
+      <idea ac_ref="AC1,AC2,AC3">test_simple_linear_workflow_end_to_end(tmp_path): Create workflow file with 3-4 activities, call analyze_workflow(), validate returns string result containing Mermaid diagram</idea>
+      <idea ac_ref="AC4">test_validate_mermaid_syntax(tmp_path): Ensure output contains 'flowchart LR' declaration, valid Mermaid markdown fenced code block, no syntax errors</idea>
+      <idea ac_ref="AC5">test_validate_start_end_nodes(tmp_path): Verify output contains s((Start)) start node and e((End)) end node with correct Mermaid syntax</idea>
+      <idea ac_ref="AC6">test_validate_node_ids(tmp_path): Verify node IDs follow convention: s for Start, 1/2/3 for activities, e for End. Extract IDs from output and assert correctness</idea>
+      <idea ac_ref="AC7">test_validate_edge_connections(tmp_path): Verify edges connect in sequence: s --&gt; 1, 1 --&gt; 2, 2 --&gt; 3, 3 --&gt; e. Parse Mermaid output and validate edge list</idea>
+      <idea ac_ref="AC8">test_example_workflow_is_importable(): Verify examples/simple_linear/workflow.py exists, is syntactically valid, can be parsed by ast.parse(), contains @workflow.defn and @workflow.run</idea>
+      <idea ac_ref="AC9">test_example_run_is_executable(): Verify examples/simple_linear/run.py can be executed via subprocess, produces expected Mermaid output to stdout, completes without errors</idea>
+      <idea ac_ref="AC10">test_expected_output_matches_actual(): Compare actual analyze_workflow() output with examples/simple_linear/expected_output.md golden file. Validate they match</idea>
+      <idea ac_ref="AC11">test_integration_suite_passes(): Meta-test ensuring all integration tests pass with 100% success rate. No skipped or failed tests</idea>
+      <idea ac_ref="AC12">test_performance_under_500ms(): Measure integration test execution time using pytest benchmark or time module. Assert total time &lt; 500ms</idea>
+      <idea ac_ref="AC13">test_readme_quick_start_exists(): Verify README.md contains Quick Start section, references examples/simple_linear/, includes code example and expected output</idea>
+    </ideas>
+  </tests>
+</story-context>
