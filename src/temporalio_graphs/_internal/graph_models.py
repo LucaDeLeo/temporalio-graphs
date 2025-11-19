@@ -285,6 +285,47 @@ class DecisionPoint:
     false_branch_activities: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class SignalPoint:
+    """Represents a signal/wait condition point in a workflow.
+
+    A signal point is a location where workflow waits for external event or condition,
+    identified by wait_condition() call. Each signal creates 2 execution paths (Signaled/Timeout).
+
+    The frozen=True attribute ensures SignalPoint instances are immutable,
+    preventing accidental modifications to signal metadata once created.
+
+    Args:
+        name: Human-readable display name for signal node (from 3rd argument of wait_condition).
+        condition_expr: String representation of condition check expression (1st argument).
+        timeout_expr: String representation of timeout duration (2nd argument).
+        source_line: Line number in workflow source code where signal is defined.
+        node_id: Unique deterministic identifier for this signal node (sig_{name}_{line}).
+
+    Example:
+        >>> signal = SignalPoint(
+        ...     name="WaitForApproval",
+        ...     condition_expr="lambda: self.approved",
+        ...     timeout_expr="timedelta(hours=24)",
+        ...     source_line=67,
+        ...     node_id="sig_waitforapproval_67"
+        ... )
+        >>> signal.name
+        'WaitForApproval'
+        >>> signal.source_line
+        67
+    """
+
+    name: str
+    condition_expr: str
+    timeout_expr: str
+    source_line: int
+    node_id: str
+    # Control flow tracking: line numbers of activities in each branch
+    signaled_branch_activities: tuple[int, ...] = ()
+    timeout_branch_activities: tuple[int, ...] = ()
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.
@@ -346,7 +387,7 @@ class WorkflowMetadata:
     workflow_run_method: str
     activities: list[Activity]
     decision_points: list[DecisionPoint]
-    signal_points: list[str]
+    signal_points: list[SignalPoint]
     source_file: Path
     total_paths: int
 
@@ -376,3 +417,22 @@ class WorkflowMetadata:
         """
         total: int = 2 ** (num_decisions + num_signals)
         return total
+
+    @property
+    def total_branch_points(self) -> int:
+        """Total decision + signal points (determines path count).
+
+        Returns:
+            Sum of decision points and signal points in workflow.
+        """
+        return len(self.decision_points) + len(self.signal_points)
+
+    @property
+    def total_paths_from_branches(self) -> int:
+        """Calculate total execution paths from branch points.
+
+        Returns:
+            2^(total_branch_points) representing all path permutations.
+        """
+        result: int = 2 ** self.total_branch_points
+        return result

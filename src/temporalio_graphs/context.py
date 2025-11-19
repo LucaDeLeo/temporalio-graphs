@@ -6,6 +6,7 @@ configuration options for workflow graph generation.
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,9 @@ class GraphBuildingContext:
             "Pascal Case" / "Snake Case" in graph labels for readability.
             Default: True.
         suppress_validation: Disable graph validation warnings (e.g., excessive
-            decision points, path explosion). Default: False.
+            decision points, path explosion, unreachable activities). Default: False.
+        include_validation_report: Include validation report in output when warnings
+            exist. Has no effect if suppress_validation is True. Default: True.
         start_node_label: Display label for the workflow start node.
             Default: "Start".
         end_node_label: Display label for the workflow end node.
@@ -51,6 +54,13 @@ class GraphBuildingContext:
             Used in Epic 4 signal node rendering. Default: "Signaled".
         signal_timeout_label: Edge label for signal timeout paths.
             Used in Epic 4 signal node rendering. Default: "Timeout".
+        include_path_list: Include text path list in output when True.
+            Path list shows all execution paths in text format. Default: True.
+        output_format: Output format mode. Controls which sections are included:
+            - "mermaid": Mermaid diagram only (no path list, no validation)
+            - "paths": Path list only (no diagram, no validation)
+            - "full": Mermaid + path list + validation report (default)
+            Default: "full".
 
     Example:
         >>> # Basic usage with defaults
@@ -79,6 +89,7 @@ class GraphBuildingContext:
     graph_output_file: Path | None = None
     split_names_by_words: bool = True
     suppress_validation: bool = False
+    include_validation_report: bool = True
     start_node_label: str = "Start"
     end_node_label: str = "End"
     max_decision_points: int = 10
@@ -87,3 +98,5 @@ class GraphBuildingContext:
     decision_false_label: str = "no"
     signal_success_label: str = "Signaled"
     signal_timeout_label: str = "Timeout"
+    include_path_list: bool = True
+    output_format: Literal["mermaid", "paths", "full"] = "full"

@@ -51,15 +51,21 @@ def test_add_decision_implementation() -> None:
     assert path.steps[0].decision_value is True
 
 
-def test_add_signal_placeholder() -> None:
-    """Call add_signal, verify it's a stub (NotImplementedError)."""
+def test_add_signal_implementation() -> None:
+    """Call add_signal, verify it records signal and returns node ID (Epic 4)."""
     path = GraphPath(path_id="0b10")
 
-    with pytest.raises(NotImplementedError) as exc_info:
-        path.add_signal("WaitForApproval", "Signaled")
+    # add_signal should now work (Epic 4 implementation)
+    node_id = path.add_signal("WaitForApproval", "Signaled")
 
-    assert "Epic 2" in str(exc_info.value)
-    assert "Epic 4" in str(exc_info.value)
+    # Should return a node ID
+    assert node_id == "1"
+
+    # Signal should be added to steps with correct type
+    assert len(path.steps) == 1
+    assert path.steps[0].node_type == 'signal'
+    assert path.steps[0].name == "WaitForApproval"
+    assert path.steps[0].signal_outcome == "Signaled"
 
 
 def test_empty_path_initialization() -> None:

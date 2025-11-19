@@ -1,0 +1,330 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>2</storyId>
+    <title>Implement wait_condition() Helper Function</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/4-2-implement-wait-condition-helper-function.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>Python developer using Temporal</asA>
+    <iWant>a helper function to mark wait conditions in my workflow</iWant>
+    <soThat>they appear as signal nodes in the generated graph</soThat>
+    <tasks>
+      - Task 1: Implement wait_condition() function (AC: 1, 2, 3, 5, 7)
+        - 1.1: Open/create src/temporalio_graphs/helpers.py
+        - 1.2: Import required modules (Callable from typing, timedelta from datetime, workflow from temporalio)
+        - 1.3: Define async function signature: async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool
+        - 1.4: Add complete Google-style docstring with Args, Returns, Raises, Example, and Note sections
+        - 1.5: Implement function body: return await workflow.wait_condition(condition_check, timeout)
+        - 1.6: Verify all type hints are complete and correct
+        - 1.7: Run mypy --strict to validate type safety
+      - Task 2: Export from public API (AC: 4)
+        - 2.1: Open src/temporalio_graphs/__init__.py
+        - 2.2: Import wait_condition from helpers module
+        - 2.3: Add wait_condition to __all__ list
+        - 2.4: Verify import order and organization
+        - 2.5: Test import: python -c "from temporalio_graphs import wait_condition; print(wait_condition.__name__)"
+      - Task 3: Create comprehensive unit tests (AC: 6)
+        - 3.1: Create/update tests/test_helpers.py
+        - 3.2: Add test_wait_condition_returns_true_on_success() using mock
+        - 3.3: Add test_wait_condition_returns_false_on_timeout() using mock
+        - 3.4: Add test_wait_condition_has_correct_type_hints() using inspect/typing
+        - 3.5: Add test_wait_condition_docstring_exists()
+        - 3.6: Add test_wait_condition_is_async_function()
+        - 3.7: Add test_wait_condition_signature_parameters()
+        - 3.8: Add test_wait_condition_calls_workflow_wait_condition() with mock
+        - 3.9: Verify all tests pass with pytest -v
+        - 3.10: Verify test coverage with pytest --cov
+      - Task 4: Create integration test with workflow (AC: 6)
+        - 4.1: Create test workflow using wait_condition in tests/integration/test_helpers_integration.py
+        - 4.2: Test validates wait_condition works in workflow context
+        - 4.3: Test validates return value (True/False) based on condition outcome
+        - 4.4: Test validates async/await syntax works correctly
+        - 4.5: Test validates compatibility with Temporal SDK
+      - Task 5: Update documentation (AC: 3, 4)
+        - 5.1: Verify docstring example is clear and accurate
+        - 5.2: Ensure docstring explains relationship to signal node visualization
+        - 5.3: Add usage note about when to use wait_condition vs workflow.wait_condition
+        - 5.4: Document in README or API reference (if applicable)
+      - Task 6: Run full test suite and validate quality (AC: 6)
+        - 6.1: Run pytest -v tests/test_helpers.py (all wait_condition tests pass)
+        - 6.2: Run pytest --cov=src/temporalio_graphs/helpers.py (100% coverage)
+        - 6.3: Run mypy --strict src/temporalio_graphs/ (0 errors)
+        - 6.4: Run ruff check src/temporalio_graphs/ (0 errors)
+        - 6.5: Run full test suite to verify no regressions
+        - 6.6: Verify public API import works correctly
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. wait_condition() function implemented in helpers.py (FR18)
+       - Function exists in src/temporalio_graphs/helpers.py alongside existing to_decision() helper
+       - Function signature: async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool
+       - Function wraps workflow.wait_condition() from Temporal SDK internally
+       - Function returns True if condition met before timeout, False if timeout occurred
+       - Function is async-compatible for use in workflow methods (FR43)
+       - Implementation is transparent passthrough - returns result unchanged from workflow.wait_condition()
+       - No side effects beyond calling underlying Temporal SDK function
+
+    2. Complete type hints and type safety (FR40, NFR-QUAL-1)
+       - All function parameters have complete type hints
+       - Return type explicitly declared as bool
+       - Type hints pass mypy --strict mode with 0 errors
+       - Callable type correctly typed as Callable[[], bool]
+       - timedelta imported from datetime module with type annotation
+       - Type hints enable full IDE autocomplete and type checking
+
+    3. Comprehensive Google-style docstring (FR41)
+       - Function has complete Google-style docstring with all sections
+       - Args section describes all 3 parameters with types and purpose
+       - Returns section explains bool return value (True=signaled, False=timeout)
+       - Raises section documents TemporalError if called outside workflow context
+       - Example section shows realistic usage in workflow context
+       - Example demonstrates await syntax, lambda condition check, timedelta timeout
+       - Note section explains static analysis detection and graph visualization behavior
+       - Docstring clearly states graph will show "Signaled" and "Timeout" branches
+
+    4. Public API export (FR37)
+       - wait_condition imported and exported from src/temporalio_graphs/__init__.py
+       - Exported in __all__ list alongside existing exports (GraphBuildingContext, analyze_workflow, to_decision)
+       - Public API maintains consistent naming and import patterns
+       - Function discoverable via from temporalio_graphs import wait_condition
+       - API documentation updated to reflect new export
+
+    5. Runtime behavior validation (FR18, FR19)
+       - Function correctly wraps workflow.wait_condition() without modifying behavior
+       - Returns True when condition becomes true before timeout
+       - Returns False when timeout occurs before condition
+       - Condition check callable invoked by underlying workflow.wait_condition()
+       - Name parameter does not affect runtime behavior (used only for static analysis)
+       - Function maintains same semantics as direct workflow.wait_condition() call
+
+    6. Comprehensive unit test coverage (NFR-QUAL-2)
+       - Unit tests in tests/test_helpers.py cover wait_condition() function
+       - Test: Function returns True when condition met before timeout
+       - Test: Function returns False when timeout occurs
+       - Test: Function has correct type hints (validated with mypy)
+       - Test: Function docstring exists and is complete (assert __doc__ presence)
+       - Test: Function is async (inspect.iscoroutinefunction returns True)
+       - Test: Function signature matches expected parameters
+       - Test coverage >100% for wait_condition function (all paths covered)
+       - Integration test validates usage in actual workflow context
+
+    7. Integration with Temporal SDK (FR18, FR43)
+       - Function imports workflow module from temporalio package
+       - Calls workflow.wait_condition() with condition_check and timeout arguments
+       - Passes through return value without modification
+       - Compatible with Temporal SDK >=1.7.1 (existing dependency)
+       - Async/await syntax correctly implemented for workflow context
+       - No breaking changes to Temporal SDK integration
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>Epic 4 Technical Specification - Signal and Wait Condition Support</title>
+        <section>Module: helpers.py (Extended) - wait_condition() async function</section>
+        <snippet>Lines 85-90: wait_condition() async function specification. Responsibility: Wrapper for workflow.wait_condition() that marks signal points for static analysis. Input: condition_check (Callable), timeout (timedelta), name (str). Output: bool (True if signaled, False if timeout). Pattern: Transparent passthrough - wraps Temporal's wait_condition, returns result unchanged.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>Public API Addition - wait_condition() signature and docstring</title>
+        <section>APIs and Interfaces - Public API Addition (helpers.py)</section>
+        <snippet>Lines 200-251: Complete wait_condition() function signature with full Google-style docstring including Args, Returns, Raises, Example sections. Function wraps Temporal's workflow.wait_condition() to enable static analysis detection. Example shows ApprovalWorkflow waiting up to 24 hours for approval signal.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/epics.md</path>
+        <title>Story 4.2 Definition from Epic 4</title>
+        <section>Story 4.2: Implement wait_condition() Helper Function</section>
+        <snippet>Lines 922-967: User story, acceptance criteria, prerequisites, and technical notes. Function signature: async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool. Must wrap workflow.wait_condition() internally. Covers FR18, FR19, FR40, FR41, FR43.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Decisions - Workflow Helper Functions Pattern</title>
+        <section>Core Modules - Workflow Helpers</section>
+        <snippet>Line 61: Workflow Helpers (to_decision, wait_condition) are async functions injected into workflow as markers for static analysis. Pattern established for decision support extends to signal support.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Type Safety Requirements</title>
+        <section>Development Tools - Type Checker</section>
+        <snippet>Line 44: mypy in latest strict mode required. NFR-QUAL-1: 100% public API type coverage. Strict mode enforces quality. All new functions must have complete type hints passing mypy --strict.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>Test Strategy - Unit Tests for wait_condition()</title>
+        <section>Unit Tests - tests/test_helpers.py</section>
+        <snippet>Lines 805-810: Unit test coverage requirements. Test: Function returns True when condition met (mock workflow.wait_condition to return True). Test: Function returns False on timeout (mock workflow.wait_condition to return False). Test: Function has correct type hints (validate with mypy). Test: Function docstring exists and is complete. Coverage Target: 100% for wait_condition.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>Dependencies and Integration Points</title>
+        <section>Integration with Temporal SDK</section>
+        <snippet>Lines 541-545: wait_condition() helper wraps workflow.wait_condition() (Temporal SDK API). Temporal SDK version: >=1.7.1 (same requirement as Epic 2). API Contract: workflow.wait_condition(condition: Callable[[], bool], timeout: timedelta) -> bool. No changes to Temporal SDK integration beyond wrapping existing function.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>NFR-QUAL-1: Type Safety Requirement</title>
+        <section>Acceptance Criteria - AC-7: Type Safety</section>
+        <snippet>Lines 642-647: GIVEN all Epic 4 code is implemented WHEN mypy --strict runs on src/temporalio_graphs/ THEN no type errors reported AND SignalPoint, wait_condition, SignalDetector all have complete type hints. TEST: CI runs mypy --strict, build fails if type errors exist.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/helpers.py</path>
+        <kind>module</kind>
+        <symbol>to_decision</symbol>
+        <lines>19-77</lines>
+        <reason>Reference implementation pattern for wait_condition(). Shows async function signature, transparent passthrough behavior, complete Google-style docstring with Args/Returns/Example/Note sections, zero runtime overhead design. wait_condition() must follow IDENTICAL structure.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>module</kind>
+        <symbol>__all__, imports</symbol>
+        <lines>1-23</lines>
+        <reason>Public API export pattern. Shows how to_decision is imported from helpers (line 18) and exported in __all__ (line 23). wait_condition must follow same pattern: import from helpers module, add to __all__ list maintaining alphabetical order.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_helpers.py</path>
+        <kind>test</kind>
+        <symbol>TestToDecisionPassthrough</symbol>
+        <lines>12-140</lines>
+        <reason>Test pattern reference for wait_condition tests. Shows comprehensive test coverage: returns True/False (lines 16-25), works with expressions (28-36), complex booleans (39-47), multiple calls (50-59), no side effects (62-68), various string names (71-82), type preservation (98-105). Apply same testing approach to wait_condition.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>module</kind>
+        <symbol>SignalDetector</symbol>
+        <lines>0-99</lines>
+        <reason>SignalDetector expects wait_condition(condition, timeout, name) signature. Detector imports SignalPoint from graph_models (line 28) and detects wait_condition() calls during AST traversal. This story's implementation must match expected signature for Story 4.1 signal detection to work.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>SignalPoint</symbol>
+        <lines>288-323</lines>
+        <reason>SignalPoint dataclass expects name field extracted from wait_condition's 3rd argument. Args: name (display name), condition_expr (1st arg), timeout_expr (2nd arg), source_line, node_id. wait_condition signature must provide these three arguments in order.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>enum</kind>
+        <symbol>NodeType.SIGNAL</symbol>
+        <lines>12-30</lines>
+        <reason>NodeType.SIGNAL enum value already defined (line 30) for signal nodes. to_mermaid() method (lines 109-110) renders SIGNAL nodes as hexagons using double braces. Infrastructure ready for wait_condition integration.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" reason="Required for workflow.wait_condition() API that wait_condition() wraps"/>
+        <package name="typing" version="stdlib" reason="Callable type hint for condition_check parameter"/>
+        <package name="datetime" version="stdlib" reason="timedelta type for timeout parameter"/>
+        <package name="pytest-asyncio" version=">=0.21.0" reason="Required for async test support in test_helpers.py"/>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - MUST be async function (workflow context requirement - workflows are async)
+    - MUST return bool type (matches workflow.wait_condition return type)
+    - MUST NOT modify behavior of underlying SDK call (transparent passthrough)
+    - MUST have complete type hints passing mypy --strict mode (NFR-QUAL-1)
+    - MUST have comprehensive Google-style docstring (FR41)
+    - MUST follow to_decision() pattern EXACTLY for API consistency
+    - Name parameter must be third argument (SignalDetector expects this order)
+    - Implementation pattern: from temporalio import workflow; return await workflow.wait_condition(condition_check, timeout)
+    - No runtime graph building - name parameter used only for static analysis
+    - Function must work in workflow context (requires await syntax)
+    - Zero side effects beyond calling Temporal SDK function
+    - Test coverage target: 100% for wait_condition function (NFR-QUAL-2)
+    - Integration test must validate actual workflow usage
+    - Public API export must maintain consistency with existing exports
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>wait_condition</name>
+      <kind>async function</kind>
+      <signature>async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool</signature>
+      <path>src/temporalio_graphs/helpers.py</path>
+      <description>Public helper function to mark wait conditions in workflows. Wraps workflow.wait_condition() for static analysis detection. Must be called with await in workflow methods.</description>
+    </interface>
+    <interface>
+      <name>workflow.wait_condition</name>
+      <kind>Temporal SDK async function</kind>
+      <signature>async def wait_condition(condition: Callable[[], bool], timeout: timedelta) -> bool</signature>
+      <path>temporalio.workflow module</path>
+      <description>Underlying Temporal SDK function that wait_condition() wraps. Takes condition check and timeout, returns True if condition met before timeout, False otherwise. Used internally by helper function.</description>
+    </interface>
+    <interface>
+      <name>SignalPoint dataclass</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) class SignalPoint: name: str, condition_expr: str, timeout_expr: str, source_line: int, node_id: str</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Data model for signal metadata. SignalDetector creates instances by extracting name from wait_condition's 3rd argument, condition_expr from 1st arg, timeout_expr from 2nd arg. Helper function signature must match this extraction pattern.</description>
+    </interface>
+    <interface>
+      <name>to_decision</name>
+      <kind>async function reference</kind>
+      <signature>async def to_decision(result: bool, name: str) -> bool</signature>
+      <path>src/temporalio_graphs/helpers.py</path>
+      <description>Reference implementation for helper function pattern. wait_condition() must follow identical structure: async function, transparent passthrough, complete docstring, type hints, zero overhead. API consistency is critical for user experience.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing standards follow established patterns from Epic 2-3. Use pytest with pytest-asyncio for async function testing. Mock workflow.wait_condition using unittest.mock.patch since function requires workflow context. Type hints validated with mypy --strict. Coverage target >80% overall, 100% for wait_condition function specifically. Follow test organization from test_helpers.py: group related tests in classes, use descriptive test names, assert specific behaviors. Integration tests should use actual workflow context if possible, otherwise mock execution environment.
+    </standards>
+    <locations>
+      tests/test_helpers.py - Unit tests for wait_condition() function
+      tests/integration/test_helpers_integration.py - Integration test with workflow context
+    </locations>
+    <ideas>
+      <test id="1" ac="6">
+        <description>test_wait_condition_returns_true_on_success</description>
+        <approach>Mock workflow.wait_condition to return True, call wait_condition(), assert result is True</approach>
+      </test>
+      <test id="2" ac="6">
+        <description>test_wait_condition_returns_false_on_timeout</description>
+        <approach>Mock workflow.wait_condition to return False, call wait_condition(), assert result is False</approach>
+      </test>
+      <test id="3" ac="2,6">
+        <description>test_wait_condition_has_correct_type_hints</description>
+        <approach>Use inspect.signature to validate parameter types (Callable, timedelta, str) and return type (bool)</approach>
+      </test>
+      <test id="4" ac="3,6">
+        <description>test_wait_condition_docstring_exists_and_complete</description>
+        <approach>Assert wait_condition.__doc__ is not None, contains "Args:", "Returns:", "Raises:", "Example:", "Note:" sections</approach>
+      </test>
+      <test id="5" ac="1,6">
+        <description>test_wait_condition_is_async_function</description>
+        <approach>Use inspect.iscoroutinefunction(wait_condition) to assert function is async</approach>
+      </test>
+      <test id="6" ac="1,6">
+        <description>test_wait_condition_signature_parameters</description>
+        <approach>Use inspect.signature to validate 3 parameters: condition_check, timeout, name. Check parameter order and names.</approach>
+      </test>
+      <test id="7" ac="5,6,7">
+        <description>test_wait_condition_calls_workflow_wait_condition_with_correct_args</description>
+        <approach>Mock workflow.wait_condition, call wait_condition(lambda: True, timedelta(seconds=10), "Test"), verify mock called with first two arguments only (name not passed to SDK)</approach>
+      </test>
+      <test id="8" ac="4,6">
+        <description>test_wait_condition_importable_from_public_api</description>
+        <approach>Test: from temporalio_graphs import wait_condition. Assert wait_condition.__name__ == "wait_condition". Verify function is callable.</approach>
+      </test>
+      <test id="9" ac="6,7">
+        <description>test_wait_condition_in_workflow_context_integration</description>
+        <approach>Create test workflow class using wait_condition, execute or mock execution context, validate return value based on condition outcome, verify async/await works</approach>
+      </test>
+      <test id="10" ac="5,6">
+        <description>test_wait_condition_no_side_effects</description>
+        <approach>Similar to to_decision test. Verify function has no side effects - pure passthrough. Call multiple times with same args, verify consistent results.</approach>
+      </test>
+    </ideas>
+  </tests>
+</story-context>

@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from temporalio_graphs._internal.graph_models import DecisionPoint
-from temporalio_graphs.detector import DecisionDetector
-from temporalio_graphs.exceptions import WorkflowParseError
+from temporalio_graphs._internal.graph_models import DecisionPoint, SignalPoint
+from temporalio_graphs.detector import DecisionDetector, SignalDetector
+from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 
 class TestDecisionDetectorBasic:
@@ -584,3 +584,347 @@ if condition:
 
         assert len(detector.decisions) == 1
         assert detector.decisions[0].name == "KeywordOnly"
+
+
+# ============================================================================
+# Signal Detection Tests (Story 4.1)
+# ============================================================================
+
+
+class TestSignalDetectorBasic:
+    """Basic signal detection tests."""
+
+    def test_single_signal_detection(self) -> None:
+        """Test detection of a single wait_condition() call."""
+        source = """
+result = await wait_condition(lambda: self.approved, timedelta(hours=24), "WaitForApproval")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "WaitForApproval"
+
+    def test_multiple_signals_detection(self) -> None:
+        """Test detection of multiple wait_condition() calls."""
+        source = """
+first = await wait_condition(lambda: self.first, timedelta(hours=12), "FirstSignal")
+second = await wait_condition(lambda: self.second, timedelta(hours=24), "SecondSignal")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 2
+        assert detector.signals[0].name == "FirstSignal"
+        assert detector.signals[1].name == "SecondSignal"
+
+    def test_ignore_non_wait_condition_calls(self) -> None:
+        """Test that non-wait_condition function calls are ignored."""
+        source = """
+some_function(lambda: x, timedelta(hours=1), "NotASignal")
+other_call(condition, timeout, "AlsoNotASignal")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 0
+
+    def test_attribute_access_wait_condition(self) -> None:
+        """Test detection of workflow.wait_condition() attribute access."""
+        source = """
+result = await workflow.wait_condition(lambda: self.ready, timedelta(hours=1), "AttributeSignal")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "AttributeSignal"
+
+
+class TestSignalNameExtraction:
+    """Tests for signal name extraction from arguments."""
+
+    def test_extract_signal_name_from_literal(self) -> None:
+        """Test extraction of signal name from string literal."""
+        source = 'wait_condition(condition, timeout, "MySignal")'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "MySignal"
+
+    def test_dynamic_signal_name_uses_unnamed(self) -> None:
+        """Test that dynamic signal name (variable) uses 'UnnamedSignal'."""
+        source = """
+signal_name = "Dynamic"
+wait_condition(condition, timeout, signal_name)
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+
+        # Should not raise error, but use fallback
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "UnnamedSignal"
+
+    def test_missing_signal_name_raises_error(self) -> None:
+        """Test that missing signal name argument raises InvalidSignalError."""
+        source = 'wait_condition(condition, timeout)'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+
+        with pytest.raises(InvalidSignalError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value)
+        assert "3 arguments" in error_msg
+        assert "got 2" in error_msg
+
+    def test_completely_missing_arguments_raises_error(self) -> None:
+        """Test that wait_condition with no arguments raises error."""
+        source = 'wait_condition()'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+
+        with pytest.raises(InvalidSignalError) as exc_info:
+            detector.visit(tree)
+
+        error_msg = str(exc_info.value)
+        assert "3 arguments" in error_msg
+        assert "got 0" in error_msg
+
+
+class TestSignalMetadataExtraction:
+    """Tests for signal metadata extraction (condition, timeout, line number)."""
+
+    def test_condition_expression_extracted(self) -> None:
+        """Test that condition expression is extracted correctly."""
+        source = 'wait_condition(lambda: self.approved, timedelta(hours=24), "Test")'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert "lambda" in detector.signals[0].condition_expr
+        assert "approved" in detector.signals[0].condition_expr
+
+    def test_timeout_expression_extracted(self) -> None:
+        """Test that timeout expression is extracted correctly."""
+        source = 'wait_condition(lambda: x, timedelta(hours=24), "Test")'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert "timedelta" in detector.signals[0].timeout_expr
+        assert "24" in detector.signals[0].timeout_expr
+
+    def test_source_line_numbers_correct(self) -> None:
+        """Test that source line numbers are recorded correctly."""
+        source = """
+
+result = await wait_condition(lambda: x, timedelta(hours=1), "Line3")
+
+
+second = await wait_condition(lambda: y, timedelta(hours=2), "Line6")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 2
+        assert detector.signals[0].source_line == 3
+        assert detector.signals[1].source_line == 6
+
+    def test_node_id_generation_deterministic(self) -> None:
+        """Test that node IDs are deterministic based on name and line."""
+        source = """
+await wait_condition(lambda: x, timedelta(hours=1), "MySignal")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        signal = detector.signals[0]
+        assert signal.node_id == f"sig_mysignal_{signal.source_line}"
+
+    def test_node_id_handles_spaces(self) -> None:
+        """Test that node IDs handle signal names with spaces."""
+        source = 'wait_condition(lambda: x, timedelta(hours=1), "Wait For Approval")'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert "wait_for_approval" in detector.signals[0].node_id
+
+
+class TestSignalWorkflowFiles:
+    """Integration tests using signal workflow fixture files."""
+
+    def test_signal_simple_workflow_file(self) -> None:
+        """Test detection in simple signal workflow file."""
+        workflow_file = Path(__file__).parent / "fixtures" / "sample_workflows" / "signal_simple.py"
+        if workflow_file.exists():
+            source = workflow_file.read_text()
+            tree = ast.parse(source)
+            detector = SignalDetector()
+            detector.visit(tree)
+
+            assert len(detector.signals) == 1
+            assert detector.signals[0].name == "WaitForApproval"
+
+    def test_signal_multiple_workflow_file(self) -> None:
+        """Test detection in multiple signal workflow file."""
+        workflow_file = Path(__file__).parent / "fixtures" / "sample_workflows" / "signal_multiple.py"
+        if workflow_file.exists():
+            source = workflow_file.read_text()
+            tree = ast.parse(source)
+            detector = SignalDetector()
+            detector.visit(tree)
+
+            assert len(detector.signals) == 2
+            assert detector.signals[0].name == "WaitForFirstApproval"
+            assert detector.signals[1].name == "WaitForSecondApproval"
+
+    def test_signal_with_decision_workflow_file(self) -> None:
+        """Test signal detection in workflow with both signals and decisions."""
+        workflow_file = Path(__file__).parent / "fixtures" / "sample_workflows" / "signal_with_decision.py"
+        if workflow_file.exists():
+            source = workflow_file.read_text()
+            tree = ast.parse(source)
+
+            # Test signals
+            signal_detector = SignalDetector()
+            signal_detector.visit(tree)
+            assert len(signal_detector.signals) == 1
+            assert signal_detector.signals[0].name == "WaitForApproval"
+
+            # Test decisions also detected
+            decision_detector = DecisionDetector()
+            decision_detector.visit(tree)
+            assert len(decision_detector.decisions) == 1
+            assert decision_detector.decisions[0].name == "HighValue"
+
+    def test_signal_dynamic_name_workflow_file(self) -> None:
+        """Test detection in workflow with dynamic signal name."""
+        workflow_file = Path(__file__).parent / "fixtures" / "sample_workflows" / "signal_dynamic_name.py"
+        if workflow_file.exists():
+            source = workflow_file.read_text()
+            tree = ast.parse(source)
+            detector = SignalDetector()
+            detector.visit(tree)
+
+            # Should detect signal but use UnnamedSignal fallback
+            assert len(detector.signals) == 1
+            assert detector.signals[0].name == "UnnamedSignal"
+
+
+class TestSignalDetectorProperty:
+    """Tests for SignalDetector property."""
+
+    def test_signals_property_returns_list(self) -> None:
+        """Test that signals property returns list."""
+        detector = SignalDetector()
+        assert isinstance(detector.signals, list)
+        assert len(detector.signals) == 0
+
+    def test_signals_property_read_only(self) -> None:
+        """Test that signals property cannot be reassigned."""
+        detector = SignalDetector()
+        with pytest.raises(AttributeError):
+            detector.signals = []  # type: ignore
+
+
+class TestSignalEdgeCases:
+    """Tests for signal detection edge cases."""
+
+    def test_nested_signal_calls(self) -> None:
+        """Test detection of signals in nested code structures."""
+        source = """
+if condition:
+    if nested:
+        result = await wait_condition(lambda: x, timedelta(hours=1), "NestedSignal")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "NestedSignal"
+
+    def test_signal_in_function_call_as_argument(self) -> None:
+        """Test detection when wait_condition is inside another function call."""
+        source = 'some_function(wait_condition(cond, timeout, "Nested"))'
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        assert detector.signals[0].name == "Nested"
+
+    def test_attribute_access_function_not_matched(self) -> None:
+        """Test that attribute access to non-wait_condition functions not matched."""
+        source = """
+obj.some_method(condition, timeout, "Test")
+obj.wait_condition_v2(condition, timeout, "Test2")
+"""
+        tree = ast.parse(source)
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 0
+
+    def test_signal_point_dataclass_fields(self) -> None:
+        """Test that SignalPoint has all required fields."""
+        source = 'wait_condition(lambda: x, timedelta(hours=1), "TestSignal")'
+        tree = ast.parse(source, mode="eval")
+        detector = SignalDetector()
+        detector.visit(tree)
+
+        assert len(detector.signals) == 1
+        signal = detector.signals[0]
+
+        # Verify all fields exist and have correct types
+        assert isinstance(signal.name, str)
+        assert isinstance(signal.condition_expr, str)
+        assert isinstance(signal.timeout_expr, str)
+        assert isinstance(signal.source_line, int)
+        assert isinstance(signal.node_id, str)
+
+        # Verify field values are populated
+        assert signal.name == "TestSignal"
+        assert len(signal.condition_expr) > 0
+        assert len(signal.timeout_expr) > 0
+        assert signal.source_line > 0
+        assert len(signal.node_id) > 0
+
+    def test_detector_reuse_creates_fresh_state(self) -> None:
+        """Test that each detector instance has independent state."""
+        source1 = 'wait_condition(c1, t1, "First")'
+        source2 = 'wait_condition(c2, t2, "Second")'
+
+        tree1 = ast.parse(source1, mode="eval")
+        tree2 = ast.parse(source2, mode="eval")
+
+        detector1 = SignalDetector()
+        detector1.visit(tree1)
+        assert len(detector1.signals) == 1
+        assert detector1.signals[0].name == "First"
+
+        # Create new detector for independent state
+        detector2 = SignalDetector()
+        detector2.visit(tree2)
+        assert len(detector2.signals) == 1
+        assert detector2.signals[0].name == "Second"
+
+        # Original detector unchanged
+        assert len(detector1.signals) == 1
+        assert detector1.signals[0].name == "First"

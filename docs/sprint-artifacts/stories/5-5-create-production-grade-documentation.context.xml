@@ -1,0 +1,674 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>5-5-create-production-grade-documentation</story-key>
+    <story-file>docs/sprint-artifacts/stories/5-5-create-production-grade-documentation.md</story-file>
+    <epic>Epic 5: Production Readiness</epic>
+    <epic-tech-spec>docs/sprint-artifacts/tech-spec-epic-5.md</epic-tech-spec>
+    <generated-date>2025-11-19</generated-date>
+    <context-version>1.0</context-version>
+  </metadata>
+
+  <story-overview>
+    <summary>Create comprehensive, production-grade documentation including README.md enhancements, API reference, CHANGELOG.md, LICENSE file, core concepts explanation, configuration patterns, troubleshooting guide, and .NET migration guide.</summary>
+    <objectives>
+      <objective>Enhance README.md with project overview, installation, quick start, badges, features, examples, API reference, contributing, and license sections</objective>
+      <objective>Document core concepts: AST analysis, decision nodes, signal nodes, path permutations, and path explosion management</objective>
+      <objective>Document configuration patterns with GraphBuildingContext examples</objective>
+      <objective>Create comprehensive API reference documentation for all public interfaces</objective>
+      <objective>Create CHANGELOG.md following Keep a Changelog format with 0.1.0 release notes</objective>
+      <objective>Create LICENSE file with MIT license matching .NET version</objective>
+      <objective>Document differences from .NET version with migration guide</objective>
+      <objective>Create troubleshooting guide with common errors and solutions</objective>
+      <objective>Ensure all code examples are tested and documentation quality standards met</objective>
+    </objectives>
+    <acceptance-criteria-count>10</acceptance-criteria-count>
+  </story-overview>
+
+  <epic-context>
+    <epic-name>Epic 5: Production Readiness</epic-name>
+    <epic-goal>Prepare library for production use with validation warnings, comprehensive error handling, alternative output formats, example gallery, and production-grade documentation</epic-goal>
+    <epic-stories>
+      <story>5-1: Validation Warnings (DONE)</story>
+      <story>5-2: Error Handling Hierarchy (DONE)</story>
+      <story>5-3: Path List Output Format (DONE)</story>
+      <story>5-4: Example Gallery (DONE)</story>
+      <story>5-5: Production-Grade Documentation (CURRENT)</story>
+    </epic-stories>
+    <tech-spec-reference>
+      <file>docs/sprint-artifacts/tech-spec-epic-5.md</file>
+      <acceptance-criteria>AC-5.5: Production-Grade Documentation (lines 1005-1022)</acceptance-criteria>
+      <key-requirements>
+        <requirement>README.md with project overview, installation, quick start (FR60: less than 10 lines), badges, examples, API reference</requirement>
+        <requirement>Core concepts documentation: AST analysis, decision nodes, signal nodes, path permutations</requirement>
+        <requirement>Configuration patterns with GraphBuildingContext examples</requirement>
+        <requirement>API reference for all public classes/functions with usage examples</requirement>
+        <requirement>CHANGELOG.md following Keep a Changelog format</requirement>
+        <requirement>LICENSE file (MIT license per NFR-QUAL-4)</requirement>
+        <requirement>Migration guide from .NET version with architecture differences</requirement>
+        <requirement>Troubleshooting section with common errors and solutions</requirement>
+        <requirement>All code examples tested and working</requirement>
+        <requirement>Documentation accessible to intermediate Python developers</requirement>
+      </key-requirements>
+    </tech-spec-reference>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>README.md</path>
+      <type>primary-documentation</type>
+      <description>Main project documentation file. Currently has basic structure with status, overview, installation, quick start, examples (complete from Story 5-4), configuration, error handling, features, structure, development, plan, how it works, example output, contributing, license, sponsors, and credits. Needs enhancement with badges, better organization, core concepts section, and integration of new content.</description>
+      <current-status>Partially complete - Examples section done in Story 5-4, needs badge section, core concepts, enhanced troubleshooting, and final polish</current-status>
+      <relevance>Primary target for Task 1 (README enhancement), Task 2 (core concepts), Task 3 (configuration patterns), Task 7 (.NET differences), Task 8 (troubleshooting)</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/prd.md</path>
+      <type>reference-documentation</type>
+      <description>Product Requirements Document with 65 functional requirements. Contains FR60 (quick start must be less than 10 lines) and NFR-QUAL-4 (MIT license requirement). Essential reference for documentation completeness.</description>
+      <key-sections>
+        <section>FR60: Quick start example must be less than 10 lines of code</section>
+        <section>NFR-QUAL-4: MIT License matching .NET version</section>
+        <section>FR1-FR65: Complete functional requirements for documentation coverage</section>
+      </key-sections>
+      <relevance>Defines quick start requirement (AC1), license requirement (AC6), and feature coverage for documentation</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>reference-documentation</type>
+      <description>Architecture document with technical decisions, design patterns, module descriptions, and implementation approach. Contains rationale for static analysis approach vs .NET runtime interceptors. Essential for documenting .NET vs Python differences.</description>
+      <key-sections>
+        <section>Executive Summary: Static code analysis approach</section>
+        <section>Decision Summary: All architectural decisions with rationale</section>
+        <section>Project Structure: Module organization</section>
+        <section>Core Modules: AST analysis, path generation, rendering</section>
+      </key-sections>
+      <relevance>Source material for core concepts documentation (AC2), architecture differences section (AC7), and technical deep-dive content</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/epics.md</path>
+      <type>reference-documentation</type>
+      <description>Epic breakdown with all stories and requirements. Contains detailed Story 5.5 definition with dev notes, learnings from previous stories, and implementation guidance.</description>
+      <key-sections>
+        <section>Story 5.5 definition (lines 1256-1298): Complete story with ACs and tasks</section>
+        <section>Functional Requirements Inventory (FR1-FR65): Complete feature list</section>
+      </key-sections>
+      <relevance>Story definition and context for implementation planning</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+      <type>technical-specification</type>
+      <description>Technical specification for Epic 5 with detailed acceptance criteria, implementation approach, test strategy, and open questions. Contains AC-5.5 with complete documentation requirements.</description>
+      <key-sections>
+        <section>AC-5.5 (lines 1005-1022): Complete acceptance criteria for documentation</section>
+        <section>Risks and Assumptions: Documentation maintenance, example complexity</section>
+        <section>Open Questions: API reference format, error handling in examples</section>
+      </key-sections>
+      <relevance>Primary specification for story implementation with acceptance criteria details</relevance>
+    </artifact>
+
+    <artifact>
+      <path>pyproject.toml</path>
+      <type>project-configuration</type>
+      <description>Project metadata, dependencies, and build configuration. Contains project name, version (0.1.0), description, Python version requirements (>=3.10), dependencies (temporalio>=1.7.1), and dev dependencies. Essential for CHANGELOG version mapping and README badge accuracy.</description>
+      <key-fields>
+        <field>name: temporalio-graphs</field>
+        <field>version: 0.1.0</field>
+        <field>requires-python: >=3.10</field>
+        <field>license: MIT</field>
+        <field>dependencies: temporalio>=1.7.1</field>
+      </key-fields>
+      <relevance>Source of truth for version numbers, Python version badges, dependency documentation</relevance>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/5-4-create-comprehensive-example-gallery.md</path>
+      <type>related-story</type>
+      <description>Completed story for example gallery (Story 5-4). Contains completion notes showing README Examples section is complete with 4 examples (simple_linear, money_transfer, signal_workflow, multi_decision) documented comprehensively. Provides pattern to follow for documentation quality and structure.</description>
+      <key-learnings>
+        <learning>Examples section already complete (200 lines, 4 examples) - preserve this content</learning>
+        <learning>Progressive complexity pattern works well (beginner → intermediate → advanced)</learning>
+        <learning>Code snippets with clear structure (workflow.py, run.py, expected_output.md)</learning>
+        <learning>Makefile created with run-examples target for CI integration</learning>
+      </key-learnings>
+      <relevance>Examples section in README already done - do not rewrite, preserve and reference in AC1</relevance>
+    </artifact>
+
+    <artifact>
+      <path>IMPLEMENTATION_PLAN.md</path>
+      <type>reference-documentation</type>
+      <description>Complete 15.5-hour phased implementation plan with 7 quality gate reviews. Shows project phases, timeline, and quality standards. Useful reference for CHANGELOG content and project history.</description>
+      <relevance>Background context for CHANGELOG creation and project evolution documentation</relevance>
+    </artifact>
+
+    <artifact>
+      <path>spike/EXECUTIVE_SUMMARY.md</path>
+      <type>reference-documentation</type>
+      <description>Architecture spike decision rationale comparing 3 approaches (mock execution, history parsing, static analysis). Explains why static analysis was chosen. Essential for documenting .NET vs Python differences.</description>
+      <key-points>
+        <point>Python SDK interceptors cannot mock activity return values (unlike .NET)</point>
+        <point>Static analysis generates ALL paths without execution</point>
+        <point>Performance: sub-millisecond vs exponential execution time</point>
+        <point>Matches conceptual model of .NET reference implementation</point>
+      </key-points>
+      <relevance>Source material for architecture differences section (AC7) explaining Python approach vs .NET</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <name>analyze_workflow</name>
+      <type>function</type>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <signature>analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <description>Main public API entry point for workflow analysis. Performs static code analysis and returns graph representation. Complete docstring with examples already exists.</description>
+      <documentation-status>Well-documented in code, needs API reference extraction</documentation-status>
+      <relevance>Primary API to document in API reference (AC4)</relevance>
+    </interface>
+
+    <interface>
+      <name>GraphBuildingContext</name>
+      <type>dataclass</type>
+      <file>src/temporalio_graphs/context.py</file>
+      <fields>
+        <field>is_building_graph: bool = True</field>
+        <field>exit_after_building_graph: bool = False</field>
+        <field>graph_output_file: Path | None = None</field>
+        <field>split_names_by_words: bool = True</field>
+        <field>suppress_validation: bool = False</field>
+        <field>include_validation_report: bool = True</field>
+        <field>start_node_label: str = "Start"</field>
+        <field>end_node_label: str = "End"</field>
+        <field>max_decision_points: int = 10</field>
+        <field>max_paths: int = 1024</field>
+        <field>decision_true_label: str = "yes"</field>
+        <field>decision_false_label: str = "no"</field>
+        <field>signal_success_label: str = "Signaled"</field>
+        <field>signal_timeout_label: str = "Timeout"</field>
+        <field>include_path_list: bool = True</field>
+        <field>output_format: Literal["mermaid", "paths", "full"] = "full"</field>
+      </fields>
+      <description>Immutable configuration dataclass for graph generation. Frozen dataclass with comprehensive docstring explaining all fields, defaults, and usage patterns.</description>
+      <documentation-status>Well-documented in code with examples, needs API reference extraction and configuration pattern examples</documentation-status>
+      <relevance>Core configuration object to document in API reference (AC4) and configuration patterns section (AC3)</relevance>
+    </interface>
+
+    <interface>
+      <name>to_decision</name>
+      <type>async-function</type>
+      <file>src/temporalio_graphs/helpers.py</file>
+      <signature>async def to_decision(result: bool, name: str) -> bool</signature>
+      <description>Helper function for marking boolean expressions as decision points. Transparent passthrough at runtime, marker for static analysis. Comprehensive docstring with usage examples and warnings about string literal requirement.</description>
+      <documentation-status>Well-documented in code, needs API reference extraction and core concepts explanation</documentation-status>
+      <relevance>Key helper function to document in API reference (AC4) and core concepts (AC2)</relevance>
+    </interface>
+
+    <interface>
+      <name>wait_condition</name>
+      <type>async-function</type>
+      <file>src/temporalio_graphs/helpers.py</file>
+      <signature>async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool</signature>
+      <description>Helper function for marking wait conditions as signal nodes. Wraps Temporal's workflow.wait_condition() for static analysis detection. Returns True if signaled, False if timeout. Comprehensive docstring with usage examples.</description>
+      <documentation-status>Well-documented in code, needs API reference extraction and core concepts explanation</documentation-status>
+      <relevance>Key helper function to document in API reference (AC4) and core concepts (AC2)</relevance>
+    </interface>
+
+    <interface>
+      <name>Exception Hierarchy</name>
+      <type>exception-classes</type>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <classes>
+        <class>TemporalioGraphsError (base exception)</class>
+        <class>WorkflowParseError(file_path, line, message, suggestion)</class>
+        <class>UnsupportedPatternError(pattern, suggestion, line)</class>
+        <class>GraphGenerationError(reason, context)</class>
+        <class>InvalidDecisionError(function, issue, suggestion)</class>
+        <class>InvalidSignalError(file_path, line, message)</class>
+      </classes>
+      <description>Comprehensive exception hierarchy with actionable error messages. Each exception has file_path, line number, and suggestion fields. All exceptions inherit from TemporalioGraphsError for easy catch-all handling.</description>
+      <documentation-status>Well-documented in code, needs API reference extraction and troubleshooting guide integration</documentation-status>
+      <relevance>Exception hierarchy to document in API reference (AC4) and use in troubleshooting guide (AC8)</relevance>
+    </interface>
+
+    <interface>
+      <name>ValidationWarning</name>
+      <type>dataclass</type>
+      <file>src/temporalio_graphs/validator.py</file>
+      <description>Data model for validation warnings (unreachable activities, path explosion, etc.). Used by validate_workflow() function to report workflow quality issues.</description>
+      <documentation-status>Implementation detail, minimal public API documentation needed</documentation-status>
+      <relevance>Minor API to document for completeness</relevance>
+    </interface>
+
+    <interface>
+      <name>ValidationReport</name>
+      <type>dataclass</type>
+      <file>src/temporalio_graphs/validator.py</file>
+      <description>Data model for validation report containing list of warnings. Has format() method for rendering report. Returned by validate_workflow().</description>
+      <documentation-status>Implementation detail, minimal public API documentation needed</documentation-status>
+      <relevance>Minor API to document for completeness</relevance>
+    </interface>
+  </existing-code-interfaces>
+
+  <example-workflows>
+    <example>
+      <name>simple_linear</name>
+      <path>examples/simple_linear/</path>
+      <description>Beginner example with sequential activities, no branching. 1 execution path. Demonstrates basic workflow pipeline pattern.</description>
+      <documentation-status>Complete - documented in README Examples section by Story 5-4</documentation-status>
+      <relevance>Reference example for basic usage documentation</relevance>
+    </example>
+
+    <example>
+      <name>money_transfer</name>
+      <path>examples/money_transfer/</path>
+      <description>Intermediate example with 2 decision points creating 4 execution paths. Demonstrates currency conversion and tax handling with to_decision() helper.</description>
+      <documentation-status>Complete - documented in README Examples section by Story 5-4</documentation-status>
+      <relevance>Reference example for decision node documentation and core concepts</relevance>
+    </example>
+
+    <example>
+      <name>signal_workflow</name>
+      <path>examples/signal_workflow/</path>
+      <description>Intermediate example with wait condition and timeout handling. 2 execution paths (Signaled vs Timeout). Demonstrates approval workflow pattern with wait_condition() helper.</description>
+      <documentation-status>Complete - documented in README Examples section by Story 5-4</documentation-status>
+      <relevance>Reference example for signal node documentation and core concepts</relevance>
+    </example>
+
+    <example>
+      <name>multi_decision</name>
+      <path>examples/multi_decision/</path>
+      <description>Advanced example with 3 decision points creating 8 execution paths (2^3). Demonstrates complex loan approval workflow with multiple criteria. Shows path explosion concept.</description>
+      <documentation-status>Complete - documented in README Examples section by Story 5-4</documentation-status>
+      <relevance>Reference example for path explosion documentation and advanced usage patterns</relevance>
+    </example>
+  </example-workflows>
+
+  <development-constraints>
+    <constraint>
+      <type>documentation-quality</type>
+      <requirement>All code examples must be tested and working (AC9)</requirement>
+      <validation>Extract examples from tested files in examples/ directory, do not create untested examples</validation>
+      <impact>High - Ensures documentation accuracy and prevents user frustration</impact>
+    </constraint>
+
+    <constraint>
+      <type>quick-start-requirement</type>
+      <requirement>Quick start example must be less than 10 lines of code (FR60, AC1)</requirement>
+      <validation>Count lines in quick start code block, excluding comments and blank lines</validation>
+      <impact>High - Explicit functional requirement from PRD</impact>
+    </constraint>
+
+    <constraint>
+      <type>license-compatibility</type>
+      <requirement>MIT License must match .NET version (NFR-QUAL-4, AC6)</requirement>
+      <validation>Use standard MIT license text, verify compatibility with .NET Temporalio.Graphs</validation>
+      <impact>High - Legal requirement for license compatibility</impact>
+    </constraint>
+
+    <constraint>
+      <type>changelog-format</type>
+      <requirement>CHANGELOG.md must follow Keep a Changelog format (AC5)</requirement>
+      <validation>Follow https://keepachangelog.com/en/1.0.0/ structure with [Unreleased] and [0.1.0] sections</validation>
+      <impact>Medium - Industry standard for changelog formatting</impact>
+    </constraint>
+
+    <constraint>
+      <type>accessibility</type>
+      <requirement>Documentation must be clear and accessible to intermediate Python developers (AC9)</requirement>
+      <validation>No advanced AST knowledge required, explain concepts progressively, use clear examples</validation>
+      <impact>High - Determines user adoption and satisfaction</impact>
+    </constraint>
+
+    <constraint>
+      <type>terminology-consistency</type>
+      <requirement>Consistent terminology throughout documentation (AC9)</requirement>
+      <validation>Use "activity" (not "task"), "decision node" (not "branch"), "signal node" (not "wait"), "workflow" (not "flow")</validation>
+      <impact>Medium - Ensures clarity and professional quality</impact>
+    </constraint>
+
+    <constraint>
+      <type>link-validation</type>
+      <requirement>No broken links in documentation (AC9)</requirement>
+      <validation>Verify all internal links (to examples, API reference) and external links (Keep a Changelog, .NET repo) work</validation>
+      <impact>Medium - Poor user experience if links broken</impact>
+    </constraint>
+
+    <constraint>
+      <type>badge-accuracy</type>
+      <requirement>README badges must accurately reflect project status (AC1, AC10)</requirement>
+      <validation>PyPI version badge matches pyproject.toml, Python version badges match requires-python, license badge shows MIT</validation>
+      <impact>Medium - Badges provide quick project status overview</impact>
+    </constraint>
+
+    <constraint>
+      <type>examples-preservation</type>
+      <requirement>Do not rewrite or remove existing Examples section from Story 5-4 (AC1)</requirement>
+      <validation>Examples section already complete and comprehensive, preserve this work</validation>
+      <impact>High - Story 5-4 completed this, do not duplicate effort</impact>
+    </constraint>
+
+    <constraint>
+      <type>version-accuracy</type>
+      <requirement>All version references must match pyproject.toml version (0.1.0)</requirement>
+      <validation>CHANGELOG version, README references, and badge URLs must use 0.1.0</validation>
+      <impact>Medium - Version consistency across documentation</impact>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency>
+      <name>temporalio</name>
+      <version>>=1.7.1</version>
+      <type>runtime</type>
+      <purpose>Temporal workflow SDK providing @workflow.defn, @workflow.run decorators, and workflow.execute_activity()</purpose>
+      <relevance>Core dependency to document in installation instructions and API reference</relevance>
+    </dependency>
+
+    <dependency>
+      <name>pytest</name>
+      <version>>=8.0.0</version>
+      <type>development</type>
+      <purpose>Testing framework for running integration tests and validating examples</purpose>
+      <relevance>Development workflow documentation, testing guidance</relevance>
+    </dependency>
+
+    <dependency>
+      <name>mypy</name>
+      <version>>=1.8.0</version>
+      <type>development</type>
+      <purpose>Type checker for strict type safety validation</purpose>
+      <relevance>Development workflow documentation, code quality standards</relevance>
+    </dependency>
+
+    <dependency>
+      <name>ruff</name>
+      <version>>=0.2.0</version>
+      <type>development</type>
+      <purpose>Fast linter and formatter for code quality</purpose>
+      <relevance>Development workflow documentation, code quality standards</relevance>
+    </dependency>
+
+    <dependency>
+      <name>pytest-cov</name>
+      <version>>=4.1.0</version>
+      <type>development</type>
+      <purpose>Coverage reporting for test quality metrics</purpose>
+      <relevance>Test coverage badge accuracy, quality standards documentation</relevance>
+    </dependency>
+
+    <dependency>
+      <name>Python</name>
+      <version>>=3.10 (3.11+ recommended)</version>
+      <type>runtime</type>
+      <purpose>Python interpreter with AST module support and modern dataclass features</purpose>
+      <relevance>Python version badges, installation requirements, compatibility notes</relevance>
+    </dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-framework>pytest</test-framework>
+    <coverage-requirement>80% minimum (currently 95%)</coverage-requirement>
+    <test-organization>Mirror src/ structure with tests/ directory</test-organization>
+
+    <test-patterns>
+      <pattern>
+        <name>Integration Tests</name>
+        <description>End-to-end tests for each example workflow validating complete pipeline (source → AST → paths → Mermaid)</description>
+        <files>
+          <file>tests/integration/test_simple_linear.py</file>
+          <file>tests/integration/test_money_transfer.py</file>
+          <file>tests/integration/test_signal_workflow.py</file>
+          <file>tests/integration/test_multi_decision.py</file>
+        </files>
+        <relevance>Validates that all documented examples work correctly</relevance>
+      </pattern>
+
+      <pattern>
+        <name>Golden File Tests</name>
+        <description>Compare generated output against expected_output.md files for regression detection</description>
+        <approach>Structural comparison (not byte-for-byte) to handle formatting variations</approach>
+        <relevance>Ensures documentation examples match actual output</relevance>
+      </pattern>
+
+      <pattern>
+        <name>Documentation Tests</name>
+        <description>Manual validation of README structure, API reference completeness, CHANGELOG format, LICENSE text</description>
+        <validation-points>
+          <point>README has all required sections</point>
+          <point>All example links resolve</point>
+          <point>Quick start code snippet extracts and runs</point>
+          <point>LICENSE file is MIT</point>
+          <point>CHANGELOG follows Keep a Changelog format</point>
+        </validation-points>
+        <relevance>AC9 quality standards validation</relevance>
+      </pattern>
+    </test-patterns>
+
+    <test-validation-requirements>
+      <requirement>All code examples in documentation must be extracted from or validated against working code in examples/ directory</requirement>
+      <requirement>Quick start example must run successfully and produce valid output</requirement>
+      <requirement>Configuration examples must instantiate GraphBuildingContext successfully</requirement>
+      <requirement>Troubleshooting code examples must demonstrate the error and solution correctly</requirement>
+    </test-validation-requirements>
+  </testing-context>
+
+  <implementation-notes>
+    <note priority="critical">
+      <title>Examples Section Already Complete</title>
+      <content>Story 5-4 completed the README Examples section with comprehensive documentation for all 4 examples (simple_linear, money_transfer, signal_workflow, multi_decision). This is 200 lines of high-quality documentation following progressive complexity pattern. DO NOT rewrite or remove this section. Task 1 (AC1) should verify it exists and is complete, not recreate it.</content>
+    </note>
+
+    <note priority="critical">
+      <title>Quick Start Line Count Requirement</title>
+      <content>FR60 requires quick start example to be less than 10 lines of code. Current README has 3-line example (import, analyze, print). This satisfies the requirement. Validate line count excludes comments and blank lines when counting.</content>
+    </note>
+
+    <note priority="high">
+      <title>Badge URLs Must Use Placeholders</title>
+      <content>README badges (PyPI, coverage, license, Python versions) should use shields.io URLs with placeholders since package is not yet published to PyPI. Use format: https://img.shields.io/badge/... or https://img.shields.io/pypi/v/temporalio-graphs (will work once published).</content>
+    </note>
+
+    <note priority="high">
+      <title>API Reference Organization</title>
+      <content>API reference can be created as separate docs/api-reference.md file OR as section in README. Tech spec suggests separate file for cleaner organization. Include: analyze_workflow(), GraphBuildingContext, to_decision(), wait_condition(), exception hierarchy. Extract from existing docstrings rather than rewriting.</content>
+    </note>
+
+    <note priority="high">
+      <title>CHANGELOG Content Strategy</title>
+      <content>CHANGELOG.md should document features from Epics 1-5 in [0.1.0] section. Group by category (Added, Changed, etc.) per Keep a Changelog format. Use epic summaries from docs/epics.md as source material. Include [Unreleased] section for future changes.</content>
+    </note>
+
+    <note priority="high">
+      <title>.NET Comparison Requires Spike Reference</title>
+      <content>Architecture differences section (AC7) should reference spike/EXECUTIVE_SUMMARY.md which explains why Python uses static analysis vs .NET's runtime interceptors. Key points: Python SDK interceptor limitations, performance benefits (sub-millisecond), no execution required. Create comparison table showing feature parity.</content>
+    </note>
+
+    <note priority="medium">
+      <title>Troubleshooting Examples Must Be Realistic</title>
+      <content>Troubleshooting guide (AC8) should use realistic error scenarios from exception classes. Each error should show: error message format, root cause, step-by-step solution, code example. Reference exceptions.py for actual error message formats to ensure accuracy.</content>
+    </note>
+
+    <note priority="medium">
+      <title>Configuration Patterns Should Show Use Cases</title>
+      <content>Configuration patterns section (AC3) should not just list GraphBuildingContext fields but show realistic use cases: "Disable word splitting for acronyms", "Custom domain terminology", "Complex workflows with many decisions", "File output for CI/CD", etc. Current README has good examples to build on.</content>
+    </note>
+
+    <note priority="medium">
+      <title>Core Concepts Should Use Visual Diagrams</title>
+      <content>Core concepts section (AC2) should include visual elements where helpful: Mermaid diagram showing all node types (activity rectangle, decision diamond, signal hexagon), path permutation tree showing 2^n explosion, etc. These diagrams make concepts clearer than text alone.</content>
+    </note>
+
+    <note priority="low">
+      <title>Contributing Guidelines Scope</title>
+      <content>Contributing section (AC1) can be brief for MVP - link to GitHub issues, mention code quality standards (mypy, ruff, pytest), reference IMPLEMENTATION_PLAN.md for current priorities. Full CONTRIBUTING.md file is post-MVP scope.</content>
+    </note>
+
+    <note priority="low">
+      <title>Documentation Tone Guidance</title>
+      <content>Tech spec requires "professional tone without being overly formal" and "clear and accessible to intermediate Python developers". Use technical accuracy but approachable language. Avoid jargon without explanation. Use examples liberally. Current README tone is good reference.</content>
+    </note>
+  </implementation-notes>
+
+  <reference-materials>
+    <reference>
+      <title>Keep a Changelog Format</title>
+      <url>https://keepachangelog.com/en/1.0.0/</url>
+      <relevance>CHANGELOG.md structure and format (AC5)</relevance>
+      <key-points>
+        <point>Sections: [Unreleased], [version] - date</point>
+        <point>Categories: Added, Changed, Deprecated, Removed, Fixed, Security</point>
+        <point>Semantic versioning explained</point>
+      </key-points>
+    </reference>
+
+    <reference>
+      <title>MIT License Text</title>
+      <url>https://opensource.org/licenses/MIT</url>
+      <relevance>LICENSE file creation (AC6)</relevance>
+      <key-points>
+        <point>Standard MIT license text with copyright year and holder</point>
+        <point>Must match .NET version for compatibility (NFR-QUAL-4)</point>
+      </key-points>
+    </reference>
+
+    <reference>
+      <title>Shields.io Badges</title>
+      <url>https://shields.io/</url>
+      <relevance>README badge generation (AC1, AC10)</relevance>
+      <key-points>
+        <point>PyPI version: https://img.shields.io/pypi/v/temporalio-graphs</point>
+        <point>Python versions: https://img.shields.io/pypi/pyversions/temporalio-graphs</point>
+        <point>License: https://img.shields.io/badge/license-MIT-blue</point>
+        <point>Coverage: https://img.shields.io/badge/coverage-95%25-brightgreen</point>
+      </key-points>
+    </reference>
+
+    <reference>
+      <title>.NET Temporalio.Graphs Repository</title>
+      <url>https://github.com/oleg-shilo/Temporalio.Graphs</url>
+      <relevance>Feature parity comparison and migration guide (AC7)</relevance>
+      <key-points>
+        <point>Reference implementation using runtime interceptors</point>
+        <point>GraphBuilder pattern for activity mocking</point>
+        <point>Compare feature sets for parity matrix</point>
+      </key-points>
+    </reference>
+
+    <reference>
+      <title>Semantic Versioning</title>
+      <url>https://semver.org/spec/v2.0.0.html</url>
+      <relevance>CHANGELOG versioning explanation (AC5)</relevance>
+      <key-points>
+        <point>MAJOR.MINOR.PATCH version format</point>
+        <point>Version increment rules</point>
+      </key-points>
+    </reference>
+  </reference-materials>
+
+  <validation-checklist>
+    <validation-item>
+      <description>README.md has all required sections per AC1</description>
+      <method>Manual section checklist: badges, overview, features, installation, quick start, core concepts, configuration, examples, API reference, troubleshooting, contributing, license</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Quick start example is less than 10 lines (FR60)</description>
+      <method>Count lines in quick start code block excluding comments and blank lines, verify runs successfully</method>
+    </validation-item>
+
+    <validation-item>
+      <description>All badges display correctly and show accurate information</description>
+      <method>Verify badge URLs work, version numbers match pyproject.toml, license shows MIT, Python versions show 3.10+</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Core concepts section complete per AC2</description>
+      <method>Verify AST analysis explanation, decision nodes with 2^n formula, signal nodes, when to use helpers, path explosion management, visual diagrams</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Configuration patterns complete per AC3</description>
+      <method>Verify GraphBuildingContext documented, common patterns shown with code examples, field table complete, use cases explained</method>
+    </validation-item>
+
+    <validation-item>
+      <description>API reference complete per AC4</description>
+      <method>Verify analyze_workflow(), GraphBuildingContext, to_decision(), wait_condition(), exception hierarchy documented with signatures, parameters, examples</method>
+    </validation-item>
+
+    <validation-item>
+      <description>CHANGELOG.md follows Keep a Changelog format per AC5</description>
+      <method>Verify [Unreleased] section, [0.1.0] section with date, Added/Changed/etc categories, Epic 1-5 features documented, semantic versioning explained</method>
+    </validation-item>
+
+    <validation-item>
+      <description>LICENSE file is MIT and matches .NET version per AC6</description>
+      <method>Verify MIT license text, copyright year 2025, copyright holder matches author, compatible with .NET version</method>
+    </validation-item>
+
+    <validation-item>
+      <description>.NET comparison and migration guide complete per AC7</description>
+      <method>Verify architecture differences explained (static vs interceptor), benefits of Python approach, feature parity table, migration guide with code pattern equivalents</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Troubleshooting guide complete per AC8</description>
+      <method>Verify common errors documented (missing decorator, path explosion, unsupported pattern, missing helper), each error has solution, performance tips included, debugging tips included, GitHub issues link</method>
+    </validation-item>
+
+    <validation-item>
+      <description>All code examples tested per AC9</description>
+      <method>Verify all code snippets extracted from working examples or tested separately, quick start runs successfully, configuration examples instantiate correctly, troubleshooting examples demonstrate errors accurately</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Documentation quality standards met per AC9</description>
+      <method>Run spell checker, verify all links work, check consistent terminology, verify professional tone, ensure intermediate Python developer accessibility, verify Mermaid diagrams render, check version compatibility notes</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Examples section preserved from Story 5-4</description>
+      <method>Verify Examples section in README is complete with all 4 examples, structure matches Story 5-4 completion, not rewritten or removed</method>
+    </validation-item>
+
+    <validation-item>
+      <description>Cross-references between documents work</description>
+      <method>Verify README links to API reference, CHANGELOG, LICENSE, examples work, verify API reference cross-references to README sections work</method>
+    </validation-item>
+  </validation-checklist>
+
+  <warnings>
+    <warning severity="high">
+      <title>Do Not Rewrite Examples Section</title>
+      <description>README Examples section was completed in Story 5-4 with 200 lines of comprehensive documentation. This work is DONE. Do not rewrite or remove it. Task 1 should verify completeness, not recreate content.</description>
+    </warning>
+
+    <warning severity="high">
+      <title>String Literal Requirement for Helpers</title>
+      <description>Documentation for to_decision() and wait_condition() must emphasize that the "name" parameter MUST be a string literal (not variable or f-string) for static analysis to work. This is a critical constraint that users must understand. Both helper functions have detailed notes about this in their docstrings.</description>
+    </warning>
+
+    <warning severity="medium">
+      <title>Badge URLs May Not Work Until Published</title>
+      <description>PyPI badges will not work until package is published to PyPI. Use placeholder URLs or local badge images. Mention in implementation notes that badges will be functional after publication.</description>
+    </warning>
+
+    <warning severity="medium">
+      <title>API Reference Can Become Outdated</title>
+      <description>Manual API reference in markdown can become outdated as code evolves. Tech spec acknowledges this risk with mitigation: extract from docstrings where possible, add CI checks, version documentation with releases. Consider adding note about keeping API reference in sync with code changes.</description>
+    </warning>
+
+    <warning severity="low">
+      <title>Copyright Year in LICENSE</title>
+      <description>LICENSE file should use 2025 as copyright year (project created in 2025). Verify year matches when creating file.</description>
+    </warning>
+
+    <warning severity="low">
+      <title>CHANGELOG Version Must Match pyproject.toml</title>
+      <description>CHANGELOG [0.1.0] version must match pyproject.toml version field. These must stay synchronized. Consider adding CI check to validate this (mentioned in tech spec).</description>
+    </warning>
+  </warnings>
+</story-context>

@@ -1,0 +1,213 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>4</storyId>
+    <title>Add Integration Test with Signal Example</title>
+    <status>backlog</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/epics.md (lines 1001-1020)</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>an example workflow with signals</iWant>
+    <soThat>users can see how to visualize wait conditions</soThat>
+    <tasks>
+      <task>Create examples/signal_workflow directory structure</task>
+      <task>Implement signal example workflow.py with wait_condition usage</task>
+      <task>Create expected_output.md golden reference file</task>
+      <task>Write integration test in tests/integration/test_signal_workflow.py</task>
+      <task>Verify test passes with 100% accuracy</task>
+      <task>Document signal example usage</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">examples/signal_workflow/workflow.py exists</criterion>
+    <criterion id="AC2">workflow contains wait_condition for approval signal</criterion>
+    <criterion id="AC3">workflow shows "Signaled" and "Timeout" paths</criterion>
+    <criterion id="AC4">analyze_workflow() produces valid Mermaid with hexagon nodes</criterion>
+    <criterion id="AC5">examples/signal_workflow/expected_output.md contains golden diagram</criterion>
+    <criterion id="AC6">tests/integration/test_signal_workflow.py validates output</criterion>
+    <criterion id="AC7">test passes with 100% accuracy</criterion>
+    <criterion id="AC8">example is documented</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/epics.md</path>
+        <title>Epic 4 Story Definitions</title>
+        <section>Story 4.4: Add Integration Test with Signal Example</section>
+        <snippet>Story defines integration test requirements for signal workflow visualization with wait_condition usage, hexagon node rendering, and path permutation validation.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/tech-spec-epic-4.md</path>
+        <title>Epic 4 Technical Specification</title>
+        <section>Signal & Wait Condition Support - Integration Test Requirements</section>
+        <snippet>Comprehensive technical context for signal node support including wait_condition() helper, SignalPoint detection, hexagon rendering, and 2-branch path generation. Defines example workflow structure with approval signal and timeout handling.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Testing Standards and Integration Test Patterns</section>
+        <snippet>Defines pytest-based testing framework, >80% coverage requirement, integration test structure using tmp_path fixtures, and Mermaid validation helpers.</snippet>
+      </artifact>
+      <artifact>
+        <path>CLAUDE.md</path>
+        <title>Project Instructions</title>
+        <section>Common Commands and Testing</section>
+        <snippet>Project uses pytest with pytest-asyncio for async testing. Test commands: pytest -v --cov=src/temporalio_graphs for coverage validation.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>tests/integration/test_simple_linear.py</path>
+        <kind>integration test</kind>
+        <symbol>TestSimpleLinearWorkflowEndToEnd</symbol>
+        <lines>1-539</lines>
+        <reason>Reference pattern for integration tests: workflow file creation, analyze_workflow() usage, Mermaid extraction helpers, node/edge validation, golden file comparison</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_money_transfer.py</path>
+        <kind>integration test</kind>
+        <symbol>TestMoneyTransferIntegration</symbol>
+        <lines>1-453</lines>
+        <reason>Reference pattern for decision-based workflows: 4-path validation (2^2), decision node detection, branch label verification, golden file structural comparison, performance testing</reason>
+      </artifact>
+      <artifact>
+        <path>examples/simple_linear/workflow.py</path>
+        <kind>example workflow</kind>
+        <symbol>SimpleWorkflow</symbol>
+        <lines>1-106</lines>
+        <reason>Reference pattern for example workflow structure: @workflow.defn decorator, async run method, execute_activity calls, complete docstrings</reason>
+      </artifact>
+      <artifact>
+        <path>examples/money_transfer/workflow.py</path>
+        <kind>example workflow</kind>
+        <symbol>MoneyTransferWorkflow</symbol>
+        <lines>entire file</lines>
+        <reason>Reference pattern for workflows with to_decision() helper usage and branching logic - signal workflow will use wait_condition() in similar pattern</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/helpers.py</path>
+        <kind>module</kind>
+        <symbol>wait_condition</symbol>
+        <lines>83-164</lines>
+        <reason>The wait_condition() helper function that the example workflow will use - shows proper signature, async usage, timeout handling, and return values (True=signaled, False=timeout)</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>module</kind>
+        <symbol>analyze_workflow</symbol>
+        <lines>59-157</lines>
+        <reason>Public API function that integration test will call to analyze the signal workflow example</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>module</kind>
+        <symbol>DecisionDetector</symbol>
+        <lines>1-100</lines>
+        <reason>Shows signal detection implementation (SignalDetector class) that parses wait_condition() calls - integration test validates this works end-to-end</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>module</kind>
+        <symbol>MermaidRenderer</symbol>
+        <lines>1-50</lines>
+        <reason>Renderer that generates hexagon nodes for signals - integration test validates hexagon syntax appears in output</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-32</lines>
+        <reason>NodeType.SIGNAL enum value used for hexagon rendering - integration test validates signal nodes use correct type</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" scope="runtime">Temporal SDK for workflow decorators and wait_condition</package>
+        <package name="pytest" version=">=8.0.0" scope="dev">Test framework for integration tests</package>
+        <package name="pytest-asyncio" version=">=0.23.0" scope="dev">Async test support for workflow testing</package>
+        <package name="pytest-cov" version=">=4.1.0" scope="dev">Coverage validation (>80% requirement)</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Example workflow must use wait_condition() helper from temporalio_graphs.helpers (not raw workflow.wait_condition)</constraint>
+    <constraint>Signal node must render as hexagon using Mermaid syntax: {{NodeName}}</constraint>
+    <constraint>Path permutation must generate exactly 2 branches: "Signaled" (true) and "Timeout" (false)</constraint>
+    <constraint>Integration test must follow existing pattern from test_simple_linear.py and test_money_transfer.py</constraint>
+    <constraint>Test must use helper functions: _extract_mermaid_content(), _extract_nodes_from_mermaid(), _extract_edges_from_mermaid()</constraint>
+    <constraint>Golden file (expected_output.md) must match actual analyze_workflow() output structurally</constraint>
+    <constraint>Test must validate hexagon node syntax using regex: r'sig\d+\{\{[^}]+\}\}'</constraint>
+    <constraint>Test must verify exactly 2 paths generated (2^1 for 1 signal point)</constraint>
+    <constraint>Test must verify branch labels: "-- Signaled -->" and "-- Timeout -->"</constraint>
+    <constraint>All code must have complete type hints (mypy strict compliance)</constraint>
+    <constraint>All functions must have Google-style docstrings</constraint>
+    <constraint>Test coverage must be >80% for new signal test code</constraint>
+    <constraint>Test must complete in <1 second (performance requirement per NFR-MAINT-2)</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>wait_condition</name>
+      <kind>async function</kind>
+      <signature>async def wait_condition(condition_check: Callable[[], bool], timeout: timedelta, name: str) -> bool</signature>
+      <path>src/temporalio_graphs/helpers.py</path>
+      <description>Helper function for marking signal points - example workflow will call this with lambda condition, timeout duration, and signal name</description>
+    </interface>
+    <interface>
+      <name>analyze_workflow</name>
+      <kind>function</kind>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <description>Public API that integration test will call to analyze signal workflow and generate Mermaid diagram</description>
+    </interface>
+    <interface>
+      <name>NodeType.SIGNAL</name>
+      <kind>enum value</kind>
+      <signature>SIGNAL = "signal"</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Enum value for signal nodes that render as hexagons in Mermaid</description>
+    </interface>
+    <interface>
+      <name>workflow.wait_condition</name>
+      <kind>Temporal SDK function</kind>
+      <signature>async def wait_condition(condition: Callable[[], bool], timeout: timedelta) -> None</signature>
+      <path>temporalio.workflow</path>
+      <description>Underlying Temporal SDK function wrapped by our wait_condition helper</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Integration tests use pytest with pytest-asyncio for async workflow testing. Tests follow AAA pattern (Arrange-Act-Assert) with descriptive test method names. Helper functions extract and validate Mermaid structure. Golden file comparison uses structural validation (nodes/edges) not byte-for-byte matching. Tests use tmp_path fixture for isolation. Coverage requirement: >80%. Performance requirement: tests complete in <1 second.
+    </standards>
+    <locations>
+      <location>tests/integration/test_signal_workflow.py (new file to create)</location>
+      <location>examples/signal_workflow/workflow.py (new example to create)</location>
+      <location>examples/signal_workflow/expected_output.md (new golden file to create)</location>
+      <location>examples/signal_workflow/run.py (optional runner script)</location>
+    </locations>
+    <ideas>
+      <idea ac="AC1,AC2,AC3">Test example workflow file exists and contains wait_condition call with proper signature (condition lambda, timeout, signal name)</idea>
+      <idea ac="AC2,AC3">Test workflow structure has @workflow.defn decorator, async run method, signal handler method, and state variable for condition</idea>
+      <idea ac="AC4">Test analyze_workflow() on signal example produces valid Mermaid with hexagon node syntax: sig0{{SignalName}}</idea>
+      <idea ac="AC4">Test Mermaid contains exactly 1 signal node (hexagon) with correct ID pattern</idea>
+      <idea ac="AC3,AC4">Test signal node has two outgoing edges with labels "-- Signaled -->" and "-- Timeout -->"</idea>
+      <idea ac="AC4">Test exactly 2 paths generated (2^1 for 1 signal point)</idea>
+      <idea ac="AC5">Test expected_output.md file exists and contains valid Mermaid code block</idea>
+      <idea ac="AC5,AC6">Test golden file content matches actual analyze_workflow() output structurally (same nodes and edges)</idea>
+      <idea ac="AC7">Test all integration tests pass with 100% success rate</idea>
+      <idea ac="AC7">Test signal example runner script exists and executes without errors</idea>
+      <idea>Test performance: signal workflow analysis completes in <1 second</idea>
+      <idea>Test signal node rendering uses hexagon syntax {{}} not diamond {}</idea>
+      <idea>Test signal branches use "Signaled"/"Timeout" labels not "yes"/"no"</idea>
+      <idea>Test example has complete docstrings and type hints</idea>
+    </ideas>
+  </tests>
+</story-context>

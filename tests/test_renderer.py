@@ -711,3 +711,202 @@ def test_to_mermaid_handles_multiple_paths_foundation(
     assert (
         process_count == 1
     ), "Deduplication should prevent duplicate nodes in multi-path rendering"
+
+# ============================================================================
+# Epic 4: Signal Node Rendering Tests (Story 4-3)
+# ============================================================================
+
+
+def test_signal_node_hexagon_syntax(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify signal nodes render with hexagon syntax {{NodeName}}.
+    
+    AC1: Signal nodes render using Mermaid hexagon syntax with double braces.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_signal("WaitForApproval", "Signaled")
+    
+    result = renderer.to_mermaid([path], default_context)
+    
+    # Signal node should use double braces for hexagon: {{NodeName}}
+    assert "WaitForApproval{{Wait For Approval}}" in result, \
+        "Signal node should render with hexagon syntax (double braces)"
+
+
+def test_signal_edges_labeled_correctly(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify signal edges are labeled with 'Signaled' or 'Timeout'.
+    
+    AC2: Signal branches labeled correctly with default labels.
+    """
+    # Path with Signaled outcome
+    path1 = GraphPath(path_id="path_0b0")
+    path1.add_signal("WaitApproval", "Signaled")
+    path1.add_activity("ProcessApproval")
+    
+    # Path with Timeout outcome
+    path2 = GraphPath(path_id="path_0b1")
+    path2.add_signal("WaitApproval", "Timeout")
+    path2.add_activity("HandleTimeout")
+    
+    result = renderer.to_mermaid([path1, path2], default_context)
+    
+    # Check for Signaled label
+    assert "-- Signaled -->" in result, \
+        "Signal success branch should be labeled 'Signaled'"
+    
+    # Check for Timeout label
+    assert "-- Timeout -->" in result, \
+        "Signal timeout branch should be labeled 'Timeout'"
+
+
+def test_signal_custom_labels(renderer: MermaidRenderer) -> None:
+    """Verify custom signal labels are used when configured.
+    
+    AC2: Custom signal labels supported via GraphBuildingContext configuration.
+    """
+    custom_context = GraphBuildingContext(
+        signal_success_label="Success",
+        signal_timeout_label="Failed"
+    )
+    
+    path1 = GraphPath(path_id="path_0b0")
+    path1.add_signal("WaitApproval", "Success")
+    path1.add_activity("ProcessApproval")
+    
+    path2 = GraphPath(path_id="path_0b1")
+    path2.add_signal("WaitApproval", "Failed")
+    path2.add_activity("HandleFailure")
+    
+    result = renderer.to_mermaid([path1, path2], custom_context)
+    
+    # Check for custom labels
+    assert "-- Success -->" in result, \
+        "Custom signal success label should be used"
+    assert "-- Failed -->" in result, \
+        "Custom signal timeout label should be used"
+
+
+def test_signal_node_deduplication(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify signal nodes deduplicate across paths.
+    
+    AC4: Same signal node ID appears only once in Mermaid output.
+    """
+    # Two paths with same signal but different outcomes
+    path1 = GraphPath(path_id="path_0b0")
+    path1.add_signal("WaitApproval", "Signaled")
+    
+    path2 = GraphPath(path_id="path_0b1")
+    path2.add_signal("WaitApproval", "Timeout")
+    
+    result = renderer.to_mermaid([path1, path2], default_context)
+    
+    # Signal node should appear only once
+    signal_node_count = result.count("WaitApproval{{Wait Approval}}")
+    assert signal_node_count == 1, \
+        "Signal node should be deduplicated (appear only once)"
+
+
+def test_signal_and_activity_combined(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify signals and activities work together in same path.
+    
+    AC3: Signal nodes integrate into path permutation.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_activity("StartProcess")
+    path.add_signal("WaitApproval", "Signaled")
+    path.add_activity("CompleteProcess")
+    
+    result = renderer.to_mermaid([path], default_context)
+    
+    # Check all nodes are present
+    assert "StartProcess[Start Process]" in result
+    assert "WaitApproval{{Wait Approval}}" in result
+    assert "CompleteProcess[Complete Process]" in result
+    
+    # Check connections
+    assert "StartProcess --> WaitApproval" in result
+    assert "WaitApproval -- Signaled --> CompleteProcess" in result
+
+
+def test_signal_and_decision_combined(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify signals and decisions work together in same path.
+    
+    AC3: Signal nodes integrate with decision nodes.
+    """
+    path = GraphPath(path_id="path_0b00")
+    path.add_decision("d0", True, "NeedApproval")
+    path.add_signal("WaitApproval", "Signaled")
+    path.add_activity("CompleteProcess")
+    
+    result = renderer.to_mermaid([path], default_context)
+    
+    # Check all nodes are present
+    assert "d0{Need Approval}" in result
+    assert "WaitApproval{{Wait Approval}}" in result
+    assert "CompleteProcess[Complete Process]" in result
+    
+    # Check connections with correct labels
+    assert "d0 -- yes --> WaitApproval" in result
+    assert "WaitApproval -- Signaled --> CompleteProcess" in result
+
+
+def test_multiple_signals_in_path(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify multiple signals can exist in same path.
+    
+    AC3: Signal nodes integrate into path permutation.
+    """
+    path = GraphPath(path_id="path_0b00")
+    path.add_signal("WaitApproval", "Signaled")
+    path.add_activity("ProcessApproval")
+    path.add_signal("WaitConfirmation", "Timeout")
+    path.add_activity("HandleTimeout")
+    
+    result = renderer.to_mermaid([path], default_context)
+    
+    # Check both signal nodes are present
+    assert "WaitApproval{{Wait Approval}}" in result
+    assert "WaitConfirmation{{Wait Confirmation}}" in result
+    
+    # Check connections
+    assert "WaitApproval -- Signaled --> ProcessApproval" in result
+    assert "WaitConfirmation -- Timeout --> HandleTimeout" in result
+
+
+def test_mermaid_output_valid_with_signals(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Verify generated Mermaid with signals is valid syntax.
+    
+    AC1, AC7: Generated Mermaid output is valid and renders correctly.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_activity("StartProcess")
+    path.add_signal("WaitApproval", "Signaled")
+    path.add_activity("CompleteProcess")
+    
+    result = renderer.to_mermaid([path], default_context)
+    
+    # Basic structure validation
+    assert result.startswith("```mermaid")
+    assert result.endswith("```")
+    lines = result.split("\n")
+    assert lines[1] == "flowchart LR"
+    
+    # Validate hexagon syntax is correct (double braces)
+    assert "{{" in result and "}}" in result, \
+        "Hexagon syntax requires double braces"
+    
+    # No syntax errors (basic check)
+    assert "{{" not in result.replace("{{", "").replace("}}", ""), \
+        "No unmatched braces should exist"

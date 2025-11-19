@@ -1,0 +1,252 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>5</epicId>
+    <storyId>4</storyId>
+    <title>Create Comprehensive Example Gallery</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/5-4-create-comprehensive-example-gallery.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>multiple example workflows demonstrating different visualization patterns</iWant>
+    <soThat>I can learn how to use the library for my specific use cases and understand the full feature set</soThat>
+    <tasks>
+      <task id="1">Design multi-decision example workflow (AC: 2)</task>
+      <task id="2">Implement multi-decision workflow.py (AC: 2)</task>
+      <task id="3">Create multi-decision run.py (AC: 3)</task>
+      <task id="4">Generate and validate expected output (AC: 4)</task>
+      <task id="5">Create integration test for multi-decision example (AC: 5)</task>
+      <task id="6">Validate existing examples (AC: 1, 4, 8)</task>
+      <task id="7">Document examples in README (AC: 6)</task>
+      <task id="8">Create CI job for examples (AC: 7)</task>
+      <task id="9">Quality validation and final checks (AC: All)</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">Example gallery structure (FR56-59, Tech Spec AC-5.4) - examples/simple_linear/, examples/money_transfer/, examples/signal_workflow/, examples/multi_decision/ (NEW) all exist with consistent structure: workflow.py, run.py, expected_output.md. All examples are self-contained and runnable.</criterion>
+    <criterion id="2">Multi-decision example workflow (FR59, Tech Spec lines 998-999) - workflow.py implements workflow with 3+ independent decision points generating 8+ paths (2^3 minimum), demonstrates nested conditionals and path permutation using to_decision() helper, includes realistic business logic with proper decorators, type hints, and docstrings.</criterion>
+    <criterion id="3">Example run scripts (Tech Spec lines 999-1000) - Each example has run.py demonstrating analyze_workflow() usage, imports from temporalio_graphs public API, prints and saves results to expected_output.md, includes error handling and educational comments.</criterion>
+    <criterion id="4">Expected output golden files (Tech Spec line 1000) - Each example has expected_output.md with complete output including Mermaid diagram, path list, validation report (if applicable). Output matches actual run.py execution, Mermaid syntax is valid, path counts match 2^n formula.</criterion>
+    <criterion id="5">Integration tests for examples (Tech Spec lines 1001-1002) - tests/integration/test_multi_decision.py validates workflow validity, analyze_workflow() output correctness, path count (8 paths for 3 decisions), all activities present, decision nodes as diamonds, golden file comparison (structural match).</criterion>
+    <criterion id="6">README documentation (Tech Spec lines 1002-1003) - README.md Examples section lists all 4 examples with name, description, pattern demonstrated, code directory links, brief code snippets, explanation of when to use each, ordered by complexity with clear learning path.</criterion>
+    <criterion id="7">CI integration (Tech Spec line 1003) - All examples run in CI on every commit via make run-examples or equivalent, each run.py executes successfully, output validated against expected_output.md, CI fails if examples produce errors, tested on all supported Python versions (3.10, 3.11, 3.12).</criterion>
+    <criterion id="8">Example quality standards (Tech Spec lines 999-1004) - All examples follow best practices, use placeholder data (no real credentials), well-commented and educational, demonstrate realistic use cases, no dependencies on external services, runnable in isolated environment, complete and self-documenting.</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+        <title>Epic 5 Technical Specification</title>
+        <section>AC-5.4: Comprehensive Example Gallery (lines 991-1004)</section>
+        <snippet>Complete acceptance criteria for example gallery including structure requirements, multi-decision workflow pattern with 3 decisions generating 8 paths (2^3), integration test requirements, README documentation needs, and CI integration. Includes multi-decision example pattern using LoanApprovalWorkflow with HighValue, LowCredit, and ExistingLoans decision points.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+        <title>Epic 5 Technical Specification</title>
+        <section>Multi-Decision Example Pattern (lines 1212-1232)</section>
+        <snippet>Reference implementation pattern showing LoanApprovalWorkflow with 3 independent decision points (HighValue, LowCredit, ExistingLoans) creating 8 execution paths. Demonstrates proper usage of to_decision() helper, workflow decorators, and activity placement between decision points.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+        <title>Epic 5 Technical Specification</title>
+        <section>Traceability Mapping AC-5.4 (lines 1049-1056)</section>
+        <snippet>Test coverage requirements for example gallery: Simple linear example (test_simple_linear.py), MoneyTransfer example (test_money_transfer.py), Signal example (test_signal_workflow.py), Multi-decision example (test_multi_decision.py - NEW). All examples runnable via run.py, golden file tests for expected_output.md comparison.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Project Epics</title>
+        <section>Story 5.4: Create Comprehensive Example Gallery (lines 1187-1232)</section>
+        <snippet>Story definition with acceptance criteria emphasizing 4 examples (simple_linear, money_transfer, multi_decision, signal_workflow), each with consistent structure (workflow.py, run.py, expected_output.md), runnable and producing correct output, multi_decision showing 8+ paths from 3 decisions, documented in README, tested in CI.</snippet>
+      </doc>
+      <doc>
+        <path>docs/prd.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR56-FR60: Examples and Documentation Requirements</section>
+        <snippet>Functional requirements for example workflows: FR56 (MoneyTransfer with decision nodes), FR57 (path permutations), FR58 (simple linear workflow), FR59 (multi-decision example with 3+ decisions), FR60 (quick start documentation). Examples are core to product deliverables demonstrating library capabilities.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Example Structure Pattern</section>
+        <snippet>Each example follows consistent structure: workflow.py (Temporal workflow with @workflow.defn decorator), run.py (demonstrates analyze_workflow() API usage), expected_output.md (golden file with complete Mermaid diagram and path list). Examples demonstrate progressive complexity and serve as integration test fixtures.</snippet>
+      </doc>
+      <doc>
+        <path>README.md</path>
+        <title>Project README</title>
+        <section>Quick Start and Examples Section (lines 60-100)</section>
+        <snippet>Current README includes simple_linear example with 3 sequential activities showing basic usage pattern. MoneyTransfer example mentioned but incomplete documentation. Pattern established: bash command to run example, Mermaid diagram output shown inline, explanation of what example demonstrates.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>examples/simple_linear/workflow.py</path>
+        <kind>example_workflow</kind>
+        <symbol>SimpleWorkflow</symbol>
+        <lines>1-106</lines>
+        <reason>Reference pattern for workflow structure: @workflow.defn decorator, @workflow.run async method, workflow.execute_activity() calls with start_to_close_timeout, complete docstrings explaining workflow purpose and usage, activity stub implementations included.</reason>
+      </artifact>
+      <artifact>
+        <path>examples/simple_linear/run.py</path>
+        <kind>example_runner</kind>
+        <symbol>main</symbol>
+        <lines>1-50</lines>
+        <reason>Reference pattern for run.py scripts: imports analyze_workflow from temporalio_graphs, uses Path(__file__).parent to locate workflow.py, calls analyze_workflow(workflow_file), prints result to stdout. Pattern to replicate for multi_decision/run.py.</reason>
+      </artifact>
+      <artifact>
+        <path>examples/money_transfer/workflow.py</path>
+        <kind>example_workflow</kind>
+        <symbol>MoneyTransferWorkflow</symbol>
+        <lines>1-172</lines>
+        <reason>Reference pattern for decision node workflows: imports to_decision from temporalio_graphs, uses to_decision(condition, "DecisionName") for all decision points, demonstrates 2 decisions creating 4 paths (2^2), includes proper docstrings explaining decision points and paths, shows reconverging branches.</reason>
+      </artifact>
+      <artifact>
+        <path>examples/signal_workflow/workflow.py</path>
+        <kind>example_workflow</kind>
+        <symbol>SignalWorkflow</symbol>
+        <lines>1-100</lines>
+        <reason>Reference pattern for signal node workflows: imports wait_condition from temporalio_graphs, demonstrates signal handling with timeout, shows hexagon node rendering in Mermaid output, provides pattern for conditional timeout handling. Useful for understanding complete feature set.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_simple_linear.py</path>
+        <kind>integration_test</kind>
+        <symbol>TestSimpleLinearIntegration</symbol>
+        <lines>1-200</lines>
+        <reason>Reference pattern for integration tests: validates workflow file exists and is valid Python, calls analyze_workflow() and checks output structure, verifies Mermaid syntax validity, checks for Start/End nodes, validates activity presence, performance requirements (&lt;1s). Pattern to follow for test_multi_decision.py.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_money_transfer.py</path>
+        <kind>integration_test</kind>
+        <symbol>TestMoneyTransferIntegration</symbol>
+        <lines>1-635</lines>
+        <reason>Comprehensive integration test pattern for decision workflows: validates path count (4 = 2^2), checks decision nodes use diamond syntax {}, verifies yes/no branch labels, extracts and validates Mermaid structure, golden file comparison using structural equivalence (not byte-for-byte), validates all 5 activities present, tests path list output format.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/__init__.py</path>
+        <kind>public_api</kind>
+        <symbol>analyze_workflow</symbol>
+        <lines>80-227</lines>
+        <reason>Public API entry point that run.py scripts must import and call. Signature: analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -&gt; str. Supports mermaid (default), paths, and full output formats. Returns complete formatted output as string.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/helpers.py</path>
+        <kind>workflow_helper</kind>
+        <symbol>to_decision</symbol>
+        <lines>1-50</lines>
+        <reason>Helper function that workflows must use for decision points. Multi-decision example will call to_decision(condition, "DecisionName") for all 3 decision points. Required import: from temporalio_graphs import to_decision. Function signature and usage pattern critical for workflow.py implementation.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>configuration</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>1-100</lines>
+        <reason>Configuration dataclass that can be passed to analyze_workflow(). Fields: split_names_by_words (bool), start_node_label (str), end_node_label (str), output_format ("mermaid" | "paths" | "full"), include_path_list (bool), suppress_validation (bool), max_decision_points (int), max_paths (int). Used to customize output in run.py if needed.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version="&gt;=1.7.1" scope="runtime">Temporal Python SDK - provides @workflow.defn and @workflow.run decorators, workflow.execute_activity() function</package>
+        <package name="pytest" version="&gt;=8.0.0" scope="dev">Testing framework - required for integration tests in tests/integration/test_multi_decision.py</package>
+        <package name="pytest-asyncio" version="&gt;=0.23.0" scope="dev">Async test support - required for testing async workflow methods</package>
+        <package name="mypy" version="&gt;=1.8.0" scope="dev">Type checker - validate examples pass mypy --strict (AC8 requirement)</package>
+        <package name="ruff" version="&gt;=0.2.0" scope="dev">Linter/formatter - validate examples pass ruff check (AC8 requirement)</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>All example workflows must use @workflow.defn decorator on workflow class (required by Temporal SDK and analyzer)</constraint>
+    <constraint>All example workflows must use @workflow.run decorator on run method (required by Temporal SDK)</constraint>
+    <constraint>Decision points in examples must use to_decision(condition, "DecisionName") helper - NOT raw if statements (required for proper graph rendering)</constraint>
+    <constraint>Signal points in examples must use wait_condition() wrapper - NOT raw workflow.wait_condition() (required for hexagon node rendering)</constraint>
+    <constraint>All example workflow.py files must pass mypy --strict type checking (project quality standard)</constraint>
+    <constraint>All example workflow.py files must pass ruff check linting (project quality standard)</constraint>
+    <constraint>Example structure must be consistent: each example directory contains exactly workflow.py, run.py, expected_output.md (established pattern from Epic 2-4)</constraint>
+    <constraint>Integration tests must use structural comparison for golden file validation, not byte-for-byte comparison (allows formatting flexibility)</constraint>
+    <constraint>Multi-decision example must demonstrate 3+ INDEPENDENT decision points - decisions should not be nested in complex ways (Tech Spec line 1.5 guidance)</constraint>
+    <constraint>Examples must use placeholder data only - no real credentials, API keys, or sensitive information (AC8 security requirement)</constraint>
+    <constraint>Examples must be runnable without network access - no external service dependencies (AC8 isolation requirement)</constraint>
+    <constraint>Path count for n decisions must equal 2^n (mathematical invariant: 3 decisions = 8 paths)</constraint>
+    <constraint>Expected output golden files must be updated whenever library output format changes (maintenance requirement)</constraint>
+    <constraint>All example run.py scripts must be executable via: cd examples/&lt;name&gt; &amp;&amp; python run.py (established usage pattern)</constraint>
+    <constraint>README Examples section must order examples by complexity: simple_linear (beginner) → money_transfer (intermediate) → signal_workflow (intermediate) → multi_decision (advanced)</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>analyze_workflow(workflow_file, context?, output_format?)</name>
+      <kind>function</kind>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -&gt; str</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <usage>Primary API function that all run.py scripts call. Accepts workflow file path, optional context for configuration, optional output_format parameter. Returns formatted output as string (Mermaid diagram in markdown code block, path list, or full output combining both).</usage>
+    </interface>
+    <interface>
+      <name>to_decision(result, name)</name>
+      <kind>function</kind>
+      <signature>async def to_decision(result: bool, name: str) -&gt; bool</signature>
+      <path>src/temporalio_graphs/helpers.py</path>
+      <usage>Helper function that workflow code must call for all decision points. First parameter is the boolean condition, second is the decision name for diagram labels. Returns the boolean result unchanged (passthrough). Multi-decision example will call this 3 times with different decision names (e.g., "HighValue", "LowCredit", "ExistingLoans").</usage>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext dataclass</name>
+      <kind>configuration</kind>
+      <signature>@dataclass class GraphBuildingContext: split_names_by_words: bool = True, output_format: Literal["mermaid", "paths", "full"] = "mermaid", include_path_list: bool = True, ...</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <usage>Optional configuration object passed to analyze_workflow(). Controls output formatting: split_names_by_words converts snake_case to "Title Case" in diagram, output_format determines sections included in output ("mermaid" only, "paths" only, or "full" with both), include_path_list can suppress path list even in full mode.</usage>
+    </interface>
+    <interface>
+      <name>@workflow.defn decorator</name>
+      <kind>decorator</kind>
+      <signature>@workflow.defn</signature>
+      <path>temporalio.workflow (external)</path>
+      <usage>Temporal SDK decorator required on all workflow classes. Must appear immediately before class definition. Analyzer validates presence of this decorator - WorkflowParseError raised if missing. All example workflow.py files must include this.</usage>
+    </interface>
+    <interface>
+      <name>@workflow.run decorator</name>
+      <kind>decorator</kind>
+      <signature>@workflow.run</signature>
+      <path>temporalio.workflow (external)</path>
+      <usage>Temporal SDK decorator required on workflow run method. Must appear immediately before async def run() method. Marks entry point for workflow execution. All example workflow.py files must include this on their run method.</usage>
+    </interface>
+    <interface>
+      <name>workflow.execute_activity()</name>
+      <kind>function</kind>
+      <signature>async def execute_activity(activity_fn, args=..., start_to_close_timeout=...)</signature>
+      <path>temporalio.workflow (external)</path>
+      <usage>Temporal SDK function for calling activities from workflows. Analyzer detects these calls to build activity nodes in graph. All example workflows use this to define workflow structure. Parameter start_to_close_timeout typically set to None in examples for simplicity.</usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Integration tests for examples follow established pattern: (1) Validate workflow file exists and is valid Python syntax, (2) Call analyze_workflow() and verify output is non-empty string, (3) Validate Mermaid structure: check for flowchart LR directive, Start/End nodes, activity nodes, decision nodes with diamond syntax, (4) Validate path count matches 2^n formula for n decisions, (5) Validate all expected activities appear in output, (6) Golden file comparison using structural equivalence (extract nodes and edges, compare sets - not byte-for-byte), (7) Performance requirement: analysis completes in &lt;1 second. Test framework: pytest with pytest-asyncio for async support. All integration tests in tests/integration/ directory with test_ prefix.</standards>
+    <locations>
+      <location>tests/integration/test_multi_decision.py - NEW integration test file to create for multi-decision example</location>
+      <location>tests/integration/test_simple_linear.py - Existing reference for linear workflow testing pattern</location>
+      <location>tests/integration/test_money_transfer.py - Existing reference for decision workflow testing pattern with path count validation and golden file comparison</location>
+      <location>tests/integration/test_signal_workflow.py - Existing reference for signal workflow testing pattern</location>
+    </locations>
+    <ideas>
+      <idea ac="1">Test that examples/multi_decision/ directory exists and contains all 3 required files: workflow.py, run.py, expected_output.md</idea>
+      <idea ac="2">Test that multi_decision/workflow.py is valid Python syntax and contains @workflow.defn decorator, imports to_decision, has exactly 3 to_decision() calls</idea>
+      <idea ac="2">Test that multi_decision workflow generates exactly 8 execution paths when analyzed (2^3 for 3 decisions)</idea>
+      <idea ac="2">Test that multi_decision workflow has 3+ activities (validate via AST or output parsing)</idea>
+      <idea ac="3">Test that multi_decision/run.py exists, imports analyze_workflow, has if __name__ == "__main__" guard, can be executed without errors</idea>
+      <idea ac="4">Test that multi_decision/expected_output.md exists, contains valid Mermaid syntax (```mermaid code block), includes path list showing 8 paths, decision count line shows "Decision Points: 3 (2^3 = 8 paths)"</idea>
+      <idea ac="4">Test Mermaid diagram from multi_decision can be parsed and rendered by Mermaid library (syntax validation)</idea>
+      <idea ac="5">Test analyze_workflow() on multi_decision/workflow.py produces output matching expected_output.md structure (golden file test using node/edge extraction)</idea>
+      <idea ac="5">Test that multi_decision output contains all expected decision nodes as diamonds: d0{...}, d1{...}, d2{...}</idea>
+      <idea ac="5">Test that multi_decision output contains yes/no branch labels on decision edges</idea>
+      <idea ac="6">Test that all 3 existing examples (simple_linear, money_transfer, signal_workflow) still execute successfully after any library changes (regression test)</idea>
+      <idea ac="6">Validate simple_linear produces 1 path (no decisions), money_transfer produces 4 paths (2 decisions), signal_workflow produces 2 paths (1 signal point)</idea>
+      <idea ac="7">Test that README.md contains "Examples" or "## Examples" section heading</idea>
+      <idea ac="7">Test that README Examples section mentions all 4 example names: simple_linear, money_transfer, signal_workflow, multi_decision</idea>
+      <idea ac="8">Test that all example workflow.py files pass mypy --strict (run mypy programmatically or check exit code)</idea>
+      <idea ac="8">Test that all example workflow.py files pass ruff check (run ruff programmatically or check exit code)</idea>
+      <idea ac="8">Test that no example files contain sensitive patterns: API_KEY, PASSWORD, SECRET, real email addresses, real URLs (security scan)</idea>
+    </ideas>
+  </tests>
+</story-context>

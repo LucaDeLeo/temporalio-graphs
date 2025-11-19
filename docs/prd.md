@@ -73,7 +73,7 @@ This is a developer tool - specifically a Python library distributed via PyPI. T
 
 ## Product Scope
 
-### MVP - Minimum Viable Product
+### MVP - Core (v0.1.0)
 
 **Core Graph Generation (Match .NET Core Features):**
 - Parse Python workflow source files using AST
@@ -104,12 +104,30 @@ This is a developer tool - specifically a Python library distributed via PyPI. T
 - Working MoneyTransfer example producing expected output
 - Type-safe (mypy strict)
 
+### MVP Extension (v0.2.0) - Cross-Workflow Support
+
+**Cross-Workflow Visualization (Epic 6):**
+- Detect child workflow calls (`workflow.execute_child_workflow()`)
+- Render child workflow nodes in Mermaid diagrams
+- Analyze multiple related workflows as a call graph
+- Generate end-to-end execution paths spanning parent and child workflows
+- Support workflow composition patterns (parent → child relationships)
+
+**Examples & Documentation:**
+- Parent-child workflow example (`examples/parent_child_workflow/`)
+- Updated README with cross-workflow usage
+- Extended API reference for multi-workflow analysis
+
+**Version Timeline:**
+- v0.1.0 (Core MVP): Epics 1-5, single-workflow analysis (65 FRs)
+- v0.2.0 (MVP Extension): Epic 6, cross-workflow support (+8 FRs, total 73 FRs)
+- Delivery: v0.2.0 releases ~1 week after v0.1.0
+
 ### Growth Features (Post-MVP)
 
 **Advanced Workflow Patterns:**
 - Nested conditionals (complex branching)
 - Loop detection and visualization (while/for)
-- Child workflow calls
 - Dynamic activity registration
 - Exception handling paths (try/except branches)
 
@@ -305,9 +323,20 @@ This is a developer tool - specifically a Python library distributed via PyPI. T
 **FR65:** Library validates that decision helper functions are used correctly
 **FR66:** Library raises UnsupportedPatternError for loops (while/for) in MVP
 
+### Cross-Workflow Visualization (Epic 6)
+
+**FR67:** Library can detect child workflow calls (`workflow.execute_child_workflow()`) in workflow source code
+**FR68:** Library can extract child workflow type/class from `execute_child_workflow()` call arguments
+**FR69:** Child workflow nodes render as distinct nodes in Mermaid diagrams (using subgraph or special notation)
+**FR70:** Child workflow nodes display the workflow type name in the graph
+**FR71:** Library can analyze multiple related workflows in a single operation (multi-workflow analysis pipeline)
+**FR72:** Library can build workflow call graphs showing parent-child relationships
+**FR73:** Library can generate end-to-end execution paths that span parent and child workflows
+**FR74:** Library includes working parent-child workflow example demonstrating cross-workflow visualization
+
 ---
 
-**Total Functional Requirements:** 65
+**Total Functional Requirements:** 73
 
 These FRs ensure feature parity with the .NET version while accounting for Python-specific architecture (static analysis vs runtime interceptors).
 

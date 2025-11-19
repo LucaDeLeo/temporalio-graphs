@@ -13,9 +13,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Status
 
-**Phase 0.5 COMPLETE** - Architecture spike validated static analysis approach (recommended over mock execution and history parsing). Ready for Phase 1 implementation.
+**Production-Ready (Epic 5 In Progress)** - Core features complete, production hardening underway.
 
-See `/spike/EXECUTIVE_SUMMARY.md` for decision rationale and `/IMPLEMENTATION_PLAN.md` for complete 15.5-hour phased plan.
+**Completed Epics (1-4):**
+- Epic 1: Foundation & Project Setup ✅
+- Epic 2: Basic Graph Generation (Linear Workflows) ✅
+- Epic 3: Decision Node Support (Branching Workflows) ✅
+- Epic 4: Signal & Wait Condition Support ✅
+
+**Epic 5 Progress (2/5 stories, 40% complete):**
+- Story 5-1: Validation Warnings ✅ (unreachable activity detection)
+- Story 5-2: Error Handling Hierarchy 🔄 (75% complete, needs integration tests)
+- Story 5-3: Path List Output Format (backlog)
+- Story 5-4: Comprehensive Example Gallery (backlog)
+- Story 5-5: Production-Grade Documentation (backlog)
+
+**Quality Metrics:**
+- 406 tests passing, 95% coverage
+- <1s test execution time
+- Mypy strict mode: ✅ passing
+- Ruff linting: ✅ passing
+
+See `/spike/EXECUTIVE_SUMMARY.md` for architectural decision rationale.
 
 ## Common Commands
 
@@ -45,13 +64,16 @@ temporalio-graphs analyze workflow.py --output diagram.md
 
 ## Architecture
 
-### Core Components (Planned)
+### Core Components (Implemented)
 
-1. **AST Parser** - Extracts workflow structure from Python source files
-2. **Decision Point Detector** - Identifies branching logic (if/else, conditions)
-3. **Path Permutation Generator** - Creates 2^n paths for n decision points
-4. **Mermaid Generator** - Converts execution paths to flowchart syntax
-5. **CLI Interface** - User-facing command tool
+1. **WorkflowAnalyzer** (`analyzer.py`) - Extracts workflow structure from Python source files using AST
+2. **DecisionDetector** (`detector.py`) - Identifies branching logic and decision points (if/else, to_decision calls)
+3. **SignalDetector** (`detector.py`) - Identifies signal/wait condition points in workflows
+4. **PathPermutationGenerator** (`generator.py`) - Creates 2^n execution paths for n decision points
+5. **MermaidRenderer** (`renderer.py`) - Converts execution paths to Mermaid flowchart syntax
+6. **Validator** (`validator.py`) - Detects workflow quality issues (unreachable activities)
+7. **Error Handler** (`exceptions.py`) - Comprehensive exception hierarchy with actionable messages
+8. **Public API** (`__init__.py`) - analyze_workflow() function with GraphBuildingContext configuration
 
 ### Key Design Patterns
 
@@ -60,30 +82,54 @@ temporalio-graphs analyze workflow.py --output diagram.md
 - **Strategy Pattern**: Multiple output formats (Mermaid, DOT, JSON)
 - **Context Pattern**: Runtime state during graph building
 
-### Main Classes (Planned)
+### Main Classes (Implemented)
 
 ```python
-@dataclass
+@dataclass(frozen=True)
 class GraphBuildingContext:
-    """Context for graph generation with configuration options"""
-    is_building_graph: bool
-    exit_after_building_graph: bool
-    graph_output_file: Optional[str]
-    split_names_by_words: bool
+    """Configuration for graph generation"""
+    split_names_by_words: bool = True
+    start_node_label: str = "Start"
+    end_node_label: str = "End"
+    suppress_validation: bool = False
+    include_validation_report: bool = True
+    max_decision_points: int = 10
+    max_paths: int = 1024
+    graph_output_file: Optional[Path] = None
 
-class GraphPath:
-    """Represents single execution path through workflow"""
-    def add_step(self, name: str) -> str
-    def add_decision(self, id: str, value: bool, name: str) -> str
+class WorkflowAnalyzer:
+    """Analyzes workflow AST to extract metadata"""
+    def analyze(self, tree: ast.Module, file_path: Path) -> WorkflowMetadata
 
-class GraphGenerator:
-    """Generates output from collected paths"""
-    def to_mermaid_syntax(self) -> str
-    def to_paths(self) -> str
+class PathPermutationGenerator:
+    """Generates all execution paths (2^n for n decisions)"""
+    def generate(self, metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]
 
-# Workflow helpers
+class MermaidRenderer:
+    """Renders paths as Mermaid flowchart syntax"""
+    def render(self, paths: list[GraphPath], context: GraphBuildingContext) -> str
+
+# Workflow helpers (Epic 3-4)
 async def to_decision(result: bool, name: str) -> bool
-async def wait_condition(condition_check, timeout, name: str) -> bool
+    """Mark decision points in workflow for graph generation"""
+
+async def wait_condition(condition_check: Callable, timeout: timedelta, name: str) -> bool
+    """Mark signal/wait points in workflow for graph generation"""
+
+# Validation (Epic 5)
+@dataclass(frozen=True)
+class ValidationWarning:
+    """Represents a single validation warning"""
+    severity: WarningSeverity
+    category: str
+    message: str
+    file_path: Path
+    line: int
+
+# Error handling (Epic 5)
+class TemporalioGraphsError(Exception): ...
+class WorkflowParseError(TemporalioGraphsError): ...
+class GraphGenerationError(TemporalioGraphsError): ...
 ```
 
 ## Project Structure
@@ -104,8 +150,39 @@ async def wait_condition(condition_check, timeout, name: str) -> bool
   │   └── RuntimeContext.cs      # State management
   └── Samples/MoneyTransferWorker/  # Example workflow
 
-/src/temporalio_graphs/          # Future Python implementation
-/tests/                          # Test suite
+/src/temporalio_graphs/          # Python implementation (IMPLEMENTED)
+  ├── __init__.py                # Public API (analyze_workflow)
+  ├── analyzer.py                # WorkflowAnalyzer (AST parsing)
+  ├── context.py                 # GraphBuildingContext configuration
+  ├── detector.py                # DecisionDetector, SignalDetector
+  ├── generator.py               # PathPermutationGenerator
+  ├── renderer.py                # MermaidRenderer
+  ├── path.py                    # GraphPath data model
+  ├── helpers.py                 # to_decision(), wait_condition()
+  ├── validator.py               # ValidationWarning, ValidationReport (Epic 5)
+  ├── exceptions.py              # Error handling hierarchy (Epic 5)
+  └── _internal/
+      └── graph_models.py        # WorkflowMetadata, DecisionPoint, SignalPoint
+
+/tests/                          # Test suite (406 tests, 95% coverage)
+  ├── test_*.py                  # Unit tests
+  ├── integration/               # Integration tests
+  │   ├── test_signal_workflow.py
+  │   └── test_validation_warnings.py
+  └── fixtures/                  # Test fixtures
+
+/examples/                       # Working examples (Epic 2-4)
+  ├── simple_linear/             # 3 sequential activities
+  ├── money_transfer/            # 2 decisions, 4 paths
+  └── signal_workflow/           # Signal/wait condition example
+
+/docs/                           # Documentation & sprint artifacts
+  ├── sprint-artifacts/
+  │   ├── stories/               # User stories
+  │   ├── sprint-status.yaml     # Epic/story tracking
+  │   └── tech-spec-epic-*.md    # Technical specifications
+  ├── architecture.md            # Architecture documentation
+  └── prd.md                     # Product requirements
 ```
 
 ## Technology Stack

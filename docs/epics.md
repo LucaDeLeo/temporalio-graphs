@@ -116,6 +116,16 @@ Extracting all 65 functional requirements from PRD to ensure complete coverage:
 - FR59: Library includes multi-decision workflow example
 - FR60: README provides quick start guide with <10 lines of example code
 
+**Cross-Workflow Visualization (FR66-FR73):**
+- FR66: Library can detect child workflow calls (workflow.execute_child_workflow())
+- FR67: Library can extract child workflow class names from execute_child_workflow() calls
+- FR68: Library can render child workflow nodes in Mermaid with distinct visual style
+- FR69: Library can analyze multiple related workflows in a single call (parent + children)
+- FR70: Library can generate end-to-end execution paths spanning parent and child workflows
+- FR71: Library can render workflow call graphs showing parent-child relationships
+- FR72: Child workflow nodes link to child workflow graphs (navigation/reference)
+- FR73: Library includes parent-child workflow example demonstrating cross-workflow visualization
+
 **Error Handling (FR61-FR65):**
 - FR61: Library provides clear error messages when workflow file cannot be parsed
 - FR62: Library warns when workflow patterns are too complex to analyze
@@ -123,7 +133,7 @@ Extracting all 65 functional requirements from PRD to ensure complete coverage:
 - FR64: Library gracefully handles missing/invalid workflow decorators
 - FR65: Library validates that decision helper functions are used correctly
 
-**Total: 65 Functional Requirements**
+**Total: 73 Functional Requirements** (65 Core MVP + 8 Cross-Workflow Extension)
 
 ---
 
@@ -161,7 +171,15 @@ Based on natural groupings that deliver incremental user value:
 **Story Count:** 5
 **FRs Covered:** FR23-FR30, FR56-FR65 (18 FRs)
 
-**Total: 5 Epics, 23 Stories, 65 FRs Covered**
+### Epic 6: Cross-Workflow Visualization (MVP Extension)
+**Goal:** Enable visualization of parent-child workflow relationships and complete end-to-end execution flows
+**User Value:** Python developers can visualize complete multi-workflow applications showing parent-child relationships and cross-workflow execution paths
+**Story Count:** 5
+**FRs Covered:** FR66-FR73 (8 FRs)
+
+**Total: 6 Epics, 28 Stories, 73 FRs Covered**
+**Core MVP (v0.1.0):** Epics 1-5, 23 Stories, 65 FRs
+**MVP Extension (v0.2.0):** Epic 6, 5 Stories, 8 FRs
 
 ---
 
@@ -176,6 +194,7 @@ This table shows which FRs are addressed by each epic:
 | **Epic 3: Decision Support** | FR11-FR17, FR46-FR47, FR49 | Decision nodes, to_decision() helper, path permutations, branching logic, elif chains, ternary operators |
 | **Epic 4: Signal Support** | FR18-FR22 | Signal nodes, wait_condition() helper, timeout handling, hexagon rendering |
 | **Epic 5: Production Ready** | FR23-FR30, FR56-FR65 | Validation warnings, path lists, error hierarchy, examples, documentation |
+| **Epic 6: Cross-Workflow** | FR66-FR73 | Child workflow detection, cross-workflow rendering, multi-workflow analysis, end-to-end path generation, parent-child examples |
 
 **FR Coverage Validation:**
 - FR1-FR10: Epic 2 ✓
@@ -188,8 +207,11 @@ This table shows which FRs are addressed by each epic:
 - FR51-FR55: Epic 2 ✓
 - FR56-FR60: Epic 5 ✓
 - FR61-FR65: Epic 5 ✓
+- FR66-FR73: Epic 6 ✓
 
-**All 65 FRs are covered across the 5 epics.**
+**All 73 FRs are covered across the 6 epics.**
+**Core MVP (65 FRs):** Epics 1-5
+**Extension (8 FRs):** Epic 6
 
 ---
 
@@ -1276,9 +1298,227 @@ So that I can quickly adopt the library and troubleshoot issues.
 
 ---
 
+## Epic 6: Cross-Workflow Visualization (MVP Extension)
+
+**Goal:** Enable visualization of parent-child workflow relationships and complete end-to-end execution flows
+
+**Epic Value:** Python developers can visualize complete multi-workflow applications showing parent-child relationships and cross-workflow execution paths. Real-world Temporal applications commonly use parent-child workflow patterns - this epic enables visualization of complete system flows spanning multiple workflows, essential for understanding complex workflow orchestrations.
+
+**FRs Covered:** FR66-FR73 (Cross-workflow visualization)
+
+### Story 6.1: Detect Child Workflow Calls in AST
+
+**User Story:**
+As a library developer,
+I want to detect execute_child_workflow() calls in workflow code,
+So that I can identify parent-child workflow relationships for visualization.
+
+**Acceptance Criteria:**
+
+**Given** a workflow file contains child workflow calls
+**When** WorkflowAnalyzer processes the file
+**Then** analyzer detects workflow.execute_child_workflow() calls (FR66)
+**And** analyzer extracts child workflow class names from arguments (FR67)
+**And** analyzer handles patterns:
+  - `await workflow.execute_child_workflow(ChildWorkflow, ...)`
+  - `await workflow.execute_child_workflow("ChildWorkflowName", ...)`
+**And** analyzer records source line numbers for each child workflow call
+**And** child_workflows list is added to WorkflowMetadata
+**And** child workflow metadata includes: child_class_name, call_site_line, parent_activity_context
+**And** multiple calls to same child workflow are tracked separately
+**And** unit tests cover: single child, multiple children, nested child calls, no children
+**And** test coverage is 100% for child workflow detection logic
+**And** detection completes in <1ms per NFR-PERF-1
+
+**Prerequisites:** Story 2.3 (Activity detection pattern established)
+
+**Technical Notes:**
+- Extend WorkflowAnalyzer.visit_Call() to detect execute_child_workflow
+- Similar pattern to activity detection:
+  ```python
+  def visit_Call(self, node: ast.Call) -> None:
+      if self._is_execute_child_workflow_call(node):
+          child_name = self._extract_workflow_name(node.args[0])
+          self._child_workflows.append((child_name, node.lineno))
+  ```
+- ChildWorkflowCall dataclass in graph_models.py
+- Covers FR66, FR67
+
+### Story 6.2: Implement Child Workflow Node Rendering in Mermaid
+
+**User Story:**
+As a library user,
+I want child workflow calls to appear distinctly in Mermaid diagrams,
+So that I can visually distinguish workflow orchestration from activity execution.
+
+**Acceptance Criteria:**
+
+**Given** paths contain child workflow nodes
+**When** Mermaid rendering runs
+**Then** child workflow nodes render with distinct visual style (FR68)
+**And** child workflow nodes use subroutine/subprocess shape: `1[[ChildWorkflow]]`
+**And** child workflow node IDs are deterministic
+**And** node labels show child workflow name
+**And** child workflow nodes integrate into path generation like activities
+**And** generated Mermaid is valid and renders in Mermaid Live Editor
+**And** visual distinction is clear between activities (rectangles) and child workflows (subroutines)
+**And** unit tests cover: single child workflow, multiple child workflows, child workflow with decisions
+**And** rendering completes in <1ms for graphs with child workflows
+
+**Prerequisites:** Story 6.1 (Child workflow detection works), Story 2.5 (Renderer exists)
+
+**Technical Notes:**
+- Extend NodeType enum with CHILD_WORKFLOW
+- GraphNode.to_mermaid() for CHILD_WORKFLOW type:
+  ```python
+  if self.node_type == NodeType.CHILD_WORKFLOW:
+      return f"{self.node_id}[[{self.display_name}]]"  # Subroutine shape
+  ```
+- Extend MermaidRenderer to handle CHILD_WORKFLOW nodes
+- Covers FR68
+
+### Story 6.3: Implement Multi-Workflow Analysis Pipeline
+
+**User Story:**
+As a library user,
+I want to analyze parent and child workflows together,
+So that I can see the complete workflow call graph for my application.
+
+**Acceptance Criteria:**
+
+**Given** a parent workflow calls child workflows
+**When** multi-workflow analysis is invoked
+**Then** WorkflowCallGraphAnalyzer class exists in src/temporalio_graphs/call_graph.py
+**And** analyzer accepts parent workflow file and discovers child workflows (FR69)
+**And** analyzer recursively analyzes all referenced child workflow files
+**And** analyzer builds workflow call graph showing parent-child relationships (FR71)
+**And** analyzer handles workflow resolution:
+  - Same directory as parent
+  - Explicit file path mapping (configuration)
+  - Import-based resolution
+**And** analyzer detects circular workflow references and raises clear error
+**And** analyzer creates separate WorkflowMetadata for each workflow
+**And** WorkflowCallGraph dataclass contains all workflow metadata and relationships
+**And** public API extended: `analyze_workflow_graph(parent_file: Path, workflow_paths: Optional[Dict[str, Path]] = None) -> WorkflowCallGraph`
+**And** unit tests cover: parent + 1 child, parent + multiple children, multi-level hierarchy, circular reference detection
+**And** integration test with 3-level workflow hierarchy
+
+**Prerequisites:** Story 6.2 (Child workflow rendering works)
+
+**Technical Notes:**
+- New WorkflowCallGraphAnalyzer class
+- WorkflowCallGraph dataclass:
+  ```python
+  @dataclass(frozen=True)
+  class WorkflowCallGraph:
+      workflows: Dict[str, WorkflowMetadata]  # workflow_name -> metadata
+      call_relationships: List[Tuple[str, str]]  # (parent, child) edges
+      root_workflow: str
+  ```
+- Recursive analysis with visited set to prevent infinite loops
+- Covers FR69, FR71
+
+### Story 6.4: Implement End-to-End Path Generation Across Workflows
+
+**User Story:**
+As a library user,
+I want execution paths that span parent and child workflows,
+So that I can understand complete end-to-end flow through my workflow system.
+
+**Acceptance Criteria:**
+
+**Given** workflow call graph with parent-child relationships exists
+**When** path generation runs for multi-workflow graph
+**Then** generator creates paths spanning parent and child workflows (FR70)
+**And** child workflow execution is expanded inline in parent path
+**And** path shows: Parent Start → Parent Activities → Child Workflow Start → Child Activities → Child Workflow End → Parent Continues → Parent End
+**And** decision points in both parent and child create full permutations
+**And** 2^(n_parent + n_child) total paths generated for independent decisions
+**And** child workflow boundary is visually indicated in path
+**And** max_paths limit applies to total cross-workflow paths
+**And** performance: generates cross-workflow paths efficiently (< 5s for 10 total decisions)
+**And** unit tests cover: linear parent with linear child, parent with decisions + child with decisions, multiple children
+**And** integration test validates path count matches expected permutations
+
+**Prerequisites:** Story 6.3 (Call graph analysis works), Story 3.3 (Path permutations)
+
+**Technical Notes:**
+- Extend PathPermutationGenerator for cross-workflow paths
+- When encountering child workflow node:
+  1. Generate all parent paths up to child call
+  2. Generate all child workflow paths
+  3. Cross product: parent_paths_before × child_paths × parent_paths_after
+- Inline expansion strategy:
+  ```python
+  path: Start → Activity1 → [ChildStart → ChildActivity → ChildEnd] → Activity2 → End
+  ```
+- Covers FR70
+
+### Story 6.5: Add Integration Test with Parent-Child Workflow Example
+
+**User Story:**
+As a library user,
+I want a complete parent-child workflow example,
+So that I can understand how to visualize multi-workflow applications.
+
+**Acceptance Criteria:**
+
+**Given** cross-workflow support is fully implemented
+**When** parent-child example is analyzed
+**Then** examples/parent_child_workflow/ exists (FR73)
+**And** example includes: parent_workflow.py, child_workflow.py, run.py, expected_output.md
+**And** parent workflow calls child workflow with execute_child_workflow
+**And** parent has 1 decision point, child has 1 decision point (4 total paths)
+**And** analyze_workflow_graph() produces valid Mermaid with subroutine nodes
+**And** generated diagram shows clear parent-child relationship (FR72)
+**And** example demonstrates navigation between parent and child graphs
+**And** tests/integration/test_parent_child.py validates output
+**And** test validates path count (4 paths for 2 independent decisions)
+**And** test validates child workflow nodes use [[ ]] syntax
+**And** example is documented in README
+**And** integration test passes with 100% accuracy
+
+**Prerequisites:** Story 6.4 (Cross-workflow path generation works)
+
+**Technical Notes:**
+- Example workflow structure:
+  ```python
+  # parent_workflow.py
+  @workflow.defn
+  class OrderWorkflow:
+      @workflow.run
+      async def run(self, order: Order) -> str:
+          await workflow.execute_activity(validate_order, ...)
+
+          if await to_decision(order.amount > 1000, "HighValue"):
+              await workflow.execute_activity(manager_approval, ...)
+
+          # Call child workflow
+          await workflow.execute_child_workflow(PaymentWorkflow, ...)
+
+          await workflow.execute_activity(ship_order, ...)
+          return "complete"
+
+  # child_workflow.py
+  @workflow.defn
+  class PaymentWorkflow:
+      @workflow.run
+      async def run(self, payment: Payment) -> str:
+          await workflow.execute_activity(process_payment, ...)
+
+          if await to_decision(payment.requires_3ds, "Requires3DS"):
+              await workflow.execute_activity(verify_3ds, ...)
+
+          return "paid"
+  ```
+- Expected: 4 paths (2^2 decisions: parent decision × child decision)
+- Covers FR72, FR73
+
+---
+
 ## FR Coverage Matrix
 
-Complete mapping of all 65 FRs to specific stories:
+Complete mapping of all 73 FRs to specific stories:
 
 | FR | Description | Epic.Story | Notes |
 |----|-------------|------------|-------|
@@ -1347,8 +1587,18 @@ Complete mapping of all 65 FRs to specific stories:
 | FR63 | Suggestions for unsupported patterns | 5.2 | Error messages |
 | FR64 | Handle missing decorators | 2.2 | Validation |
 | FR65 | Validate helper function usage | 5.2 | InvalidDecisionError |
+| FR66 | Detect child workflow calls | 6.1 | execute_child_workflow detection |
+| FR67 | Extract child workflow class names | 6.1 | AST argument extraction |
+| FR68 | Render child workflow nodes distinctly | 6.2 | Subroutine shape [[ ]] |
+| FR69 | Analyze multiple workflows together | 6.3 | WorkflowCallGraphAnalyzer |
+| FR70 | Generate end-to-end cross-workflow paths | 6.4 | Path spanning parent + child |
+| FR71 | Render workflow call graphs | 6.3 | Parent-child relationships |
+| FR72 | Child workflow node navigation/linking | 6.5 | Graph references |
+| FR73 | Parent-child workflow example | 6.5 | Integration example |
 
-**All 65 FRs mapped to implementation stories.**
+**All 73 FRs mapped to implementation stories.**
+**Core MVP (65 FRs):** FR1-FR65 across Epics 1-5
+**MVP Extension (8 FRs):** FR66-FR73 in Epic 6
 
 ---
 
@@ -1356,16 +1606,19 @@ Complete mapping of all 65 FRs to specific stories:
 
 ### Epic Breakdown Complete
 
-✅ **5 Epics Created:**
+✅ **6 Epics Created:**
 1. Foundation & Project Setup (1 story)
 2. Basic Graph Generation (8 stories)
 3. Decision Node Support (5 stories)
 4. Signal & Wait Condition Support (4 stories)
 5. Production Readiness (5 stories)
+6. Cross-Workflow Visualization (5 stories) - MVP Extension
 
-✅ **23 Stories Total** - Each sized for single dev agent completion
+✅ **28 Stories Total** - Each sized for single dev agent completion
 
-✅ **65 FRs Fully Covered** - All functional requirements mapped to stories
+✅ **73 FRs Fully Covered** - All functional requirements mapped to stories
+  - Core MVP: 65 FRs (Epics 1-5)
+  - Extension: 8 FRs (Epic 6)
 
 ✅ **Architecture Integrated** - Static analysis approach, uv, mypy strict, src/ layout, performance targets
 
@@ -1374,14 +1627,15 @@ Complete mapping of all 65 FRs to specific stories:
 - Epic 2: **Visualize linear workflows** (core value delivered)
 - Epic 3: **Visualize branching workflows** (decision support added)
 - Epic 4: **Visualize wait conditions** (signal support added)
-- Epic 5: **Production-grade library** (robust, documented, tested)
+- Epic 5: **Production-grade library** (robust, documented, tested) - v0.1.0 Core MVP
+- Epic 6: **Visualize multi-workflow systems** (parent-child workflows, end-to-end flows) - v0.2.0 MVP Extension
 
 ### Context Incorporated
 
 **From PRD:**
-- 65 FRs provide strategic WHAT (capabilities exist)
+- 73 FRs provide strategic WHAT (capabilities exist) - 65 Core MVP + 8 Cross-Workflow Extension
 - Success criteria, NFRs, and project classification inform acceptance criteria
-- .NET feature parity ensures completeness
+- .NET feature parity ensures completeness, with Python-specific extension for cross-workflow visualization
 
 **From Architecture:**
 - Static analysis approach (ADR-001) drives AST-based implementation
@@ -1411,11 +1665,19 @@ Complete mapping of all 65 FRs to specific stories:
 5. **Implementation** - Use `/bmad:bmm:workflows:create-story` for each story, then `/bmad:bmm:workflows:dev-story` to implement
 
 **Development Sequence:**
+
+**Phase 1 - Core MVP (v0.1.0):**
 - Epic 1 → Epic 2 → Epic 3 → Epic 4 → Epic 5
 - Epic 2 stories must be sequential (2.1→2.2→2.3→2.4→2.5→2.6→2.7→2.8)
 - Epic 3 can partially overlap Epic 2 after Story 2.3
 - Epic 4 follows similar pattern to Epic 3
 - Epic 5 stories can partially parallel
+
+**Phase 2 - MVP Extension (v0.2.0):**
+- Epic 6 (after Epic 5 complete)
+- Epic 6 stories must be sequential (6.1→6.2→6.3→6.4→6.5)
+- Builds on Epic 2 (AST analysis) and Epic 3 (path permutations) patterns
+- Deliverable: Complete cross-workflow visualization capability
 
 ---
 

@@ -182,28 +182,44 @@ class GraphPath:
         return node_id
 
     def add_signal(self, name: str, outcome: str) -> str:
-        """Add a signal point to this execution path (Epic 4 stub).
+        """Add a signal point to this execution path.
 
-        This method is a placeholder for Epic 4 implementation. In Epic 4, it
-        will record the signal name and outcome (e.g., "Signaled" or "Timeout")
-        for this path, and generate a node ID for the signal hexagon in the graph.
+        Records the signal name and outcome (e.g., "Signaled" or "Timeout")
+        for this path, adds the signal to the steps list, and generates a unique
+        node ID for the signal hexagon in the graph.
+
+        This method is called during path generation in PathPermutationGenerator
+        to track signals encountered along each execution path. A signal with
+        outcome="Signaled" represents successful signal receipt; outcome="Timeout"
+        represents the timeout branch.
 
         Args:
             name: Human-readable signal name (e.g., "WaitForApproval").
             outcome: Signal result for this path ("Signaled" or "Timeout").
 
         Returns:
-            Node ID for the signal node (to be implemented in Epic 4).
-
-        Raises:
-            NotImplementedError: This method is not implemented in Epic 2.
+            Node ID for the signal node. Follows same sequential format as
+            add_activity(): "1", "2", "3", etc.
 
         Example:
             >>> path = GraphPath(path_id="0b10")
-            >>> # This will raise NotImplementedError in Epic 2
-            >>> # path.add_signal("WaitForApproval", "Signaled")
+            >>> node_id = path.add_signal("WaitForApproval", "Signaled")
+            >>> node_id
+            '1'
+            >>> [step.name for step in path.steps]
+            ['WaitForApproval']
+            >>> [step.signal_outcome for step in path.steps]
+            ['Signaled']
         """
-        raise NotImplementedError(
-            "Signal point tracking is not implemented in Epic 2. "
-            "This will be added in Epic 4 (Story 4.3)."
+        # Add signal step to the steps list with type information
+        step = PathStep(
+            node_type='signal',
+            name=name,
+            signal_outcome=outcome
         )
+        self.steps.append(step)
+
+        # Generate sequential node ID: count of all steps so far
+        node_id = str(len(self.steps))
+
+        return node_id

@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>5-2-implement-comprehensive-error-handling-hierarchy</story-key>
+    <story-file>docs/sprint-artifacts/stories/5-2-implement-comprehensive-error-handling-hierarchy.md</story-file>
+    <epic-key>epic-5</epic-key>
+    <epic-tech-spec>docs/sprint-artifacts/tech-spec-epic-5.md</epic-tech-spec>
+    <generated-date>2025-11-19</generated-date>
+    <status>ready-for-dev</status>
+  </metadata>
+
+  <story-summary>
+    <title>Implement Comprehensive Error Handling Hierarchy</title>
+    <description>
+      Create a complete exception hierarchy with actionable error messages for all failure modes.
+      Implement WorkflowParseError (parsing failures), UnsupportedPatternError (unsupported patterns),
+      GraphGenerationError (generation failures), InvalidDecisionError (helper function misuse).
+      Integrate exceptions into analyze_workflow, WorkflowAnalyzer, and PathPermutationGenerator.
+      All exceptions include file path, line number, error description, and actionable suggestions.
+    </description>
+    <acceptance-criteria-count>8</acceptance-criteria-count>
+    <task-count>12</task-count>
+  </story-summary>
+
+  <epic-context>
+    <epic-goal>Add validation, error handling, examples, and documentation for production use</epic-goal>
+    <epic-value>Library is production-ready with comprehensive error messages, validation warnings, complete examples, and documentation</epic-value>
+    <related-stories>
+      <story id="5-1">Validation Warnings for Graph Quality (done)</story>
+      <story id="5-3">Path List Output Format (backlog)</story>
+      <story id="5-4">Comprehensive Example Gallery (backlog)</story>
+      <story id="5-5">Production-Grade Documentation (backlog)</story>
+    </related-stories>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+      <type>technical-specification</type>
+      <relevance>Primary technical specification for Epic 5 error handling</relevance>
+      <sections>
+        <section>Lines 174-225: Exception hierarchy design (TemporalioGraphsError, WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError)</section>
+        <section>Lines 345-371: Public API exports (exceptions added to __all__)</section>
+        <section>Lines 594-608: Integration into analyze_workflow (exception handling flow)</section>
+        <section>Lines 799-823: Exception Hierarchy section (detailed design)</section>
+        <section>Lines 957-975: AC-5.2 acceptance criteria (authoritative)</section>
+        <section>Lines 428-473: Error message examples for each exception type</section>
+        <section>Lines 474-503: Exception chaining pattern with raise...from</section>
+      </sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/architecture.md</path>
+      <type>architecture-documentation</type>
+      <relevance>Error handling patterns and integration points</relevance>
+      <sections>
+        <section>Lines 760-791: Exception hierarchy design</section>
+        <section>Lines 384-394: Error message format patterns</section>
+        <section>Lines 447-463: Error recovery patterns in lifecycle</section>
+      </sections>
+    </artifact>
+
+    <artifact>
+      <path>CLAUDE.md</path>
+      <type>project-guidance</type>
+      <relevance>Project conventions, tool preferences, common commands</relevance>
+      <sections>
+        <section>Use uv for Python package management (user requirement)</section>
+        <section>Testing: pytest -v --cov, mypy strict mode, ruff check/format</section>
+        <section>Code conventions: snake_case, Google/NumPy docstrings, 100% type hints</section>
+      </sections>
+    </artifact>
+
+    <artifact>
+      <path>docs/sprint-artifacts/stories/5-1-implement-validation-warnings-for-graph-quality.md</path>
+      <type>previous-story-completion</type>
+      <relevance>Story 5-1 completion notes provide patterns for Story 5-2</relevance>
+      <sections>
+        <section>Lines 282-360: Learnings from Story 5-1 (dataclass patterns, message formats, integration, testing, backward compatibility)</section>
+        <section>Dataclass pattern consistency (frozen=True, attribute storage)</section>
+        <section>Message format consistency (multi-line, clear sections, actionable suggestions)</section>
+        <section>Integration point pattern (try/except at each stage, preserve exception chaining)</section>
+        <section>Public API export pattern (add to __all__ list)</section>
+        <section>Test organization pattern (test classes per exception type)</section>
+        <section>Edge case coverage (no file, no line number, with/without context dict)</section>
+        <section>Backward compatibility requirement (all 372 tests pass)</section>
+        <section>Documentation standard (README section)</section>
+        <section>Performance target (less than 1ms per exception creation)</section>
+        <section>Type safety (mypy strict mode, 100% coverage)</section>
+      </sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <type>module</type>
+      <name>exception-hierarchy</name>
+      <description>Existing exception module with base class and some exceptions</description>
+      <existing-classes>
+        <class name="TemporalioGraphsError">Base exception for all library errors (already exists)</class>
+        <class name="WorkflowParseError">Raised when workflow parsing fails (already exists, needs enhancement)</class>
+        <class name="GraphGenerationError">Raised when graph generation fails (already exists, needs enhancement)</class>
+        <class name="InvalidSignalError">Raised for wait_condition errors (already exists, Epic 4)</class>
+      </existing-classes>
+      <modifications-needed>
+        <modification>Enhance WorkflowParseError with __init__(file_path, line, message, suggestion)</modification>
+        <modification>Add attributes: self.file_path, self.line, self.message, self.suggestion</modification>
+        <modification>Build formatted message with file path, line, and suggestion</modification>
+        <modification>Add UnsupportedPatternError class with __init__(pattern, suggestion, line=None)</modification>
+        <modification>Enhance GraphGenerationError with __init__(reason, context=None)</modification>
+        <modification>Add InvalidDecisionError class with __init__(function, issue, suggestion)</modification>
+        <modification>Add complete Google-style docstrings with examples</modification>
+      </modifications-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <type>function</type>
+      <name>analyze_workflow</name>
+      <description>Main entry point for workflow analysis - needs error handling integration</description>
+      <signature>def analyze_workflow(workflow_file: Path | str, context: GraphBuildingContext | None = None, output_format: Literal["mermaid", "json", "paths"] = "mermaid") -> str</signature>
+      <current-error-handling>
+        <detail>Lines 129-131: Validates workflow_file is not None</detail>
+        <detail>Line 147: analyzer.analyze(workflow_path, context) may raise exceptions</detail>
+        <detail>No explicit try/except for FileNotFoundError, PermissionError, SyntaxError</detail>
+      </current-error-handling>
+      <integration-needed>
+        <modification>Import all exception classes from temporalio_graphs.exceptions</modification>
+        <modification>Wrap file path validation: try path.exists(), catch FileNotFoundError -> WorkflowParseError</modification>
+        <modification>Wrap file permission check: try path.read_text(), catch PermissionError -> WorkflowParseError</modification>
+        <modification>Note: AST parsing happens in WorkflowAnalyzer, not here</modification>
+        <modification>Update docstring Raises section with all exception types</modification>
+      </integration-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <type>class</type>
+      <name>WorkflowAnalyzer</name>
+      <description>AST-based analyzer - needs to raise WorkflowParseError for missing decorators</description>
+      <current-validation>
+        <detail>Checks for @workflow.defn decorator (visit_ClassDef method)</detail>
+        <detail>Checks for @workflow.run decorator (visit_FunctionDef method)</detail>
+        <detail>Currently may not raise explicit exceptions for missing decorators</detail>
+      </current-validation>
+      <integration-needed>
+        <modification>Import WorkflowParseError from temporalio_graphs.exceptions</modification>
+        <modification>After AST traversal in analyze() method, check if _workflow_class is None</modification>
+        <modification>If None: raise WorkflowParseError(file_path, line=0, message="Missing @workflow.defn decorator", suggestion="Add @workflow.defn decorator to workflow class")</modification>
+        <modification>Check if _workflow_run_method is None</modification>
+        <modification>If None: raise WorkflowParseError(file_path, line, message="Missing @workflow.run method", suggestion="Add @workflow.run method to workflow class")</modification>
+        <modification>Wrap ast.parse() with try/except for SyntaxError</modification>
+        <modification>On SyntaxError: raise WorkflowParseError with line number and suggestion</modification>
+      </integration-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/generator.py</file>
+      <type>class</type>
+      <name>PathPermutationGenerator</name>
+      <description>Path generator - needs to raise GraphGenerationError for path explosion</description>
+      <current-validation>
+        <detail>generate_paths method creates 2^n paths for n decision points</detail>
+        <detail>May have explosion checking but needs enhancement</detail>
+      </current-validation>
+      <integration-needed>
+        <modification>Import GraphGenerationError from temporalio_graphs.exceptions</modification>
+        <modification>Before generating paths, check decision_count against context.max_decision_points</modification>
+        <modification>Calculate total_paths = 2 ** decision_count</modification>
+        <modification>If decision_count greater than max_decision_points: raise GraphGenerationError with reason and context dict</modification>
+        <modification>Reason format: "Too many decision points ({decision_count}) would generate {total_paths} paths (limit: {max_decision_points}). Suggestion: Refactor workflow to reduce decisions or increase max_decision_points"</modification>
+        <modification>Context dict: {"decision_count": decision_count, "limit": context.max_decision_points, "paths": total_paths}</modification>
+      </integration-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/__init__.py</file>
+      <type>module</type>
+      <name>public-api</name>
+      <description>Public API exports for library users</description>
+      <current-exports>
+        <export>GraphBuildingContext</export>
+        <export>analyze_workflow</export>
+        <export>to_decision</export>
+        <export>wait_condition</export>
+        <export>ValidationWarning</export>
+        <export>ValidationReport</export>
+      </current-exports>
+      <modifications-needed>
+        <modification>Import all exception classes: TemporalioGraphsError, WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</modification>
+        <modification>Add all exception classes to __all__ list (total should be 11 exports)</modification>
+        <modification>Update module docstring to document error handling features</modification>
+        <modification>Verify imports work: from temporalio_graphs import WorkflowParseError</modification>
+      </modifications-needed>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <type>dataclass</type>
+      <name>GraphBuildingContext</name>
+      <description>Configuration context - used for max_decision_points limit</description>
+      <relevant-fields>
+        <field name="max_decision_points" type="int" default="10">Maximum decision points before GraphGenerationError</field>
+        <field name="max_paths" type="int" default="1024">Maximum total paths before GraphGenerationError</field>
+      </relevant-fields>
+      <usage-in-story>
+        <detail>PathPermutationGenerator checks context.max_decision_points for explosion limit</detail>
+        <detail>No modifications needed to GraphBuildingContext in this story</detail>
+      </usage-in-story>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <type>dataclass</type>
+      <name>WorkflowMetadata</name>
+      <description>Metadata describing workflow structure from AST analysis</description>
+      <fields>
+        <field name="workflow_class" type="str">Name of workflow class</field>
+        <field name="workflow_run_method" type="str">Name of run method</field>
+        <field name="activities" type="list[Activity]">List of Activity objects</field>
+        <field name="decision_points" type="list[DecisionPoint]">List of DecisionPoint objects</field>
+        <field name="signal_points" type="list[SignalPoint]">List of SignalPoint objects</field>
+        <field name="source_file" type="Path">Path to workflow source file</field>
+        <field name="total_paths" type="int">Total execution paths (2^n for n decisions)</field>
+      </fields>
+      <usage-in-story>
+        <detail>metadata.source_file provides file path for exception messages</detail>
+        <detail>metadata.decision_points used to count decision points for explosion check</detail>
+        <detail>No modifications needed to WorkflowMetadata in this story</detail>
+      </usage-in-story>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint category="type-safety">
+      <description>All code must pass mypy --strict with 100% type coverage</description>
+      <rationale>ADR-006: Mypy strict mode enforces quality and prevents runtime type errors</rationale>
+      <enforcement>CI checks fail if mypy errors exist</enforcement>
+      <application>
+        <detail>All exception __init__ parameters typed: Path, int, str, Optional[int], Optional[dict]</detail>
+        <detail>All exception attributes typed: self.file_path: Path, self.line: int</detail>
+        <detail>Exception classes properly typed for exception handling</detail>
+      </application>
+    </constraint>
+
+    <constraint category="code-quality">
+      <description>All code must pass ruff check and ruff format with zero errors</description>
+      <rationale>ADR-007: Ruff enforces consistent code style and catches common errors</rationale>
+      <enforcement>CI checks fail if ruff errors exist</enforcement>
+    </constraint>
+
+    <constraint category="exception-design">
+      <description>All exceptions must store context as instance attributes</description>
+      <rationale>Enable programmatic access to error details for logging, testing, user handling</rationale>
+      <pattern>
+        <detail>WorkflowParseError: self.file_path, self.line, self.message, self.suggestion</detail>
+        <detail>UnsupportedPatternError: self.pattern, self.suggestion, self.line</detail>
+        <detail>GraphGenerationError: self.reason, self.context</detail>
+        <detail>InvalidDecisionError: self.function, self.issue, self.suggestion</detail>
+      </pattern>
+    </constraint>
+
+    <constraint category="message-format">
+      <description>All error messages must be multi-line, clear, actionable</description>
+      <rationale>NFR-USE-2: Clear, actionable error messages with context</rationale>
+      <format>
+        <line-1>Error type: {details}</line-1>
+        <line-2>Line X: {message}</line-2>
+        <line-3>Suggestion: {actionable_fix}</line-3>
+      </format>
+      <examples>
+        <example>Cannot parse workflow file: /path/to/workflow.py\nLine 42: Missing @workflow.defn decorator\nSuggestion: Add @workflow.defn decorator to workflow class</example>
+      </examples>
+    </constraint>
+
+    <constraint category="exception-chaining">
+      <description>All exceptions must preserve original exception via raise...from pattern</description>
+      <rationale>Maintain stack traces for debugging, standard Python pattern</rationale>
+      <pattern>
+        <code>try:\n    ast.parse(source)\nexcept SyntaxError as e:\n    raise WorkflowParseError(...) from e</code>
+      </pattern>
+    </constraint>
+
+    <constraint category="performance">
+      <description>Exception creation must be less than 1ms per exception</description>
+      <rationale>NFR-PERF-3: Error handling should not add significant overhead</rationale>
+      <implementation>
+        <detail>No expensive operations in __init__ (no file I/O, no network calls)</detail>
+        <detail>Lazy formatting (only when str(exception) called)</detail>
+        <detail>Performance test validates exception creation time</detail>
+      </implementation>
+    </constraint>
+
+    <constraint category="backward-compatibility">
+      <description>Existing code using analyze_workflow must work unchanged</description>
+      <rationale>Library users should not need to modify their code when upgrading</rationale>
+      <implementation>
+        <detail>Exception types are additive (new error types, not changing behavior)</detail>
+        <detail>Default behavior unchanged (errors still raised, now with better messages)</detail>
+        <detail>All Epic 2-5.1 regression tests must pass</detail>
+      </implementation>
+    </constraint>
+
+    <constraint category="documentation">
+      <description>All exception classes need Google-style docstrings with examples</description>
+      <rationale>ADR-009: Consistent documentation format for API reference generation</rationale>
+      <format>Google-style with Args, Attributes, Raises, Example sections</format>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <runtime-dependencies>
+      <dependency>
+        <name>pathlib.Path</name>
+        <source>Python stdlib</source>
+        <usage>File path handling in exception messages</usage>
+      </dependency>
+      <dependency>
+        <name>typing.Optional</name>
+        <source>Python stdlib</source>
+        <usage>Optional parameters (line=None, context=None)</usage>
+      </dependency>
+    </runtime-dependencies>
+
+    <internal-dependencies>
+      <dependency>
+        <module>temporalio_graphs.context</module>
+        <imports>GraphBuildingContext</imports>
+        <usage>Access max_decision_points for explosion limit in PathPermutationGenerator</usage>
+      </dependency>
+      <dependency>
+        <module>temporalio_graphs.exceptions</module>
+        <imports>TemporalioGraphsError, WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</imports>
+        <usage>Import in analyzer.py, generator.py, __init__.py for integration</usage>
+      </dependency>
+      <dependency>
+        <module>temporalio_graphs._internal.graph_models</module>
+        <imports>WorkflowMetadata</imports>
+        <usage>Access metadata.source_file for exception file paths</usage>
+      </dependency>
+    </internal-dependencies>
+
+    <development-dependencies>
+      <dependency>
+        <name>pytest</name>
+        <version>>=8.0.0</version>
+        <usage>Unit and integration testing framework</usage>
+      </dependency>
+      <dependency>
+        <name>pytest-cov</name>
+        <version>>=4.1.0</version>
+        <usage>Code coverage measurement (target >80%, aim for 100% for exceptions.py)</usage>
+      </dependency>
+      <dependency>
+        <name>mypy</name>
+        <version>>=1.8.0</version>
+        <usage>Type checking in strict mode</usage>
+      </dependency>
+      <dependency>
+        <name>ruff</name>
+        <version>>=0.2.0</version>
+        <usage>Linting and code formatting</usage>
+      </dependency>
+    </development-dependencies>
+  </dependencies>
+
+  <testing-context>
+    <test-patterns>
+      <pattern name="exception-creation-testing">
+        <description>Test exception instantiation, message format, attribute access</description>
+        <structure>
+          <step>Create exception instance with all required parameters</step>
+          <step>Verify exception message contains expected components (file path, line, message, suggestion)</step>
+          <step>Verify all attributes are accessible (self.file_path, self.line, etc.)</step>
+          <step>Verify exception inherits from TemporalioGraphsError and Exception</step>
+        </structure>
+        <apply-to>WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</apply-to>
+      </pattern>
+
+      <pattern name="exception-chaining-testing">
+        <description>Test raise...from pattern preserves original exception</description>
+        <structure>
+          <step>Trigger condition that raises original exception (e.g., FileNotFoundError)</step>
+          <step>Verify WorkflowParseError is raised</step>
+          <step>Verify __cause__ attribute points to original exception</step>
+          <step>Verify stack trace includes both exceptions</step>
+        </structure>
+        <apply-to>All exception integrations (analyze_workflow, WorkflowAnalyzer)</apply-to>
+      </pattern>
+
+      <pattern name="integration-testing">
+        <description>End-to-end workflow analysis triggering each exception type</description>
+        <reference>tests/integration/test_signal_workflow.py (Story 4-4 pattern)</reference>
+        <structure>
+          <step>Create test workflow or condition that triggers specific error</step>
+          <step>Call analyze_workflow() expecting exception</step>
+          <step>Verify correct exception type raised</step>
+          <step>Verify error message is helpful and includes suggestion</step>
+          <step>Test exception catching (both specific type and base type)</step>
+        </structure>
+        <apply-to>test_error_handling.py integration tests</apply-to>
+      </pattern>
+
+      <pattern name="performance-testing">
+        <description>Measure exception creation time with time.perf_counter()</description>
+        <requirement>Exception creation must complete in less than 1ms</requirement>
+        <implementation>
+          <step>Create 100 WorkflowParseError instances</step>
+          <step>Measure: start = perf_counter(), create exceptions, duration = perf_counter() - start</step>
+          <step>Assert duration less than 0.001 (1ms total for 100 = 0.00001 per exception)</step>
+        </implementation>
+      </pattern>
+    </test-patterns>
+
+    <test-coverage-requirements>
+      <requirement>Overall project coverage must remain above 80%</requirement>
+      <requirement>exceptions.py module coverage target: 100%</requirement>
+      <requirement>Minimum 10 unit tests in test_exceptions.py (one per exception type plus extras)</requirement>
+      <requirement>Minimum 4 integration tests in test_error_handling.py</requirement>
+      <requirement>1 performance test in test_performance.py</requirement>
+    </test-coverage-requirements>
+
+    <existing-test-examples>
+      <example>
+        <file>tests/test_validator.py</file>
+        <description>Story 5-1 unit tests for ValidationWarning and ValidationReport</description>
+        <patterns-to-reuse>
+          <pattern>Test dataclass instantiation with all parameters</pattern>
+          <pattern>Test message format() method output</pattern>
+          <pattern>Test attribute access (self.severity, self.category, etc.)</pattern>
+          <pattern>Test edge cases (with/without optional parameters)</pattern>
+        </patterns-to-reuse>
+      </example>
+
+      <example>
+        <file>tests/integration/test_validation_warnings.py</file>
+        <description>Story 5-1 integration test for validation in full pipeline</description>
+        <patterns-to-reuse>
+          <pattern>Create temporary workflow file with specific characteristics</pattern>
+          <pattern>Call analyze_workflow() and validate output</pattern>
+          <pattern>Test suppression flags work correctly</pattern>
+        </patterns-to-reuse>
+      </example>
+    </existing-test-examples>
+  </testing-context>
+
+  <implementation-guidance>
+    <guidance category="exception-module-enhancement">
+      <title>Enhance exceptions.py with complete hierarchy</title>
+      <current-state>
+        <detail>TemporalioGraphsError base class exists (line 7)</detail>
+        <detail>WorkflowParseError exists but needs enhancement (line 13, simple pass)</detail>
+        <detail>GraphGenerationError exists but needs enhancement (line 26, simple pass)</detail>
+        <detail>InvalidSignalError exists from Epic 4 (line 38, has __init__)</detail>
+      </current-state>
+      <modifications>
+        <step>1. Enhance WorkflowParseError with complete __init__ method</step>
+        <step>2. Add parameters: file_path: Path, line: int, message: str, suggestion: str</step>
+        <step>3. Store all parameters as instance attributes</step>
+        <step>4. Build formatted message: f"Cannot parse workflow file: {file_path}\nLine {line}: {message}\nSuggestion: {suggestion}"</step>
+        <step>5. Call super().__init__(formatted_message)</step>
+        <step>6. Add complete Google-style docstring with Args, Attributes, Example</step>
+        <step>7. Add UnsupportedPatternError class after WorkflowParseError</step>
+        <step>8. Implement __init__(pattern: str, suggestion: str, line: Optional[int] = None)</step>
+        <step>9. Store pattern, suggestion, line as attributes</step>
+        <step>10. Build formatted message with optional line number</step>
+        <step>11. Enhance GraphGenerationError with __init__(reason: str, context: Optional[dict] = None)</step>
+        <step>12. Store reason and context as attributes</step>
+        <step>13. Build formatted message with optional context dict</step>
+        <step>14. Add InvalidDecisionError class after GraphGenerationError</step>
+        <step>15. Implement __init__(function: str, issue: str, suggestion: str)</step>
+        <step>16. Store function, issue, suggestion as attributes</step>
+        <step>17. Build formatted message: f"Invalid {function} usage: {issue}\nSuggestion: {suggestion}"</step>
+        <step>18. Add complete type hints to all parameters and attributes</step>
+        <step>19. Add Google-style docstrings to all classes with examples</step>
+      </modifications>
+    </guidance>
+
+    <guidance category="analyzer-integration">
+      <title>Integrate exceptions into analyze_workflow</title>
+      <location>src/temporalio_graphs/analyzer.py (analyze_workflow function)</location>
+      <modifications>
+        <step>1. Import all exception classes from temporalio_graphs.exceptions</step>
+        <step>2. After line 132 (workflow_path = Path(workflow_file)), add file validation</step>
+        <step>3. Wrap path.exists() check with try/except for FileNotFoundError</step>
+        <step>4. If file not found: raise WorkflowParseError(file_path=workflow_path, line=0, message="Workflow file not found", suggestion="Verify file path is correct") from e</step>
+        <step>5. Wrap path.read_text() check with try/except for PermissionError</step>
+        <step>6. If permission denied: raise WorkflowParseError(file_path=workflow_path, line=0, message="Cannot read file (permission denied)", suggestion="Check file permissions") from e</step>
+        <step>7. Note: AST parsing happens in WorkflowAnalyzer.analyze(), not here</step>
+        <step>8. Update docstring Raises section to list all exception types</step>
+      </modifications>
+    </guidance>
+
+    <guidance category="workflow-analyzer-integration">
+      <title>Integrate exceptions into WorkflowAnalyzer</title>
+      <location>src/temporalio_graphs/analyzer.py (WorkflowAnalyzer class)</location>
+      <modifications>
+        <step>1. Import WorkflowParseError from temporalio_graphs.exceptions</step>
+        <step>2. In analyze() method, wrap ast.parse(source) with try/except for SyntaxError</step>
+        <step>3. On SyntaxError as e: raise WorkflowParseError(file_path=workflow_path, line=e.lineno or 0, message=f"Invalid Python syntax: {e.msg}", suggestion="Check workflow file for syntax errors") from e</step>
+        <step>4. After AST traversal (self.visit(tree)), check if self._workflow_class is None</step>
+        <step>5. If None: raise WorkflowParseError(file_path=workflow_path, line=0, message="Missing @workflow.defn decorator", suggestion="Add @workflow.defn decorator to workflow class")</step>
+        <step>6. Check if self._workflow_run_method is None</step>
+        <step>7. If None: raise WorkflowParseError(file_path=workflow_path, line=self._line_numbers.get("workflow_class", 0), message="Missing @workflow.run method", suggestion="Add @workflow.run method to workflow class")</step>
+      </modifications>
+    </guidance>
+
+    <guidance category="path-generator-integration">
+      <title>Integrate exceptions into PathPermutationGenerator</title>
+      <location>src/temporalio_graphs/generator.py (PathPermutationGenerator class)</location>
+      <modifications>
+        <step>1. Import GraphGenerationError from temporalio_graphs.exceptions</step>
+        <step>2. In generate_paths() method, after extracting decision_points from metadata</step>
+        <step>3. Calculate decision_count = len(metadata.decision_points)</step>
+        <step>4. Calculate total_paths = 2 ** decision_count</step>
+        <step>5. Check if decision_count greater than context.max_decision_points</step>
+        <step>6. If exceeded: build reason string with suggestion</step>
+        <step>7. Build context dict: {"decision_count": decision_count, "limit": context.max_decision_points, "paths": total_paths}</step>
+        <step>8. Raise GraphGenerationError(reason=reason, context=context_dict)</step>
+        <step>9. Reason format: f"Too many decision points ({decision_count}) would generate {total_paths} paths (limit: {context.max_decision_points}). Suggestion: Refactor workflow to reduce decisions or increase max_decision_points"</step>
+      </modifications>
+    </guidance>
+
+    <guidance category="public-api-exports">
+      <title>Export exceptions from __init__.py</title>
+      <location>src/temporalio_graphs/__init__.py</location>
+      <modifications>
+        <step>1. Add import statement after line 20 (after validator imports)</step>
+        <step>2. Import: from temporalio_graphs.exceptions import TemporalioGraphsError, WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</step>
+        <step>3. Add all exception classes to __all__ list (lines 24-31)</step>
+        <step>4. Total exports should be 11: GraphBuildingContext, analyze_workflow, to_decision, wait_condition, ValidationWarning, ValidationReport, TemporalioGraphsError, WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</step>
+        <step>5. Update module docstring to mention error handling features</step>
+        <step>6. Verify imports work: from temporalio_graphs import WorkflowParseError</step>
+      </modifications>
+    </guidance>
+
+    <guidance category="testing-strategy">
+      <title>Comprehensive testing approach</title>
+      <unit-tests>
+        <file>tests/test_exceptions.py</file>
+        <tests>
+          <test name="test_base_exception">Instantiate TemporalioGraphsError with message, verify inheritance</test>
+          <test name="test_workflow_parse_error_format">Create with all parameters, verify formatted message contains file path, line, message, suggestion</test>
+          <test name="test_workflow_parse_error_attributes">Verify file_path, line, message, suggestion accessible</test>
+          <test name="test_unsupported_pattern_error_with_line">Create with line number, verify format includes line</test>
+          <test name="test_unsupported_pattern_error_without_line">Create without line, verify format excludes line</test>
+          <test name="test_graph_generation_error_with_context">Create with context dict, verify context in message</test>
+          <test name="test_graph_generation_error_without_context">Create without context, verify format</test>
+          <test name="test_invalid_decision_error">Create for to_decision, verify function name in message</test>
+          <test name="test_exception_inheritance">Verify all exceptions inherit from TemporalioGraphsError and Exception</test>
+          <test name="test_exception_chaining">Verify raise ... from e preserves original exception</test>
+        </tests>
+      </unit-tests>
+
+      <integration-tests>
+        <file>tests/integration/test_error_handling.py</file>
+        <tests>
+          <test name="test_missing_decorator_error">Create workflow without @workflow.defn, verify WorkflowParseError raised with correct message</test>
+          <test name="test_syntax_error">Create workflow with invalid Python syntax, verify WorkflowParseError with line number</test>
+          <test name="test_file_not_found">Call analyze_workflow with non-existent path, verify WorkflowParseError</test>
+          <test name="test_path_explosion_error">Create workflow with 15 decisions, verify GraphGenerationError with suggestion</test>
+          <test name="test_error_messages_helpful">Verify all error messages contain "Suggestion:" keyword</test>
+          <test name="test_exception_catching">Verify exceptions can be caught separately and with TemporalioGraphsError base</test>
+        </tests>
+      </integration-tests>
+
+      <performance-tests>
+        <file>tests/test_performance.py</file>
+        <tests>
+          <test name="test_exception_creation_performance">
+            <description>Verify exception creation completes in less than 1ms per exception</description>
+            <implementation>
+              <step>Create 100 WorkflowParseError instances with mock parameters</step>
+              <step>Measure: start = time.perf_counter()</step>
+              <step>Create all 100 exceptions</step>
+              <step>Measure: duration = time.perf_counter() - start</step>
+              <step>Assert duration less than 0.001 (1ms total)</step>
+            </implementation>
+          </test>
+        </tests>
+      </performance-tests>
+    </guidance>
+  </implementation-guidance>
+
+  <validation-checklist>
+    <item category="code-quality">All new code passes mypy --strict with zero errors</item>
+    <item category="code-quality">All new code passes ruff check with zero errors</item>
+    <item category="code-quality">All new code formatted with ruff format</item>
+    <item category="testing">Minimum 10 unit tests in test_exceptions.py, all passing</item>
+    <item category="testing">Minimum 4 integration tests in test_error_handling.py, all passing</item>
+    <item category="testing">Performance test validates less than 1ms per exception requirement</item>
+    <item category="testing">Test coverage for exceptions.py above 80% (target 100%)</item>
+    <item category="testing">All Epic 2-5.1 regression tests still pass (backward compatibility)</item>
+    <item category="functionality">TemporalioGraphsError base exception exists</item>
+    <item category="functionality">WorkflowParseError enhanced with file_path, line, message, suggestion parameters</item>
+    <item category="functionality">UnsupportedPatternError implemented with pattern, suggestion, optional line</item>
+    <item category="functionality">GraphGenerationError enhanced with reason and optional context dict</item>
+    <item category="functionality">InvalidDecisionError implemented with function, issue, suggestion</item>
+    <item category="functionality">All exceptions store parameters as instance attributes</item>
+    <item category="functionality">All exceptions build formatted multi-line messages</item>
+    <item category="functionality">All exceptions include actionable suggestions</item>
+    <item category="functionality">analyze_workflow wraps file operations with try/except</item>
+    <item category="functionality">WorkflowAnalyzer raises WorkflowParseError for missing decorators</item>
+    <item category="functionality">WorkflowAnalyzer wraps ast.parse with try/except for SyntaxError</item>
+    <item category="functionality">PathPermutationGenerator raises GraphGenerationError for path explosion</item>
+    <item category="functionality">All exception integrations use raise...from for exception chaining</item>
+    <item category="api">All exception classes exported in __init__.py</item>
+    <item category="api">Total exports in __all__ is 11 (6 existing + 5 exception classes)</item>
+    <item category="api">Public API imports work: from temporalio_graphs import WorkflowParseError</item>
+    <item category="documentation">All exception classes have Google-style docstrings</item>
+    <item category="documentation">Docstrings include Args, Attributes, Example sections</item>
+    <item category="documentation">analyze_workflow docstring updated with Raises section</item>
+    <item category="performance">Exception creation less than 1ms (verified by test)</item>
+    <item category="performance">No file I/O or network calls during exception creation</item>
+  </validation-checklist>
+
+  <warnings-and-gaps>
+    <warning category="incomplete-error-detection">
+      <description>UnsupportedPatternError defined but not yet raised anywhere (loops, dynamic activities)</description>
+      <impact>Low - UnsupportedPatternError will be used in future enhancements when loop/reflection detection added</impact>
+      <mitigation>Exception is ready for use when pattern detection implemented in future stories</mitigation>
+    </warning>
+
+    <warning category="missing-documentation">
+      <description>README.md does not yet document error handling features</description>
+      <impact>Medium - Users won't know about exception types until Story 5.5 (documentation)</impact>
+      <mitigation>Story 5.5 will add comprehensive documentation including error handling section and troubleshooting guide</mitigation>
+    </warning>
+
+    <gap category="renderer-error-handling">
+      <description>Story 5.2 does not integrate exceptions into MermaidRenderer</description>
+      <impact>Low - Renderer failures are rare, can be added as future enhancement</impact>
+      <resolution>Future story can add GraphGenerationError to renderer for rendering failures</resolution>
+    </gap>
+
+    <gap category="helper-function-validation">
+      <description>InvalidDecisionError defined but not yet raised in to_decision() or wait_condition()</description>
+      <impact>Low - Helper function validation can be added in future enhancements</impact>
+      <resolution>Future story can add validation logic to helpers.py to raise InvalidDecisionError for incorrect usage</resolution>
+    </gap>
+  </warnings-and-gaps>
+
+  <reference-implementations>
+    <reference>
+      <name>InvalidSignalError from Epic 4</name>
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <lines>38-62</lines>
+      <pattern>Exception __init__ with file_path, line, message parameters. Builds formatted message. Stores attributes.</pattern>
+      <apply-to>WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError</apply-to>
+    </reference>
+
+    <reference>
+      <name>ValidationWarning from Story 5-1</name>
+      <file>src/temporalio_graphs/validator.py</file>
+      <lines>Lines with ValidationWarning dataclass</lines>
+      <pattern>Frozen dataclass with format() method for human-readable output. Multi-line formatting with icon, category, message, suggestion.</pattern>
+      <apply-to>Exception message formatting pattern (multi-line, clear sections)</apply-to>
+    </reference>
+
+    <reference>
+      <name>WorkflowAnalyzer.analyze method</name>
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <lines>74-238 (analyze method)</lines>
+      <pattern>Pipeline orchestration with validation checks. Uses self._workflow_class to track state. Raises exceptions on validation failures.</pattern>
+      <apply-to>Integration of WorkflowParseError for missing decorators</apply-to>
+    </reference>
+
+    <reference>
+      <name>PathPermutationGenerator.generate_paths method</name>
+      <file>src/temporalio_graphs/generator.py</file>
+      <lines>generate_paths method</lines>
+      <pattern>Decision count calculation (len(metadata.decision_points)), path explosion checking, raising GraphGenerationError</pattern>
+      <apply-to>Integration of GraphGenerationError for path explosion</apply-to>
+    </reference>
+
+    <reference>
+      <name>Story 5-1 test patterns</name>
+      <file>tests/test_validator.py</file>
+      <lines>All tests</lines>
+      <pattern>Unit test organization: one test class per data model, test creation/format/attributes/edge cases</pattern>
+      <apply-to>test_exceptions.py unit test structure (one test per exception type)</apply-to>
+    </reference>
+  </reference-implementations>
+
+  <next-steps>
+    <step order="1">Review this Story Context XML to ensure all necessary information is captured</step>
+    <step order="2">Begin implementation with Task 1: Create exceptions module structure (base exception already exists)</step>
+    <step order="3">Implement Task 2-5: Enhance/create all exception classes (WorkflowParseError, UnsupportedPatternError, GraphGenerationError, InvalidDecisionError)</step>
+    <step order="4">Implement Task 6: Integrate exceptions into analyze_workflow (file validation)</step>
+    <step order="5">Implement Task 7: Integrate exceptions into WorkflowAnalyzer (missing decorators, syntax errors)</step>
+    <step order="6">Implement Task 8: Integrate exceptions into PathPermutationGenerator (path explosion)</step>
+    <step order="7">Implement Task 9: Export exceptions from public API (__init__.py)</step>
+    <step order="8">Implement Task 10: Create comprehensive unit tests (test_exceptions.py)</step>
+    <step order="9">Implement Task 11: Create integration tests (test_error_handling.py)</step>
+    <step order="10">Implement Task 12: Documentation and final validation (README update, full test suite)</step>
+    <step order="11">Mark story as review after all ACs validated</step>
+    <step order="12">After SM review approval, mark story as done and update sprint-status.yaml</step>
+  </next-steps>
+</story-context>

@@ -56,6 +56,8 @@ This establishes the base architecture with these decisions:
 | Path Tracking | GraphPath class | - | Core Graph Generation | Tracks single execution path. Efficient step storage. |
 | AST Analysis | WorkflowAnalyzer (ast.NodeVisitor) | - | Core Graph Generation | Visits workflow AST nodes. Detects activities/decisions. |
 | Decision Detection | DecisionDetector | - | Decision Node Support | Identifies to_decision() calls, extracts names/branches. |
+| Child Workflow Detection | ChildWorkflowDetector | - | Cross-Workflow Visualization | Identifies execute_child_workflow() calls, extracts workflow names. |
+| Call Graph Analysis | WorkflowCallGraphAnalyzer | - | Cross-Workflow Visualization | Orchestrates multi-workflow analysis, builds workflow call graphs. |
 | Path Generation | PathPermutationGenerator | - | Core Graph Generation | Generates 2^n paths for n decisions. Explosion safeguards. |
 | Output Rendering | MermaidRenderer | - | Graph Output, Output Format Compliance | Generates valid Mermaid flowchart syntax. |
 | Workflow Helpers | to_decision, wait_condition | - | Decision Node Support, Signal Support | Async functions injected into workflow. Marker for static analysis. |
@@ -91,8 +93,13 @@ temporalio-graphs/
 │   │   └── expected_output.md # Expected Mermaid diagram
 │   ├── simple_linear/
 │   │   └── workflow.py        # Linear workflow (no decisions)
-│   └── multi_decision/
-│       └── workflow.py        # Complex branching example
+│   ├── multi_decision/
+│   │   └── workflow.py        # Complex branching example
+│   └── parent_child_workflow/ # Epic 6: Cross-workflow example
+│       ├── parent_workflow.py # Parent workflow with child calls
+│       ├── child_workflow.py  # Child workflow
+│       ├── run.py             # Example runner
+│       └── expected_output.md # Expected end-to-end diagram
 ├── src/
 │   └── temporalio_graphs/
 │       ├── __init__.py        # Public API exports
@@ -101,7 +108,8 @@ temporalio-graphs/
 │       ├── context.py         # GraphBuildingContext dataclass
 │       ├── path.py            # GraphPath class
 │       ├── analyzer.py        # WorkflowAnalyzer (AST visitor)
-│       ├── detector.py        # DecisionDetector
+│       ├── detector.py        # DecisionDetector, ChildWorkflowDetector
+│       ├── call_graph_analyzer.py  # WorkflowCallGraphAnalyzer (Epic 6)
 │       ├── generator.py       # PathPermutationGenerator
 │       ├── renderer.py        # MermaidRenderer
 │       ├── helpers.py         # to_decision, wait_condition
@@ -109,7 +117,7 @@ temporalio-graphs/
 │       └── _internal/
 │           ├── __init__.py
 │           ├── ast_utils.py   # AST helper functions
-│           └── graph_models.py # GraphNode, GraphEdge dataclasses
+│           └── graph_models.py # GraphNode, GraphEdge, ChildWorkflowCall, WorkflowCallGraph
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py            # Pytest fixtures
@@ -117,6 +125,7 @@ temporalio-graphs/
 │   ├── test_path.py
 │   ├── test_analyzer.py
 │   ├── test_detector.py
+│   ├── test_call_graph_analyzer.py  # Epic 6 tests
 │   ├── test_generator.py
 │   ├── test_renderer.py
 │   ├── test_helpers.py
@@ -124,7 +133,8 @@ temporalio-graphs/
 │   ├── integration/
 │   │   ├── test_money_transfer.py
 │   │   ├── test_simple_linear.py
-│   │   └── test_multi_decision.py
+│   │   ├── test_multi_decision.py
+│   │   └── test_parent_child_workflow.py  # Epic 6 integration test
 │   └── fixtures/
 │       ├── sample_workflows/  # Test workflow files
 │       └── expected_outputs/  # Golden files for regression
@@ -152,6 +162,7 @@ temporalio-graphs/
 | **Output Format Compliance** | FR51-FR55: Valid Mermaid, match .NET structure, naming conventions | renderer.py (syntax generation) | Mermaid validation via rendering tests. .NET comparison in regression tests. |
 | **Examples & Documentation** | FR56-FR60: MoneyTransfer example, simple/multi-decision examples, README | examples/ directory, README.md, docstrings | Port .NET MoneyTransfer workflow. Include progressive examples. |
 | **Error Handling** | FR61-FR65: Clear errors, pattern warnings, suggestions, validation | exceptions.py, analyzer.py (error detection), detector.py (warnings) | Exception hierarchy with context. Actionable error messages. Validation mode for dry-run. |
+| **Cross-Workflow Visualization** | FR66-FR73: Detect child workflows, multi-workflow analysis, end-to-end paths, call graph rendering | call_graph_analyzer.py (WorkflowCallGraphAnalyzer), detector.py (ChildWorkflowDetector), renderer.py (subgraph support) | Epic 6. Analyzes parent-child workflow relationships. Generates end-to-end flow diagrams spanning multiple workflows. Supports reference nodes, inline expansion, and subgraph rendering modes. |
 
 ## Technology Stack Details
 
@@ -538,6 +549,9 @@ class GraphBuildingContext:
     decision_false_label: str = "no"
     signal_success_label: str = "Signaled"
     signal_timeout_label: str = "Timeout"
+    # Epic 6: Cross-workflow visualization settings
+    child_workflow_expansion: Literal["reference", "inline", "subgraph"] = "reference"
+    max_expansion_depth: int = 2  # Prevent infinite recursion
 
 class NodeType(Enum):
     """Graph node types."""
@@ -546,6 +560,7 @@ class NodeType(Enum):
     ACTIVITY = "activity"
     DECISION = "decision"
     SIGNAL = "signal"
+    CHILD_WORKFLOW = "child_workflow"  # Epic 6
 
 @dataclass
 class GraphNode:
@@ -567,6 +582,8 @@ class GraphNode:
             return f"{self.node_id}{{{self.display_name}}}"
         elif self.node_type == NodeType.SIGNAL:
             return f"{self.node_id}{{{{{self.display_name}}}}}"
+        elif self.node_type == NodeType.CHILD_WORKFLOW:
+            return f"{self.node_id}[[{self.display_name}]]"  # Epic 6: Double brackets for child workflow
 
 @dataclass
 class GraphEdge:
@@ -616,6 +633,35 @@ class WorkflowMetadata:
     signal_points: list[str]
     source_file: Path
     total_paths: int  # 2^n for n decisions
+
+# Epic 6: Cross-Workflow Data Models
+
+@dataclass
+class ChildWorkflowCall:
+    """Represents a child workflow invocation point."""
+    workflow_name: str  # e.g., "ProcessPayment"
+    workflow_file: Optional[Path]  # Path to child workflow source (resolved during analysis)
+    call_site_line: int  # Line number where execute_child_workflow was called
+    call_id: str  # Unique identifier for this call
+    parent_workflow: str  # Name of parent workflow
+
+@dataclass
+class WorkflowCallGraph:
+    """Represents the complete parent-child workflow relationship graph."""
+    root_workflow: WorkflowMetadata  # Entry point workflow
+    child_workflows: dict[str, WorkflowMetadata]  # workflow_name -> metadata
+    call_relationships: list[tuple[str, str]]  # (parent_name, child_name) pairs
+    all_child_calls: list[ChildWorkflowCall]  # All child workflow calls across the graph
+    total_workflows: int  # Total number of workflows in graph
+
+@dataclass
+class MultiWorkflowPath:
+    """Execution path spanning multiple workflows."""
+    path_id: str
+    workflows: list[str]  # Ordered list of workflow names traversed in this path
+    steps: list[str]  # All steps including cross-workflow boundaries
+    workflow_transitions: list[tuple[int, str, str]]  # (step_idx, from_workflow, to_workflow)
+    total_decisions: int  # Total decisions across all workflows in path
 ```
 
 ### Data Flow
@@ -678,7 +724,7 @@ MermaidDiagram (1) ──< (n) GraphNode
 
 ## API Contracts
 
-### Primary Entry Point
+### Primary Entry Points
 
 ```python
 def analyze_workflow(
@@ -686,7 +732,7 @@ def analyze_workflow(
     context: Optional[GraphBuildingContext] = None,
     output_format: Literal["mermaid", "json", "paths"] = "mermaid"
 ) -> str:
-    """Analyze workflow source file and return graph representation.
+    """Analyze a single workflow source file and return graph representation.
 
     Args:
         workflow_file: Path to Python workflow source file
@@ -705,6 +751,51 @@ def analyze_workflow(
         >>> from temporalio_graphs import analyze_workflow
         >>> result = analyze_workflow("my_workflow.py")
         >>> print(result)  # Mermaid diagram
+    """
+
+def analyze_workflow_graph(
+    entry_workflow: Path | str,
+    workflow_search_paths: Optional[list[Path | str]] = None,
+    context: Optional[GraphBuildingContext] = None,
+    output_format: Literal["mermaid", "json", "paths"] = "mermaid"
+) -> str:
+    """Analyze workflow and all child workflows for end-to-end visualization.
+
+    Epic 6: Cross-Workflow Visualization
+
+    This function analyzes a parent workflow and recursively discovers and analyzes
+    all child workflows it calls via execute_child_workflow(). The result is a
+    complete end-to-end flow diagram showing execution paths across workflow boundaries.
+
+    Args:
+        entry_workflow: Path to the entry point (parent) workflow file
+        workflow_search_paths: Optional list of directories to search for child workflows.
+                               If None, searches in the same directory as entry_workflow.
+        context: Optional configuration (uses defaults if None)
+        output_format: Output format - "mermaid" (default), "json", or "paths"
+
+    Returns:
+        Complete workflow graph visualization as string in requested format
+
+    Raises:
+        WorkflowParseError: If any workflow file cannot be parsed
+        ChildWorkflowNotFoundError: If child workflow file cannot be located
+        GraphGenerationError: If graph cannot be generated
+        CircularWorkflowError: If circular workflow references detected
+
+    Example:
+        >>> from temporalio_graphs import analyze_workflow_graph
+        >>> result = analyze_workflow_graph(
+        ...     "parent_workflow.py",
+        ...     workflow_search_paths=["./workflows", "./child_workflows"]
+        ... )
+        >>> print(result)  # End-to-end Mermaid diagram with all workflows
+
+    Note:
+        The visualization mode is controlled by context.child_workflow_expansion:
+        - "reference" (default): Child workflows shown as single nodes
+        - "inline": Child workflow content expanded into parent paths
+        - "subgraph": Child workflows shown as Mermaid subgraphs
     """
 ```
 
@@ -788,6 +879,26 @@ class GraphGenerationError(TemporalioGraphsError):
 class InvalidDecisionError(TemporalioGraphsError):
     """Raised when to_decision() is used incorrectly."""
     pass
+
+# Epic 6: Cross-Workflow Exceptions
+
+class ChildWorkflowNotFoundError(TemporalioGraphsError):
+    """Raised when child workflow file cannot be located."""
+    def __init__(self, workflow_name: str, search_paths: list[Path]):
+        paths_str = ", ".join(str(p) for p in search_paths)
+        super().__init__(
+            f"Child workflow '{workflow_name}' not found in search paths: {paths_str}\n"
+            f"Suggestion: Ensure child workflow file exists and is in one of the search paths"
+        )
+
+class CircularWorkflowError(TemporalioGraphsError):
+    """Raised when circular workflow references are detected."""
+    def __init__(self, workflow_chain: list[str]):
+        chain_str = " -> ".join(workflow_chain)
+        super().__init__(
+            f"Circular workflow reference detected: {chain_str}\n"
+            f"Suggestion: Remove circular dependency between workflows"
+        )
 ```
 
 ## Security Architecture
@@ -1499,6 +1610,88 @@ Use pytest with pytest-cov, enforce 80% minimum coverage in CI, target 100% for 
 
 ---
 
+### ADR-011: Cross-Workflow Visualization Strategy
+
+**Context:**
+Epic 6 adds support for visualizing parent-child workflow relationships via `execute_child_workflow()` calls. The library must generate end-to-end flow diagrams showing execution paths that span multiple workflows. Need to decide how to represent cross-workflow relationships in Mermaid diagrams.
+
+**Decision:**
+Implement a **hybrid approach** with three visualization modes controlled by `GraphBuildingContext.child_workflow_expansion`:
+
+1. **"reference" mode (default):** Child workflows appear as special nodes (double-bracket syntax `[[ChildWorkflow]]`) in the parent diagram. Each workflow gets its own separate diagram.
+2. **"inline" mode:** Child workflow content is expanded directly into parent execution paths (cross-product of parent × child paths).
+3. **"subgraph" mode:** Child workflows rendered as Mermaid subgraphs within parent diagram.
+
+**Rationale:**
+
+**Why Reference Mode as Default:**
+1. **Scalability:** Prevents path explosion (parent paths × child paths can grow exponentially)
+2. **Readability:** Large diagrams become unreadable; separate diagrams maintain clarity
+3. **Modularity:** Matches workflow architecture - workflows are separate units
+4. **Progressive Detail:** Users can drill down into specific workflows as needed
+
+**Why Support Inline Mode:**
+1. **True End-to-End:** Some users need complete execution flow in single view
+2. **Shallow Hierarchies:** Works well for workflows with 1-2 child calls
+3. **Documentation:** Useful for comprehensive documentation of simple flows
+
+**Why Support Subgraph Mode:**
+1. **Visual Grouping:** Shows workflow boundaries clearly in single diagram
+2. **Mermaid Native:** Leverages Mermaid's subgraph feature
+3. **Medium Complexity:** Good middle ground for 2-3 workflow levels
+
+**Implementation Details:**
+
+```python
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    # ... existing fields ...
+    child_workflow_expansion: Literal["reference", "inline", "subgraph"] = "reference"
+    max_expansion_depth: int = 2  # Prevent infinite recursion/explosion
+```
+
+**Safeguards:**
+- `max_expansion_depth` prevents runaway recursion and exponential blowup
+- Circular workflow detection raises `CircularWorkflowError`
+- Path explosion checks apply across all workflows in inline mode
+
+**Mermaid Syntax:**
+```mermaid
+# Reference mode (default)
+flowchart LR
+  s((Start)) --> Activity1 --> cw1[[ChildWorkflow]] --> Activity2 --> e((End))
+
+# Subgraph mode
+flowchart LR
+  subgraph ParentWorkflow
+    s((Start)) --> Activity1
+  end
+  subgraph ChildWorkflow
+    cs((Start)) --> ChildActivity --> ce((End))
+  end
+  Activity1 --> cs
+  ce --> Activity2
+```
+
+**Consequences:**
+- ✅ Flexible - users choose detail level based on use case
+- ✅ Scalable - reference mode prevents explosion by default
+- ✅ Clear - each mode has specific use case
+- ✅ Future-proof - can add more modes (e.g., "collapsible") later
+- ⚠️ More complex implementation - three rendering paths
+- ⚠️ Documentation needed - users must understand mode tradeoffs
+
+**Alternatives Considered:**
+
+1. **Reference Only:** Simpler implementation, but limiting for users who need end-to-end view
+2. **Inline Only:** Matches "end-to-end" request literally, but doesn't scale
+3. **Auto-detect:** Automatically choose mode based on complexity - rejected as too "magical", unpredictable behavior
+
+**Status:** Accepted ✅
+
+---
+
 _Generated by BMAD Decision Architecture Workflow v1.0_
 _Date: 2025-11-18_
+_Updated: 2025-11-19 (ADR-011 added)_
 _For: Luca_

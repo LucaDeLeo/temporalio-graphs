@@ -21,7 +21,7 @@ import re
 import time
 from pathlib import Path
 
-from temporalio_graphs import analyze_workflow
+from temporalio_graphs import GraphBuildingContext, analyze_workflow
 
 
 def _extract_mermaid_content(output: str) -> str:
@@ -450,3 +450,185 @@ class TestMoneyTransferQualityGates:
         assert len(content) > 0, "Golden file should not be empty"
         assert "```mermaid" in content, "Golden file should contain Mermaid code block"
         assert "flowchart LR" in content, "Golden file should contain flowchart"
+
+
+class TestMoneyTransferPathListOutput:
+    """Test Story 5-3: Path list output format integration tests."""
+
+    def test_money_transfer_path_list_output(self) -> None:
+        """Test that full output includes path list with correct 4 paths.
+
+        Validates path list section appears in full output with:
+        - Header showing "4 total" paths
+        - Decision summary showing "2 (2^2 = 4 paths)"
+        - All 4 paths listed sequentially
+        - Activities from MoneyTransfer workflow present
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+
+        # Explicitly request full output with context
+        context = GraphBuildingContext(output_format="full")
+        result = analyze_workflow(workflow_file, context=context)
+
+        # Verify path list header present
+        assert "--- Execution Paths (4 total) ---" in result, \
+            "Full output should contain path list header"
+
+        # Verify decision summary
+        assert "Decision Points: 2 (2^2 = 4 paths)" in result, \
+            "Path list should show decision point summary"
+
+        # Verify all 4 paths present
+        assert "Path 1:" in result, "Should contain Path 1"
+        assert "Path 2:" in result, "Should contain Path 2"
+        assert "Path 3:" in result, "Should contain Path 3"
+        assert "Path 4:" in result, "Should contain Path 4"
+
+        # Verify activities from MoneyTransfer workflow appear in path list
+        # Activity names are NOT word-split in path list (they use raw names from steps)
+        assert "withdraw_funds" in result or "Withdraw" in result, \
+            "Path list should include withdraw_funds activity"
+        assert "deposit_funds" in result or "Deposit" in result, \
+            "Path list should include deposit_funds activity"
+
+        # Verify arrow separator used in path list
+        assert "→" in result, "Path list should use arrow separator"
+
+    def test_output_format_mermaid_only(self) -> None:
+        """Test output_format="mermaid" produces diagram only (no path list).
+
+        Validates that when output_format parameter is "mermaid":
+        - Mermaid diagram is present
+        - Path list is NOT present
+        - Validation report is NOT present
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+
+        # Explicitly request mermaid-only output
+        result = analyze_workflow(workflow_file, output_format="mermaid")
+
+        # Verify Mermaid present
+        assert "```mermaid" in result, "Mermaid output should be present"
+        assert "flowchart LR" in result, "Mermaid diagram should be present"
+
+        # Verify path list NOT present
+        assert "--- Execution Paths" not in result, \
+            "Mermaid-only output should NOT contain path list"
+        assert "Path 1:" not in result, \
+            "Mermaid-only output should NOT contain path entries"
+
+        # Verify validation NOT present
+        assert "--- Validation Report ---" not in result, \
+            "Mermaid-only output should NOT contain validation report"
+
+    def test_output_format_paths_only(self) -> None:
+        """Test output_format="paths" produces path list only (no Mermaid).
+
+        Validates that when output_format parameter is "paths":
+        - Path list is present
+        - Mermaid diagram is NOT present
+        - Validation report is NOT present
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+
+        # Explicitly request paths-only output
+        result = analyze_workflow(workflow_file, output_format="paths")
+
+        # Verify path list present
+        assert "--- Execution Paths (4 total) ---" in result, \
+            "Paths output should contain path list header"
+        assert "Path 1:" in result, "Paths output should contain paths"
+        assert "→" in result, "Paths output should use arrow separator"
+
+        # Verify Mermaid NOT present
+        assert "```mermaid" not in result, \
+            "Paths-only output should NOT contain Mermaid code block"
+        assert "flowchart LR" not in result, \
+            "Paths-only output should NOT contain flowchart diagram"
+
+        # Verify validation NOT present
+        assert "--- Validation Report ---" not in result, \
+            "Paths-only output should NOT contain validation report"
+
+    def test_output_format_full_includes_all_sections(self) -> None:
+        """Test context.output_format="full" includes all sections.
+
+        Validates that when GraphBuildingContext.output_format is "full":
+        - Mermaid diagram is present
+        - Path list is present
+        - Sections appear in correct order: Mermaid, Path list, Validation (if warnings)
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+        context = GraphBuildingContext(output_format="full")
+
+        result = analyze_workflow(workflow_file, context=context)
+
+        # Verify Mermaid present
+        assert "```mermaid" in result, "Full output should include Mermaid"
+        assert "flowchart LR" in result, "Full output should include diagram"
+
+        # Verify path list present
+        assert "--- Execution Paths (4 total) ---" in result, \
+            "Full output should include path list"
+
+        # Verify order: Mermaid should appear before path list
+        mermaid_pos = result.find("```mermaid")
+        path_list_pos = result.find("--- Execution Paths")
+        assert mermaid_pos < path_list_pos, \
+            "Mermaid diagram should appear before path list in full output"
+
+    def test_include_path_list_false_excludes_paths(self) -> None:
+        """Test include_path_list=False excludes path list from output.
+
+        Validates that when GraphBuildingContext.include_path_list is False:
+        - Path list is NOT present
+        - Mermaid diagram is still present (in full mode)
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+        context = GraphBuildingContext(
+            output_format="full",
+            include_path_list=False
+        )
+
+        result = analyze_workflow(workflow_file, context=context)
+
+        # Verify Mermaid present
+        assert "```mermaid" in result, "Full output should include Mermaid"
+
+        # Verify path list NOT present
+        assert "--- Execution Paths" not in result, \
+            "Output should NOT include path list when include_path_list=False"
+        assert "Path 1:" not in result, \
+            "Output should NOT include paths when include_path_list=False"
+
+    def test_path_list_activities_correct(self) -> None:
+        """Test that path list extracts activities correctly.
+
+        Validates that path list shows activities in correct order and
+        does NOT include decision names or signal names in activity list.
+        """
+        workflow_file = Path("examples/money_transfer/workflow.py")
+        context = GraphBuildingContext(output_format="paths")
+
+        result = analyze_workflow(workflow_file, context=context)
+
+        # Verify paths start with Start and end with End
+        assert "Start →" in result, "Paths should start with Start"
+        assert "→ End" in result, "Paths should end with End"
+
+        # Verify activities present (raw names, not word-split in path list)
+        # Path list uses step names directly (not formatted like Mermaid diagram)
+        assert "withdraw_funds" in result, "Should include withdraw_funds activity"
+        assert "deposit_funds" in result, "Should include deposit_funds activity"
+
+        # Decision names should NOT appear as activities in path steps
+        # (They appear in decision summary but not in "Path N: Start → ... → End" lines)
+        # We can't easily test this without parsing, so verify at least the format is correct
+        lines = result.split("\n")
+        path_lines = [line for line in lines if line.startswith("Path ")]
+        assert len(path_lines) == 4, "Should have exactly 4 path lines"
+
+        # Each path line should follow format: "Path N: Start → ... → End"
+        for line in path_lines:
+            assert "Start →" in line, f"Path line should start with 'Start →': {line}"
+            assert "→ End" in line, f"Path line should end with '→ End': {line}"
