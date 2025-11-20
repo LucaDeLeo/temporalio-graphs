@@ -1,0 +1,35 @@
+---
+description: BMAD WORKTREE Workflow: worktree-sync
+globs: 
+alwaysApply: false
+---
+
+# Worktree Sync Workflow
+name: worktree-sync
+description: "Sync one or all worktrees with base branch to keep them up to date and prevent merge conflicts"
+author: "BMad"
+
+# Configuration sources
+config_source: "{project-root}/.bmad/worktree/config.yaml"
+bmm_config: "{project-root}/.bmad/bmm/config.yaml"
+
+# Critical variables from config
+worktree_root: "{config_source}:worktree_root"
+state_file: "{config_source}:state_file"
+default_base_branch: "{config_source}:default_base_branch"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+project_name: "{bmm_config}:project_name"
+date: system-generated
+
+# Workflow components
+installed_path: "{project-root}/.bmad/worktree/workflows/sync"
+instructions: "{installed_path}/instructions.md"
+
+# Variables and inputs
+variables:
+  worktree_name: null  # Specific worktree to sync, or null for all
+  sync_all: false      # Sync all worktrees flag
+  auto_stash: true     # Auto-stash uncommitted changes
+
+standalone: true

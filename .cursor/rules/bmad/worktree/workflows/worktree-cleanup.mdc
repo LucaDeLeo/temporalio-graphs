@@ -1,0 +1,36 @@
+---
+description: BMAD WORKTREE Workflow: worktree-cleanup
+globs: 
+alwaysApply: false
+---
+
+# Worktree Cleanup Workflow
+name: worktree-cleanup
+description: "Safely remove completed worktrees with merge verification and cleanup of tracking state"
+author: "BMad"
+
+# Configuration sources
+config_source: "{project-root}/.bmad/worktree/config.yaml"
+bmm_config: "{project-root}/.bmad/bmm/config.yaml"
+
+# Critical variables from config
+worktree_root: "{config_source}:worktree_root"
+state_file: "{config_source}:state_file"
+default_base_branch: "{config_source}:default_base_branch"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+project_name: "{bmm_config}:project_name"
+date: system-generated
+
+# Workflow components
+installed_path: "{project-root}/.bmad/worktree/workflows/cleanup"
+instructions: "{installed_path}/instructions.md"
+
+# Variables and inputs
+variables:
+  worktree_name: null   # Specific worktree to cleanup
+  force: false          # Force cleanup without merge verification
+  prune: false          # Prune stale tracking entries
+  delete_branch: true   # Delete branch after cleanup
+
+standalone: true

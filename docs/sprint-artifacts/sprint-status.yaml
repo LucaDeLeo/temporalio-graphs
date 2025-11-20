@@ -87,3 +87,12 @@ development_status:
   6-4-implement-end-to-end-path-generation-across-workflows: done  # APPROVED - Senior Developer Review Complete 2025-11-19
   6-5-add-integration-test-with-parent-child-workflow-example: done  # APPROVED - Senior Developer Review Complete 2025-11-19
   epic-6-retrospective: optional
+
+  # Epic 7: Peer-to-Peer Workflow Signaling (v0.3.0 Extension)
+  epic-7: backlog
+  7-1-implement-external-signal-detector: backlog
+  7-2-create-external-signal-call-data-model: backlog
+  7-3-integrate-external-signal-detection-into-analysis-pipeline: backlog
+  7-4-implement-mermaid-rendering-for-external-signals: backlog
+  7-5-add-peer-signal-workflow-example-and-documentation: backlog
+  epic-7-retrospective: optional

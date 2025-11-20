@@ -1,0 +1,22 @@
+```mermaid
+flowchart LR
+s((Start))
+currency_convert[currency_convert]
+d0{Need To Convert}
+d1{Is TFN_Known}
+deposit_funds[deposit_funds]
+notify_ato[notify_ato]
+take_non_resident_tax[take_non_resident_tax]
+withdraw_funds[withdraw_funds]
+e((End))
+s --> withdraw_funds
+withdraw_funds --> d0
+d0 -- no --> d1
+d1 -- no --> take_non_resident_tax
+take_non_resident_tax --> deposit_funds
+deposit_funds --> e
+d1 -- yes --> notify_ato
+notify_ato --> deposit_funds
+d0 -- yes --> currency_convert
+currency_convert --> d1
+```

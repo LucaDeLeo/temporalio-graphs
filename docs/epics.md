@@ -1517,6 +1517,165 @@ So that I can understand how to visualize multi-workflow applications.
 
 ---
 
+## Epic 7: Peer-to-Peer Workflow Signaling (v0.3.0 Extension)
+
+**Goal:** Enable visualization of asynchronous signal communication between independent Temporal workflows
+
+**Epic Value:** Python developers can visualize peer-to-peer workflow signaling where Workflow A sends external signals to Workflow B (independent workflows, async communication). This completes workflow interaction pattern coverage: Activities (Epic 2), Internal Signals (Epic 4), Parent-Child (Epic 6), and Peer-to-Peer (Epic 7).
+
+**FRs Covered:** FR74-FR81 (Peer-to-peer signal detection, visualization, and examples)
+
+### Story 7.1: Implement ExternalSignalDetector (AST Detection)
+
+**User Story:**
+As a library developer,
+I want to detect `get_external_workflow_handle()` and `.signal()` calls in workflow code,
+So that I can identify peer-to-peer signal communication for visualization.
+
+**Acceptance Criteria:**
+
+**Given** a workflow with external signal sends exists
+**When** ExternalSignalDetector analyzes the AST
+**Then** ExternalSignalDetector class exists in `src/temporalio_graphs/detector.py` (after ChildWorkflowDetector)
+**And** detector extends `ast.NodeVisitor` following established pattern (FR74)
+**And** detector implements `visit_Assign()` to track `get_external_workflow_handle()` calls
+**And** detector implements `visit_Await()` to detect `.signal()` calls on handles (FR75)
+**And** detector stores handle assignments: `{var_name: (target_pattern, line_number)}`
+**And** detector handles patterns: two-step, inline, format string, dynamic ID
+**And** detector extracts signal name from first argument of `.signal()` call (FR76)
+**And** detector extracts target workflow pattern (string literal, format string, or `<dynamic>`) (FR77)
+**And** detector generates deterministic signal node IDs: `ext_sig_{signal_name}_{line_number}`
+**And** detector has property `external_signals` returning `list[ExternalSignalCall]`
+**And** detector raises `WorkflowParseError` for invalid patterns with actionable suggestions
+**And** unit tests in `tests/test_detector.py` achieve 100% coverage for ExternalSignalDetector
+**And** all tests pass with no regressions in existing Epic 1-6 tests
+
+**Prerequisites:** Epic 6 complete (ChildWorkflowDetector pattern established)
+
+**Technical Notes:**
+- ~200 lines of code after line 756 in detector.py
+- AST detection: Assign nodes for handle creation, Await nodes for signal calls
+- Format string pattern extraction: JoinedStr → "prefix-{*}" pattern
+- Covers FR74, FR75, FR76, FR77
+
+### Story 7.2: Create ExternalSignalCall Data Model
+
+**User Story:**
+As a library developer,
+I want a type-safe data structure for external signal metadata,
+So that signal information flows correctly through the analysis pipeline.
+
+**Acceptance Criteria:**
+
+**Given** external signals are detected by ExternalSignalDetector
+**When** signal metadata is stored
+**Then** `ExternalSignalCall` dataclass exists in `src/temporalio_graphs/_internal/graph_models.py`
+**And** dataclass is frozen (immutable) per Architecture pattern
+**And** dataclass has fields: signal_name, target_workflow_pattern, source_line, node_id, source_workflow
+**And** dataclass has complete type hints (mypy strict compliant)
+**And** `NodeType` enum includes `EXTERNAL_SIGNAL = "external_signal"` value
+**And** `WorkflowMetadata` dataclass includes `external_signals: tuple[ExternalSignalCall, ...] = ()`
+**And** unit tests verify data model creation and immutability
+**And** all tests pass with mypy strict mode validation
+
+**Prerequisites:** Story 7.1 complete
+
+**Technical Notes:**
+- ~30 lines of code in graph_models.py
+- Add after ChildWorkflowCall dataclass
+- Covers FR74-FR77 (data model foundation)
+
+### Story 7.3: Integrate External Signal Detection into Analysis Pipeline
+
+**User Story:**
+As a library user,
+I want external signals to be detected automatically when I analyze workflows,
+So that peer-to-peer communication appears in my generated diagrams.
+
+**Acceptance Criteria:**
+
+**Given** ExternalSignalDetector and ExternalSignalCall exist
+**When** WorkflowAnalyzer processes a workflow file
+**Then** `WorkflowAnalyzer` in `analyzer.py` instantiates `ExternalSignalDetector`
+**And** analyzer runs `detector.visit(tree)` alongside other detectors
+**And** analyzer collects external signals into `WorkflowMetadata`
+**And** PathPermutationGenerator handles external signals as sequential nodes (no branching)
+**And** integration test validates workflow analysis includes external signals
+**And** existing Epic 1-6 integration tests still pass (no regressions)
+**And** test coverage remains >=80%
+
+**Prerequisites:** Story 7.2 complete
+
+**Technical Notes:**
+- ~10 lines in analyzer.py, ~20 lines in generator.py
+- ~100 lines of integration test code
+- Covers FR74-FR77 (end-to-end detection)
+
+### Story 7.4: Implement Mermaid Rendering for External Signals
+
+**User Story:**
+As a library user,
+I want external signals to appear as distinct trapezoid shapes in Mermaid diagrams,
+So that I can visually distinguish peer-to-peer signals from other workflow patterns.
+
+**Acceptance Criteria:**
+
+**Given** paths contain external signal nodes
+**When** Mermaid rendering runs
+**Then** `MermaidRenderer` in `renderer.py` handles `NodeType.EXTERNAL_SIGNAL`
+**And** external signal nodes render with trapezoid syntax: `node_id[/Signal Name\\]` (FR78)
+**And** signal labels show target pattern: `[/Signal 'ship_order' to shipping-{*}\\]` (FR80)
+**And** external signal edges render with dashed style: `-.signal.->` (FR79)
+**And** external signal nodes have orange/amber color styling
+**And** generated Mermaid is valid and renders in Mermaid Live Editor
+**And** `GraphBuildingContext` includes configuration options:
+  - `show_external_signals: bool = True`
+  - `external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"`
+**And** unit tests validate trapezoid shape, dashed edges, and styling
+**And** rendering completes in <1ms for graphs with 10 external signals
+
+**Prerequisites:** Story 7.3 complete
+
+**Technical Notes:**
+- ~30 lines in renderer.py, ~5 lines in context.py
+- Trapezoid shape: `[/label\\]`, dashed edge: `-.signal.->`
+- Color: `style sig1 fill:#fff4e6,stroke:#ffa500`
+- Covers FR78, FR79, FR80
+
+### Story 7.5: Add Peer Signal Workflow Example & Documentation
+
+**User Story:**
+As a library user,
+I want a complete example of peer-to-peer workflow signaling,
+So that I can understand how to visualize workflows that signal each other.
+
+**Acceptance Criteria:**
+
+**Given** external signal support is fully implemented
+**When** peer signal example is analyzed
+**Then** `examples/peer_signal_workflow/` directory exists
+**And** `order_workflow.py` exists with Order workflow that sends external signal
+**And** `shipping_workflow.py` exists with Shipping workflow that receives signal
+**And** `run.py` demonstrates analyzing both workflows
+**And** `expected_output.md` contains golden Mermaid diagram (FR81)
+**And** integration test validates Order workflow analysis shows trapezoid signal node
+**And** README.md updated with "Peer-to-Peer Workflow Signaling" section
+**And** `docs/architecture.md` updated with ADR-012: Peer-to-Peer Signal Detection
+**And** CHANGELOG.md updated with Epic 7 changes
+**And** pyproject.toml version updated to `0.3.0`
+**And** all documentation examples are tested and working
+
+**Prerequisites:** Story 7.4 complete
+
+**Technical Notes:**
+- ~200 lines of example code (Order + Shipping workflows)
+- ~100 lines of integration test
+- ~150 lines of documentation updates
+- Example: `workflow.get_external_workflow_handle(f"shipping-{order_id}").signal("ship_order", order_id)`
+- Covers FR81
+
+---
+
 ## FR Coverage Matrix
 
 Complete mapping of all 73 FRs to specific stories:
@@ -1596,10 +1755,19 @@ Complete mapping of all 73 FRs to specific stories:
 | FR71 | Render workflow call graphs | 6.3 | Parent-child relationships |
 | FR72 | Child workflow node navigation/linking | 6.5 | Graph references |
 | FR73 | Parent-child workflow example | 6.5 | Integration example |
+| FR74 | Detect `get_external_workflow_handle()` calls | 7.1 | AST visit_Assign detection |
+| FR75 | Detect `.signal()` calls on external handles | 7.1 | AST visit_Await detection |
+| FR76 | Extract signal names from `.signal()` calls | 7.1 | Argument extraction |
+| FR77 | Extract target workflow patterns | 7.1 | String literal, f-string, or dynamic |
+| FR78 | Render external signal nodes as trapezoids | 7.4 | `[/SignalName\\]` syntax |
+| FR79 | Render external signal edges as dashed lines | 7.4 | `-.signal.->` syntax |
+| FR80 | Display target workflow pattern in signal labels | 7.4 | Label formatting with pattern |
+| FR81 | Peer-to-peer workflow example (Order → Shipping) | 7.5 | Integration example |
 
-**All 73 FRs mapped to implementation stories.**
+**All 81 FRs mapped to implementation stories.**
 **Core MVP (65 FRs):** FR1-FR65 across Epics 1-5
-**MVP Extension (8 FRs):** FR66-FR73 in Epic 6
+**v0.2.0 Extension (8 FRs):** FR66-FR73 in Epic 6
+**v0.3.0 Extension (8 FRs):** FR74-FR81 in Epic 7
 
 ---
 
@@ -1607,19 +1775,21 @@ Complete mapping of all 73 FRs to specific stories:
 
 ### Epic Breakdown Complete
 
-✅ **6 Epics Created:**
+✅ **7 Epics Created:**
 1. Foundation & Project Setup (1 story)
 2. Basic Graph Generation (8 stories)
 3. Decision Node Support (5 stories)
 4. Signal & Wait Condition Support (4 stories)
 5. Production Readiness (5 stories)
-6. Cross-Workflow Visualization (5 stories) - MVP Extension
+6. Cross-Workflow Visualization (5 stories) - v0.2.0 MVP Extension
+7. Peer-to-Peer Workflow Signaling (5 stories) - v0.3.0 Extension
 
-✅ **28 Stories Total** - Each sized for single dev agent completion
+✅ **33 Stories Total** - Each sized for single dev agent completion
 
-✅ **73 FRs Fully Covered** - All functional requirements mapped to stories
+✅ **81 FRs Fully Covered** - All functional requirements mapped to stories
   - Core MVP: 65 FRs (Epics 1-5)
-  - Extension: 8 FRs (Epic 6)
+  - v0.2.0 Extension: 8 FRs (Epic 6)
+  - v0.3.0 Extension: 8 FRs (Epic 7)
 
 ✅ **Architecture Integrated** - Static analysis approach, uv, mypy strict, src/ layout, performance targets
 
@@ -1630,6 +1800,7 @@ Complete mapping of all 73 FRs to specific stories:
 - Epic 4: **Visualize wait conditions** (signal support added)
 - Epic 5: **Production-grade library** (robust, documented, tested) - v0.1.0 Core MVP
 - Epic 6: **Visualize multi-workflow systems** (parent-child workflows, end-to-end flows) - v0.2.0 MVP Extension
+- Epic 7: **Visualize peer-to-peer workflow signaling** (external signal communication between independent workflows) - v0.3.0 Extension
 
 ### Context Incorporated
 
@@ -1680,10 +1851,17 @@ Complete mapping of all 73 FRs to specific stories:
 - Builds on Epic 2 (AST analysis) and Epic 3 (path permutations) patterns
 - Deliverable: Complete cross-workflow visualization capability
 
+**Phase 3 - Peer-to-Peer Extension (v0.3.0):**
+- Epic 7 (after Epic 6 complete)
+- Epic 7 stories must be sequential (7.1→7.2→7.3→7.4→7.5)
+- Builds on Epic 2 (AST analysis), Epic 3 (detector patterns), and Epic 6 (cross-workflow patterns)
+- Deliverable: Peer-to-peer workflow signaling visualization (external signals between independent workflows)
+
 ---
 
 _Epic breakdown created for temporalio-graphs-python-port - Python library for complete workflow visualization using static code analysis._
 
 _Generated using BMM Epic and Story Decomposition Workflow - 2025-11-18_
+_Updated with Epic 7 (Peer-to-Peer Workflow Signaling) - 2025-11-20_
 
 _For implementation: Use the `create-story` workflow to generate individual story implementation plans from this epic breakdown._

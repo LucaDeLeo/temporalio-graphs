@@ -1,0 +1,32 @@
+---
+description: BMAD WORKTREE Workflow: worktree-status
+globs: 
+alwaysApply: false
+---
+
+# Worktree Status Workflow
+name: worktree-status
+description: "Display status of all git worktrees with health checks, branch info, and sync status"
+author: "BMad"
+
+# Configuration sources
+config_source: "{project-root}/.bmad/worktree/config.yaml"
+bmm_config: "{project-root}/.bmad/bmm/config.yaml"
+
+# Critical variables from config
+worktree_root: "{config_source}:worktree_root"
+state_file: "{config_source}:state_file"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+project_name: "{bmm_config}:project_name"
+date: system-generated
+
+# Workflow components
+installed_path: "{project-root}/.bmad/worktree/workflows/status"
+instructions: "{installed_path}/instructions.md"
+
+# Variables and inputs
+variables:
+  detailed: false  # Show detailed information
+
+standalone: true
