@@ -94,5 +94,5 @@ development_status:
   7-2-create-external-signal-call-data-model: done  # Completed as part of Story 7.1 - ExternalSignalCall dataclass in graph_models.py:374-414
   7-3-integrate-external-signal-detection-into-analysis-pipeline: done  # APPROVED - Senior Developer Review Complete 2025-11-20
   7-4-implement-mermaid-rendering-for-external-signals: done  # APPROVED - Senior Developer Review Complete 2025-11-20
-  7-5-add-peer-signal-workflow-example-and-documentation: backlog
+  7-5-add-peer-signal-workflow-example-and-documentation: done  # APPROVED - Senior Developer Review Complete 2025-11-20
   epic-7-retrospective: optional

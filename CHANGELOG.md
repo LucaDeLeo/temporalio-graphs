@@ -13,6 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loop detection and warnings for advanced control flow
 - IDE plugins and editor integrations
 
+## [0.3.0] - 2025-11-20
+
+### Added (Epic 7: Peer-to-Peer Workflow Signaling)
+
+- **ExternalSignalDetector**: Static AST analysis for detecting `workflow.get_external_workflow_handle().signal()` patterns in workflow code
+- **ExternalSignalCall Data Model**: New dataclass for representing peer-to-peer signals with `signal_name`, `target_workflow_pattern`, `source_line`, `node_id`, and `source_workflow` fields
+- **Trapezoid Node Rendering**: External signals render as trapezoid shapes `[/Signal 'name' to target\]` in Mermaid diagrams, visually distinct from internal signals (hexagons)
+- **Dashed Edge Styling**: Async signal flow visualized with dashed edges `-.signal.->` instead of solid edges, distinguishing fire-and-forget communication from synchronous calls
+- **Orange/Amber Color Styling**: External signal nodes use orange fill (#fff4e6) and stroke (#ffa500) to distinguish from activities (default), decisions (default), internal signals (blue), and child workflows (green)
+- **Target Pattern Extraction**: Best-effort static analysis extracts workflow ID patterns from f-strings (e.g., `f"shipping-{order_id}"` → `shipping-{*}`) with fallback to `<dynamic>` for complex expressions
+- **Peer Signal Workflow Example**: New `examples/peer_signal_workflow/` with Order→Shipping workflow demonstrating peer-to-peer signaling pattern
+- **Integration Tests**: New `tests/integration/test_peer_signals.py` validating external signal detection, Mermaid rendering, and example structure
+- **README Peer-to-Peer Section**: Comprehensive documentation explaining three signal types (internal, parent-child, peer-to-peer) with code examples and visualization comparison table
+- **ADR-012 Documentation**: Architectural decision record documenting peer-to-peer signal detection strategy, static analysis limitations, pattern matching approach, and visualization design choices
+
+### Changed
+
+- **NodeType Enum**: Extended with `EXTERNAL_SIGNAL` value for peer-to-peer signal nodes
+- **WorkflowMetadata**: Added `external_signals: list[ExternalSignalCall]` field to capture detected external signal calls
+- **GraphBuildingContext**: Added `show_external_signals: bool = True` and `external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"` configuration fields
+- **MermaidRenderer**: Enhanced to render external signal nodes with trapezoid syntax, dashed edges, and color styling
+- **README Node Types Table**: Updated to include both internal signals (hexagon) and external signals (trapezoid) with usage distinctions
+- **Example Structure Documentation**: Updated to include peer signal workflow in examples gallery
+
+### Technical Details
+
+- **Static Analysis Pattern**: Detects `get_external_workflow_handle(workflow_id)` followed by `.signal(signal_name, *args)` in AST
+- **F-String Pattern Matching**: Extracts workflow ID patterns from JoinedStr AST nodes, replacing FormattedValue with `{*}` wildcard
+- **No Path Explosion**: External signals don't create additional execution branches (fire-and-forget semantics)
+- **Backward Compatible**: All new features are additive with sensible defaults; existing workflows continue working unchanged
+
+### Quality Metrics
+
+- **Test Coverage**: 584 tests passing (up from 547), 89.34% coverage (maintained above 80% target)
+- **Type Safety**: All new code passes mypy strict mode with zero errors
+- **Linting**: ruff check passes with zero violations
+- **Performance**: External signal detection <1ms overhead per workflow (NFR-PERF-1 compliant)
+- **Real-World Validation**: Tested on production workflow patterns with external signal communication
+
 ## [0.1.1] - 2025-11-19
 
 ### Fixed

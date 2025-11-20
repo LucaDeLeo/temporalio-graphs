@@ -1696,7 +1696,141 @@ flowchart LR
 
 ---
 
+### ADR-012: Peer-to-Peer Signal Detection
+
+**Context:**
+Epic 7 adds support for visualizing peer-to-peer workflow signaling where one workflow sends an external signal to another independent workflow via `workflow.get_external_workflow_handle(workflow_id).signal(signal_name, *args)`. Unlike internal signals (Epic 4) which use `wait_condition()` within a single workflow, or parent-child relationships (Epic 6) which use `execute_child_workflow()`, peer-to-peer signals represent asynchronous fire-and-forget communication between independent workflows.
+
+The challenge is that workflow IDs are often determined at runtime (e.g., `f"shipping-{order_id}"` where `order_id` is a workflow parameter), making exact target identification impossible during static analysis. Need to decide how to detect and visualize external signals given these constraints.
+
+**Decision:**
+Implement **best-effort static analysis** with pattern matching for external signal detection:
+
+1. **Detection Strategy:** AST traversal identifies `workflow.get_external_workflow_handle(...)` calls followed by `.signal(...)` method calls
+2. **Target Pattern Extraction:**
+   - **String literals:** Extract exact target (e.g., `"shipping-123"` → `shipping-123`)
+   - **Format strings (f-strings):** Extract pattern with wildcard (e.g., `f"shipping-{order_id}"` → `shipping-{*}`)
+   - **Dynamic expressions:** Fallback to `<dynamic>` placeholder when target cannot be determined
+3. **Visualization Mode:** MVP (v0.3.0) implements "reference" mode only - external signals appear as trapezoid nodes in sender workflow's diagram
+
+**Rationale:**
+
+**Why Best-Effort Detection:**
+1. **Static Analysis Limitation:** Cannot execute workflow code to resolve runtime values
+2. **Practical Value:** Most workflows use predictable patterns (f-strings) that can be extracted
+3. **Transparency:** Users understand what library can/cannot detect via documentation
+
+**Why Pattern Matching for f-strings:**
+1. **Common Pattern:** `f"workflow-{param}"` is standard Temporal practice
+2. **AST Support:** Python AST provides JoinedStr nodes for f-strings with analyzable structure
+3. **Visual Clarity:** Pattern `shipping-{*}` shows target workflow type and dynamic component
+
+**Why Reference Mode Only (MVP):**
+1. **Architectural Consistency:** Matches ADR-011's default mode for child workflows
+2. **Prevents Diagram Clutter:** External signals are async fire-and-forget, not execution path dependencies
+3. **Clear Semantics:** Trapezoid nodes show "signal sent" not "signal received"
+4. **Deferred Complexity:** Inline/subgraph modes would require analyzing both workflows simultaneously
+
+**Implementation Details:**
+
+```python
+@dataclass(frozen=True)
+class ExternalSignalCall:
+    """Represents an external signal sent to another workflow."""
+    signal_name: str                    # e.g., "ship_order"
+    target_workflow_pattern: str        # e.g., "shipping-{*}" or "shipping-123"
+    source_line: int                    # Line number in source file
+    node_id: str                        # e.g., "ext_sig_ship_order_38"
+    source_workflow: str                # e.g., "OrderWorkflow"
+
+class ExternalSignalDetector(ast.NodeVisitor):
+    """Detects get_external_workflow_handle().signal() patterns in AST."""
+
+    def visit_Await(self, node: ast.Await) -> None:
+        """Detect: await handle.signal("name", args)"""
+        if isinstance(node.value, ast.Call):
+            if self._is_signal_call(node.value):
+                self._extract_external_signal(node.value)
+
+    def _extract_target_pattern(self, arg: ast.expr) -> str:
+        """Extract workflow ID pattern from get_external_workflow_handle() arg."""
+        if isinstance(arg, ast.Constant):  # String literal
+            return str(arg.value)
+        elif isinstance(arg, ast.JoinedStr):  # f-string
+            return self._format_string_to_pattern(arg)  # "shipping-{*}"
+        else:  # Complex expression
+            return "<dynamic>"
+```
+
+**Mermaid Visualization:**
+
+External signals use **trapezoid shape** with **dashed edges** and **orange/amber color**:
+
+```mermaid
+flowchart LR
+  s((Start)) --> process_order[Process Order]
+  process_order --> ext_sig_ship_order[/Signal 'ship_order' to shipping-{*}\]
+  ext_sig_ship_order -.signal.-> complete_order[Complete Order]
+  complete_order --> e((End))
+  style ext_sig_ship_order fill:#fff4e6,stroke:#ffa500
+```
+
+**Visual Distinction:**
+- **Internal Signals (Epic 4):** Hexagon `{{WaitForApproval}}` - blue color
+- **Child Workflows (Epic 6):** Subroutine `[[PaymentWorkflow]]` - green color
+- **External Signals (Epic 7):** Trapezoid `[/Signal 'name'\]` - orange color
+- **Dashed Edges:** `-.signal.->` shows async communication (vs `-->` for sync calls)
+
+**Configuration:**
+
+```python
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    # ... existing fields ...
+    show_external_signals: bool = True
+    external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"
+```
+
+- `show_external_signals=False`: Omit external signal nodes from diagram (treat as implementation detail)
+- `external_signal_label_style="target-pattern"`: Include target pattern in label (e.g., `Signal 'ship_order' to shipping-{*}`)
+
+**Consequences:**
+- ✅ Detects most common patterns (string literals, f-strings)
+- ✅ Clear visualization distinguishing three signal types
+- ✅ Transparent about limitations (pattern matching vs runtime resolution)
+- ✅ No path explosion (external signals don't create branches)
+- ⚠️ Cannot detect complex dynamic IDs (e.g., `workflow_ids[order_type]`)
+- ⚠️ Documentation critical - users must understand static analysis constraints
+
+**Alternatives Considered:**
+
+1. **Runtime Execution:** Execute workflow with mock activities to capture actual workflow IDs
+   - **Rejected:** Contradicts core static analysis architecture (ADR-001)
+   - **Issue:** Would require 2^n executions for n decisions (same as .NET interceptor approach)
+
+2. **String Analysis Heuristics:** Advanced pattern extraction for complex expressions
+   - **Deferred:** Diminishing returns - most workflows use simple f-strings
+   - **Complexity:** Would require symbolic execution or constraint solving
+
+3. **User Annotations:** Require developers to annotate external signals with target patterns
+   - **Rejected:** Increases friction, violates "zero workflow modification" principle
+   - **Temporal SDK Pattern:** Existing code doesn't have annotations to preserve
+
+4. **Inline/Subgraph Modes:** Visualize both sender and receiver workflows together
+   - **Deferred to Future:** Requires multi-workflow analysis orchestration
+   - **Scope:** Epic 7 MVP focuses on detection and basic visualization
+
+**Future Enhancements:**
+
+- **Epic 7+:** Inline mode showing signal flow across workflow diagrams
+- **Epic 7+:** System-level view with all workflows and signal relationships
+- **Epic 7+:** Signal handler detection (receiver side) with correlation to sender
+
+**Status:** Accepted ✅
+
+---
+
 _Generated by BMAD Decision Architecture Workflow v1.0_
 _Date: 2025-11-18_
-_Updated: 2025-11-19 (ADR-011 added)_
+_Updated: 2025-11-20 (ADR-011, ADR-012 added)_
 _For: Luca_

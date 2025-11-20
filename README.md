@@ -280,7 +280,9 @@ flowchart LR
 | Start | Circle | `((Start))` | Workflow entry point |
 | Activity | Rectangle | `[ActivityName]` | Temporal activity execution |
 | Decision | Diamond | `{DecisionName}` | Conditional branch (if/else) |
-| Signal | Hexagon | `{{SignalName}}` | Wait condition with timeout |
+| Signal (Internal) | Hexagon | `{{SignalName}}` | Wait condition with timeout |
+| Signal (External) | Trapezoid | `[/SignalName\]` | Peer-to-peer workflow signal |
+| Child Workflow | Subroutine | `[[WorkflowName]]` | Child workflow execution |
 | End | Circle | `((End))` | Workflow completion |
 
 ### Path Explosion Management
@@ -766,6 +768,91 @@ result = analyze_workflow_graph("parent_workflow.py", context=context)
 
 ---
 
+### 7. Peer-to-Peer Workflow Signaling (Advanced)
+
+**Pattern**: Independent workflows communicating via external signals
+**Path Count**: 1 path per workflow (linear, no decisions in example)
+**Use Case**: Microservices communication, event-driven architectures, distributed workflow orchestration
+
+```bash
+python examples/peer_signal_workflow/run.py
+```
+
+This demonstrates peer-to-peer workflow signaling where one workflow sends an external signal to another independent workflow using `get_external_workflow_handle().signal()`:
+
+```python
+from temporalio import workflow
+
+# Order workflow sends signal to Shipping workflow
+@workflow.defn
+class OrderWorkflow:
+    @workflow.run
+    async def run(self, order_id: str) -> str:
+        # Process order
+        await workflow.execute_activity(process_order, ...)
+
+        # Send external signal to Shipping workflow
+        shipping_handle = workflow.get_external_workflow_handle(f"shipping-{order_id}")
+        await shipping_handle.signal("ship_order", order_id)
+
+        # Complete order
+        await workflow.execute_activity(complete_order, ...)
+        return "order_complete"
+
+# Shipping workflow receives signal from Order workflow
+@workflow.defn
+class ShippingWorkflow:
+    def __init__(self) -> None:
+        self.should_ship = False
+        self.order_id = None
+
+    @workflow.run
+    async def run(self, shipping_id: str) -> str:
+        # Wait for ship_order signal
+        await workflow.wait_condition(
+            lambda: self.should_ship,
+            timeout=timedelta(hours=24)
+        )
+
+        # Ship package
+        await workflow.execute_activity(ship_package, ...)
+        return "shipped"
+
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        self.should_ship = True
+        self.order_id = order_id
+```
+
+**Key Features**:
+- **Trapezoid nodes**: External signals render as `[/Signal 'name' to target\]` (vs hexagons for internal signals)
+- **Dashed edges**: `-.signal.->` shows async communication (vs solid edges for synchronous calls)
+- **Orange/amber styling**: Distinguishes external signals from activities, decisions, and child workflows
+- **Target pattern detection**: Shows target workflow pattern (`shipping-{*}` for dynamic IDs)
+- **Static analysis limitations**: Best-effort detection with pattern matching for runtime IDs
+
+**Three Signal Types Comparison**:
+
+| Signal Type | Pattern | Visualization | Use Case |
+|-------------|---------|---------------|----------|
+| **Internal (Epic 4)** | `wait_condition()` | Hexagon `{{SignalName}}` (blue) | Workflow waits for own state changes |
+| **Parent-Child (Epic 6)** | `execute_child_workflow()` | Subroutine `[[ChildWorkflow]]` (green) | Synchronous spawning with return values |
+| **Peer-to-Peer (Epic 7)** | `get_external_workflow_handle().signal()` | Trapezoid `[/Signal 'name'\]` (orange) | Async fire-and-forget between independent workflows |
+
+**Static Analysis Limitations**:
+
+External signal detection is best-effort due to static analysis constraints:
+
+- **String literals**: Exact target extracted (e.g., `"shipping-123"` → `shipping-123`)
+- **Format strings**: Pattern with wildcard (e.g., `f"shipping-{order_id}"` → `shipping-{*}`)
+- **Dynamic expressions**: Fallback to `<dynamic>` when ID cannot be determined
+
+See ADR-012 in [`docs/architecture.md`](docs/architecture.md) for design rationale.
+
+**Learn More**: See [`examples/peer_signal_workflow/`](examples/peer_signal_workflow/) for complete code and expected Mermaid output.
+
+---
+
 ### Example Structure
 
 Each example follows a consistent structure:
@@ -781,6 +868,7 @@ Each example follows a consistent structure:
 - **Order Processing**: Real-world e-commerce workflows combining decisions and signals
 - **Multi-Decision**: Complex business logic, multi-criteria evaluation, understanding path explosion
 - **Parent-Child Workflow**: Microservices orchestration, workflow composition patterns
+- **Peer Signal Workflow**: Event-driven microservices, async inter-workflow communication, distributed systems
 
 ## Troubleshooting
 

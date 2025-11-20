@@ -1,0 +1,280 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>5</storyId>
+    <title>Add Peer Signal Workflow Example and Documentation</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/7-5-add-peer-signal-workflow-example-and-documentation.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>a complete example of peer-to-peer workflow signaling</iWant>
+    <soThat>I can understand how to visualize workflows that signal each other</soThat>
+    <tasks>
+      - Create peer signal workflow example directory (AC: 1, 2, 3, 4)
+      - Write integration test for peer signal example (AC: 5)
+      - Update README.md with peer-to-peer signaling section (AC: 6)
+      - Add ADR-012 to architecture.md (AC: 7)
+      - Update CHANGELOG.md for v0.3.0 release (AC: 8)
+      - Update version in pyproject.toml (AC: 9)
+      - Verify all documentation and tests (AC: 10)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Order Workflow Example - examples/peer_signal_workflow/order_workflow.py with Order workflow sending external signal
+    2. Shipping Workflow Example - examples/peer_signal_workflow/shipping_workflow.py with Shipping workflow receiving signal
+    3. Example Runner - examples/peer_signal_workflow/run.py demonstrating analysis of both workflows
+    4. Expected Output Documentation - examples/peer_signal_workflow/expected_output.md with golden Mermaid diagram
+    5. Integration Test Validation - tests/integration/test_peer_signals.py validates trapezoid nodes, dashed edges, target patterns
+    6. README.md Updates - Section explaining three signal types (internal, parent-child, peer-to-peer) with examples
+    7. ADR-012 Documentation - docs/architecture.md updated with peer-to-peer signal detection design decision
+    8. CHANGELOG.md Updates - Epic 7 changes following Keep a Changelog format
+    9. Version Update - pyproject.toml version updated to 0.3.0
+    10. All Documentation Tested - Examples run successfully, integration tests pass
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Story 7.5: Add Peer Signal Workflow Example &amp; Documentation</section>
+        <snippet>Story 7.5 deliverables: Create examples/peer_signal_workflow/ with order/shipping workflows, run.py, expected_output.md. Integration test test_peer_signals.py validates trapezoid nodes and dashed edges. Update README.md with peer-to-peer section, add ADR-012 to architecture.md, update CHANGELOG.md and pyproject.toml to v0.3.0.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Story Breakdown</title>
+        <section>Story 7.5: Add Peer Signal Workflow Example &amp; Documentation (lines 303-402)</section>
+        <snippet>Order workflow sends signal via get_external_workflow_handle(f"shipping-{order_id}").signal("ship_order"). Shipping workflow has @workflow.signal async def ship_order handler and waits with wait_condition. Expected Mermaid shows trapezoid [/Signal 'ship_order' to shipping-{*}\] with dashed edge and orange/amber styling.</snippet>
+      </doc>
+      <doc>
+        <path>README.md</path>
+        <title>Project README</title>
+        <section>Examples section structure (lines 1-150)</section>
+        <snippet>README follows pattern: Overview, Key Features, Installation, Quick Start, Core Concepts, Configuration, Examples, Troubleshooting. Examples section shows code snippets with expected Mermaid output. Currently covers linear workflows, decision nodes, signals, cross-workflow (parent-child). Need to add peer-to-peer signaling section after cross-workflow.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>ADR pattern structure (lines 1-100)</section>
+        <snippet>Architecture.md contains Executive Summary, Project Initialization, Decision Summary table, Project Structure, and Architectural Decision Records (ADRs). Each ADR documents: Context, Decision, Consequences, Alternatives Considered. ADR-011 was last Epic 6 ADR. ADR-012 should follow for peer-to-peer signal detection.</snippet>
+      </doc>
+      <doc>
+        <path>CHANGELOG.md</path>
+        <title>Project Changelog</title>
+        <section>Keep a Changelog format (lines 1-80)</section>
+        <snippet>CHANGELOG follows Keep a Changelog format with [version] - date, sections: Added, Changed, Deprecated, Removed, Fixed, Security. v0.1.1 (2025-11-19) documented real-world testing fixes. v0.1.0 (2025-11-19) documented Epics 1-6. v0.3.0 should document Epic 7 peer-to-peer signaling features.</snippet>
+      </doc>
+      <doc>
+        <path>examples/parent_child_workflow/expected_output_reference.md</path>
+        <title>Epic 6 Parent-Child Example Pattern</title>
+        <section>Expected output format for workflow examples</section>
+        <snippet>Example pattern: Mermaid code block showing expected diagram, Path List section showing execution paths, Notes section explaining behavior. Follow this structure for peer_signal_workflow/expected_output.md.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/7-4-implement-mermaid-rendering-for-external-signals.md</path>
+        <title>Story 7.4: Mermaid Rendering Complete</title>
+        <section>Learnings from Previous Story (lines 290-346)</section>
+        <snippet>Story 7.4 completed trapezoid syntax [/Signal 'name'\], dashed edge -.signal.->, orange/amber color styling. 9 unit tests in test_renderer.py, 1 integration test in test_external_signals.py. All 584 tests passing, 89.34% coverage. Configuration: show_external_signals, external_signal_label_style (name-only/target-pattern). No breaking changes, backward compatible.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>data model</kind>
+        <symbol>NodeType.EXTERNAL_SIGNAL</symbol>
+        <lines>35</lines>
+        <reason>NodeType enum includes EXTERNAL_SIGNAL value for trapezoid rendering. Example must validate this node type appears in output.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>data model</kind>
+        <symbol>ExternalSignalCall</symbol>
+        <lines>374-414</lines>
+        <reason>ExternalSignalCall dataclass (created in Story 7.2) contains signal_name, target_workflow_pattern, source_line, node_id, source_workflow fields. Order workflow example will create instances of this.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>configuration</kind>
+        <symbol>GraphBuildingContext.external_signal_label_style</symbol>
+        <lines>131-132</lines>
+        <reason>Configuration field controls signal label format: "name-only" vs "target-pattern". Example should demonstrate target-pattern mode showing "shipping-{*}".</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>rendering logic</kind>
+        <symbol>MermaidRenderer external signal rendering</symbol>
+        <lines>190-209</lines>
+        <reason>Renderer logic for external signals: formats label based on external_signal_label_style, creates GraphNode with NodeType.EXTERNAL_SIGNAL, generates trapezoid syntax [/Signal...\], adds dashed edge -.signal.-&gt;. Integration test must validate this output.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_external_signals.py</path>
+        <kind>integration test</kind>
+        <symbol>test_order_workflow_external_signal_detection</symbol>
+        <lines>all</lines>
+        <reason>Existing integration test from Story 7.3 validates external signal detection. New test_peer_signals.py should follow similar pattern but validate complete Order-&gt;Shipping workflow example.</reason>
+      </artifact>
+      <artifact>
+        <path>examples/parent_child_workflow/parent_workflow.py</path>
+        <kind>example workflow</kind>
+        <symbol>ParentWorkflow</symbol>
+        <lines>all</lines>
+        <reason>Epic 6 parent-child example shows workflow structure pattern: @workflow.defn decorator, @workflow.run async def run method, activity calls, child workflow calls. Order workflow should follow similar structure.</reason>
+      </artifact>
+      <artifact>
+        <path>examples/parent_child_workflow/run.py</path>
+        <kind>example runner</kind>
+        <symbol>main function</symbol>
+        <lines>all</lines>
+        <reason>Epic 6 example runner shows pattern: import analyze_workflow, call for each workflow file, print results with formatting. peer_signal_workflow/run.py should follow similar structure for order and shipping workflows.</reason>
+      </artifact>
+      <artifact>
+        <path>pyproject.toml</path>
+        <kind>package metadata</kind>
+        <symbol>version field</symbol>
+        <lines>3</lines>
+        <reason>Current version is "0.1.1". Must update to "0.3.0" for Epic 7 completion (semantic versioning: minor bump for new feature).</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version="&gt;=1.7.1" />
+        <package name="pytest" version="&gt;=8.0.0" scope="dev" />
+        <package name="pytest-asyncio" version="&gt;=0.23.0" scope="dev" />
+        <package name="mypy" version="&gt;=1.8.0" scope="dev" />
+        <package name="ruff" version="&gt;=0.2.0" scope="dev" />
+        <package name="pytest-cov" version="&gt;=4.1.0" scope="dev" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <category>Static Analysis Documentation</category>
+      <description>Documentation must clearly explain why static analysis is used and its limitations. For peer-to-peer signals, runtime workflow IDs (e.g., f"shipping-{order_id}") cannot be fully resolved at static analysis time. Document best-effort pattern matching: string literals (exact), format strings (pattern with wildcard), dynamic expressions (fallback to &lt;dynamic&gt;).</description>
+    </constraint>
+    <constraint>
+      <category>Mermaid Output Visualization</category>
+      <description>Examples must show complete Mermaid diagrams with: Trapezoid external signal nodes [/Signal 'name' to target\], Dashed edges -.signal.-&gt; for async communication, Orange/amber color styling distinguishing signals from activities/decisions/child workflows, Clear visual differentiation from internal signals (hexagons) and child workflows (subroutines).</description>
+    </constraint>
+    <constraint>
+      <category>Three Signal Patterns</category>
+      <description>Documentation must clearly distinguish: 1. Internal Signals (Epic 4): wait_condition() - workflow waits for own state changes. 2. Parent-Child (Epic 6): execute_child_workflow() - synchronous spawning with return values. 3. Peer-to-Peer (Epic 7): get_external_workflow_handle().signal() - async fire-and-forget communication between independent workflows.</description>
+    </constraint>
+    <constraint>
+      <category>Epic 7 Integration</category>
+      <description>This story completes Epic 7 and v0.3.0 release. Must ensure: All Epic 7 features documented (Stories 7.1-7.5), Examples demonstrate real-world use cases (Order → Shipping is production-realistic), ADR-012 provides architectural context for future maintainers, Version bump follows semantic versioning (0.3.0 = new feature, backward compatible).</description>
+    </constraint>
+    <constraint>
+      <category>Example Structure Pattern</category>
+      <description>Follow Epic 6 parent-child example pattern: Two workflow files (order_workflow.py, shipping_workflow.py), Run script (run.py), Expected output (expected_output.md with Mermaid + Path List + Notes), Integration test validating structure. Directory: examples/peer_signal_workflow/</description>
+    </constraint>
+    <constraint>
+      <category>Testing Standards</category>
+      <description>Integration test test_peer_signals.py must validate: Order workflow analysis detects external signal, Mermaid output contains trapezoid syntax [/Signal...\], Mermaid output contains dashed edge -.signal.-&gt;, Mermaid output contains target pattern shipping-{*} or shipping-, Output structure matches expected_output.md. Ensure Epic 1-6 tests continue passing (regression prevention).</description>
+    </constraint>
+    <constraint>
+      <category>Keep a Changelog Format</category>
+      <description>CHANGELOG.md must follow Keep a Changelog format: [0.3.0] - 2025-11-20, ### Added (Epic 7: Peer-to-Peer Workflow Signaling) section with bullet list of features, ### Changed section with updates to existing code, Each feature should reference what was added (ExternalSignalDetector, ExternalSignalCall, trapezoid rendering, etc).</description>
+    </constraint>
+    <constraint>
+      <category>ADR Documentation Pattern</category>
+      <description>ADR-012 must follow existing ADR structure in architecture.md: Title (ADR-012: Peer-to-Peer Signal Detection), Context section explaining problem, Decision section describing chosen approach, Consequences section listing benefits/tradeoffs, Alternatives Considered section (if applicable). Document static analysis approach, runtime ID limitation, pattern matching strategy (string literals, f-strings, dynamic fallback).</description>
+    </constraint>
+    <constraint>
+      <category>Code Quality Gates</category>
+      <description>All changes must pass: pytest with &gt;=80% coverage (currently 89.34%), mypy strict mode (zero errors), ruff check (zero violations), Integration tests pass (100% success rate), Test execution time &lt;1.5s. No regressions in existing Epic 1-6 functionality.</description>
+    </constraint>
+    <constraint>
+      <category>Semantic Versioning</category>
+      <description>Version update to 0.3.0 follows semantic versioning: Major.Minor.Patch. Epic 7 is new feature (peer-to-peer signals) that is backward compatible with v0.1.1/v0.2.0, so Minor version increments (0.3.0). No breaking changes to public API. New features are additive only (show_external_signals default=True, external_signal_label_style default="name-only").</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>analyze_workflow</name>
+      <kind>Public API function</kind>
+      <signature>def analyze_workflow(workflow_file: str | Path, context: GraphBuildingContext | None = None) -&gt; str</signature>
+      <path>src/temporalio_graphs/__init__.py</path>
+      <description>Main public API for analyzing workflows. Example runner (run.py) will call this function to analyze order_workflow.py and shipping_workflow.py. Returns Mermaid diagram as string.</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext</name>
+      <kind>Configuration dataclass</kind>
+      <signature>@dataclass(frozen=True) class GraphBuildingContext</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Configuration for graph generation. Example should demonstrate external_signal_label_style="target-pattern" to show shipping-{*} pattern in output. Default "name-only" shows just signal name.</description>
+    </interface>
+    <interface>
+      <name>workflow.get_external_workflow_handle</name>
+      <kind>Temporal SDK method</kind>
+      <signature>def get_external_workflow_handle(workflow_id: str) -&gt; ExternalWorkflowHandle</signature>
+      <path>temporalio.workflow module</path>
+      <description>Temporal SDK method to get handle to external workflow. Order workflow uses this with f"shipping-{order_id}" to target specific Shipping workflow instance. Returns handle that can call .signal() method.</description>
+    </interface>
+    <interface>
+      <name>ExternalWorkflowHandle.signal</name>
+      <kind>Temporal SDK method</kind>
+      <signature>async def signal(signal_name: str, *args) -&gt; None</signature>
+      <path>temporalio.workflow.ExternalWorkflowHandle</path>
+      <description>Sends signal to external workflow. Order workflow calls await handle.signal("ship_order", order_id) to notify Shipping workflow. This is what ExternalSignalDetector (Story 7.1) detects.</description>
+    </interface>
+    <interface>
+      <name>@workflow.signal decorator</name>
+      <kind>Temporal SDK decorator</kind>
+      <signature>@workflow.signal</signature>
+      <path>temporalio.workflow module</path>
+      <description>Decorator for signal handler methods. Shipping workflow has @workflow.signal async def ship_order(self, order_id: str) method to receive ship_order signal from Order workflow.</description>
+    </interface>
+    <interface>
+      <name>workflow.wait_condition</name>
+      <kind>Temporal SDK method</kind>
+      <signature>async def wait_condition(condition: Callable[[], bool], timeout: timedelta | None = None) -&gt; bool</signature>
+      <path>temporalio.workflow module</path>
+      <description>Waits for condition to become true. Shipping workflow uses await workflow.wait_condition(lambda: self.should_ship, timeout=timedelta(hours=24)) to wait for ship_order signal. Returns True when signaled, False on timeout.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing uses pytest &gt;=8.0.0 with pytest-asyncio for async support. Integration tests go in tests/integration/ directory. Unit tests mirror src/ structure. Coverage target &gt;=80% (pytest-cov with --cov-fail-under=80). Type checking with mypy strict mode. Linting with ruff. Test execution time target &lt;1.5s for full suite.
+    </standards>
+    <locations>
+      tests/ - Root test directory
+      tests/integration/ - Integration tests (end-to-end workflow analysis)
+      tests/integration/test_peer_signals.py - New file for peer signal example validation
+      tests/integration/test_external_signals.py - Existing from Story 7.3 (reference pattern)
+    </locations>
+    <ideas>
+      <test_idea ac_ref="5">
+        <name>test_order_workflow_analysis</name>
+        <description>Validate Order workflow analysis detects external signal send. Assert analyze_workflow("examples/peer_signal_workflow/order_workflow.py") succeeds, output contains [/Signal 'ship_order', output contains shipping-{*} or shipping- pattern, output contains -.signal.-&gt; dashed edge.</description>
+      </test_idea>
+      <test_idea ac_ref="5">
+        <name>test_shipping_workflow_analysis</name>
+        <description>Validate Shipping workflow analysis detects signal handler and wait_condition. Assert analyze_workflow("examples/peer_signal_workflow/shipping_workflow.py") succeeds, output contains wait_condition signal node, output shows signal handler in workflow structure.</description>
+      </test_idea>
+      <test_idea ac_ref="5">
+        <name>test_peer_signal_mermaid_output</name>
+        <description>Validate complete Mermaid structure for peer signals. Load expected_output.md golden file, compare key patterns: trapezoid node syntax, dashed edge syntax, target pattern format, color styling (if present in output). Use string matching or regex for validation.</description>
+      </test_idea>
+      <test_idea ac_ref="10">
+        <name>test_example_runner_executes</name>
+        <description>Validate run.py executes without errors. Run: uv run python examples/peer_signal_workflow/run.py. Assert exit code 0, stdout contains "Order Workflow:" and "Shipping Workflow:" headers, no exceptions raised during execution.</description>
+      </test_idea>
+      <test_idea ac_ref="10">
+        <name>test_no_regressions_epic_1_to_6</name>
+        <description>Ensure all existing tests continue passing after documentation changes. Run full test suite: pytest -v. Assert 547+ tests pass (may increase with new tests), coverage remains &gt;=80%, test execution time &lt;1.5s, zero failures.</description>
+      </test_idea>
+      <test_idea ac_ref="6,7,8,9">
+        <name>test_documentation_files_updated</name>
+        <description>Validate documentation files contain required changes. Assert README.md contains "Peer-to-Peer Workflow Signaling" section, architecture.md contains "ADR-012", CHANGELOG.md contains "[0.3.0]", pyproject.toml version field is "0.3.0". Use file reading and string search.</description>
+      </test_idea>
+    </ideas>
+  </tests>
+</story-context>
