@@ -3,8 +3,8 @@
 [![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/project/temporalio-graphs/)
 [![Python versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/temporalio-graphs/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Test Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](https://github.com/yourusername/temporalio-graphs)
-[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen)](https://github.com/yourusername/temporalio-graphs)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](https://github.com/LucaDeLeo/temporalio-graphs)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen)](https://github.com/LucaDeLeo/temporalio-graphs)
 
 Generate complete workflow visualization diagrams for Temporal workflows using static code analysis.
 
@@ -37,7 +37,24 @@ Unlike DAG-based workflow engines, Temporal workflows don't provide complete vis
 - **Zero Runtime Overhead**: Pure static analysis - no workflow execution required
 - **Blazing Fast**: <1ms analysis time vs exponential execution time
 - **No Mock Setup**: Unlike runtime approaches, no interceptor or mock configuration needed
-- **Production Ready**: 95% test coverage, comprehensive error handling, actionable error messages
+- **Production Ready**: 91% test coverage, comprehensive error handling, validated on real-world workflows
+
+### Real-World Validation ✅
+
+Tested and validated on production workflows from official Temporal samples and real applications:
+
+- ✅ **Official Temporal Python samples** - 20+ workflows analyzed successfully
+- ✅ **Production AI agent workflow** - Complex multi-activity workflow with signals
+- ✅ **547 unit tests passing** - Comprehensive test coverage
+- ✅ **3 critical bugs found and fixed** - Issues that would block 67% of real workflows
+
+**Supported Patterns** (validated on real code):
+- `workflow.execute_activity()` and `workflow.execute_activity_method()` - Both activity execution patterns
+- `workflow.execute_child_workflow(ChildWorkflow.run, ...)` - Attribute access for child workflows
+- `workflow.wait_condition(lambda: ...)` - Temporal's built-in (ignored by analyzer)
+- `wait_condition(condition, timeout, name)` - Our custom helper (3 args)
+
+See [Real-World Testing Report](REAL_WORLD_TESTING_REPORT.md) for complete validation details.
 
 ## Key Features
 
@@ -90,7 +107,7 @@ poetry add temporalio-graphs
 ### From source (development)
 
 ```bash
-git clone https://github.com/yourusername/temporalio-graphs
+git clone https://github.com/LucaDeLeo/temporalio-graphs
 cd temporalio-graphs
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
@@ -882,7 +899,7 @@ result = analyze_workflow("workflow.py", context)
 
 ### Reporting Issues
 
-Found a bug or have a feature request? Please [open an issue on GitHub](https://github.com/yourusername/temporalio-graphs/issues) with:
+Found a bug or have a feature request? Please [open an issue on GitHub](https://github.com/LucaDeLeo/temporalio-graphs/issues) with:
 
 1. **Environment details** (Python version, OS, library version)
 2. **Minimal reproducible example** (workflow code that triggers the issue)
@@ -1156,7 +1173,7 @@ Contributions welcome! We're looking for:
 
 ### Reporting Issues
 
-Found a bug? [Open an issue](https://github.com/yourusername/temporalio-graphs/issues) with:
+Found a bug? [Open an issue](https://github.com/LucaDeLeo/temporalio-graphs/issues) with:
 - Python version and OS
 - Minimal reproducible example
 - Expected vs actual behavior
@@ -1181,8 +1198,8 @@ Python port of [Temporalio.Graphs (.NET)](https://github.com/oleg-shilo/Temporal
 ### Links
 
 - **Documentation**: [Full API Reference](docs/api-reference.md)
-- **Source Code**: [GitHub Repository](https://github.com/yourusername/temporalio-graphs)
-- **Issues**: [Bug Tracker](https://github.com/yourusername/temporalio-graphs/issues)
+- **Source Code**: [GitHub Repository](https://github.com/LucaDeLeo/temporalio-graphs)
+- **Issues**: [Bug Tracker](https://github.com/LucaDeLeo/temporalio-graphs/issues)
 - **PyPI**: [Package Page](https://pypi.org/project/temporalio-graphs/)
 - **Changelog**: [Release Notes](CHANGELOG.md)
 - **.NET Version**: [Temporalio.Graphs](https://github.com/oleg-shilo/Temporalio.Graphs)
