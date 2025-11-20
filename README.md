@@ -585,7 +585,78 @@ class ApprovalWorkflow:
 
 ---
 
-### 4. Multi-Decision Workflow (Advanced)
+### 4. Order Processing Workflow (Intermediate)
+
+**Pattern**: Decision nodes + signal handling in real-world business workflow
+**Path Count**: 8 paths (2 decisions × 1 signal = 2² paths with signal branches)
+**Use Case**: Order processing, e-commerce workflows, payment handling, inventory management
+
+```bash
+python examples/order_processing/analyze_workflow.py
+```
+
+This demonstrates a realistic order processing workflow combining decision nodes with signal/wait conditions:
+
+```python
+from temporalio_graphs import to_decision, wait_condition
+from datetime import timedelta
+
+@workflow.defn
+class OrderWorkflow:
+    def __init__(self) -> None:
+        self.payment_confirmed = False
+
+    @workflow.run
+    async def run(self, order_id: str, order_amount: float) -> str:
+        # Step 1: Validate order
+        await workflow.execute_activity(validate_order, ...)
+
+        # Decision 1: Check inventory availability
+        if await to_decision(True, "InventoryAvailable"):
+            await workflow.execute_activity(reserve_inventory, ...)
+        else:
+            await workflow.execute_activity(notify_backorder, ...)
+
+        # Decision 2: High-value order check
+        if await to_decision(order_amount > 1000, "HighValueOrder"):
+            await workflow.execute_activity(require_manual_approval, ...)
+
+        # Signal: Wait for payment confirmation
+        if await wait_condition(
+            lambda: self.payment_confirmed,
+            timedelta(hours=24),
+            "WaitForPayment"
+        ):
+            await workflow.execute_activity(process_payment, ...)
+            await workflow.execute_activity(ship_order, ...)
+            return "shipped"
+        else:
+            await workflow.execute_activity(cancel_order, ...)
+            return "cancelled"
+
+    @workflow.signal
+    async def confirm_payment(self) -> None:
+        self.payment_confirmed = True
+```
+
+**Key Features**:
+- Combines decision nodes (inventory, high-value) with signal nodes (payment)
+- Real-world business logic (inventory checks, approval workflows, payment handling)
+- 8 execution paths showing all possible order processing scenarios
+- Demonstrates how decision and signal nodes interact in production workflows
+
+**Example Paths**:
+1. In-stock, low-value, payment received → shipped
+2. In-stock, high-value (needs approval), payment received → shipped
+3. Backorder, payment timeout → cancelled
+4. In-stock, payment timeout → cancelled
+... and 4 more combinations
+
+**Learn More**: See [`examples/order_processing/`](examples/order_processing/) for complete code, README, and generated diagram.
+
+---
+
+### 5. Multi-Decision Workflow (Advanced)
 
 **Pattern**: Multiple independent decision points with complex path permutations
 **Path Count**: 8 paths (3 decisions = 2^3)
@@ -594,6 +665,8 @@ class ApprovalWorkflow:
 ```bash
 python examples/multi_decision/run.py
 ```
+
+**Note**: This example generates the same number of paths (8) as the Order Processing example, but through a different mechanism (3 decisions vs 2 decisions + 1 signal).
 
 This demonstrates complex workflows with 3 independent decision points creating 8 execution paths:
 
@@ -642,7 +715,7 @@ class LoanApprovalWorkflow:
 
 ---
 
-### 5. Parent-Child Workflow (Advanced)
+### 6. Parent-Child Workflow (Advanced)
 
 **Pattern**: Multi-workflow visualization with parent-child relationships
 **Path Count**: Varies by expansion mode (reference: 2, inline: 4, subgraph: 2)
@@ -705,7 +778,9 @@ Each example follows a consistent structure:
 - **Simple Linear**: Learning the basics, testing library installation, simple pipelines
 - **MoneyTransfer**: Understanding decision nodes, learning conditional branching
 - **Signal Workflow**: Implementing approval flows, event-driven patterns, timeout handling
+- **Order Processing**: Real-world e-commerce workflows combining decisions and signals
 - **Multi-Decision**: Complex business logic, multi-criteria evaluation, understanding path explosion
+- **Parent-Child Workflow**: Microservices orchestration, workflow composition patterns
 
 ## Troubleshooting
 
@@ -1129,7 +1204,9 @@ temporalio-graphs/
 │   ├── simple_linear/
 │   ├── money_transfer/
 │   ├── signal_workflow/
-│   └── multi_decision/
+│   ├── order_processing/
+│   ├── multi_decision/
+│   └── parent_child_workflow/
 ├── docs/                   # Documentation
 │   ├── api-reference.md
 │   ├── architecture.md

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **execute_activity_method() Support**: Added detection for `workflow.execute_activity_method()` pattern used in production codebases. Previously only `execute_activity()` was recognized, causing incomplete activity detection. (Real-world testing - 2025-11-19)
+- **Child Workflow Attribute Access**: Added support for `ChildWorkflow.run` pattern in `execute_child_workflow()` calls. Previously only `ChildWorkflow` (name) or string literals were supported. This is the standard pattern used in official Temporal samples. (Real-world testing - 2025-11-19)
+- **wait_condition() Disambiguation**: Fixed false positive errors on Temporal's built-in `workflow.wait_condition(lambda: ...)` by distinguishing it from our custom 3-argument helper via argument count detection. (Real-world testing - 2025-11-19)
+
+### Changed
+- Test coverage adjusted from 95% to 91% after adding real-world pattern support
+- Updated test suite to 547 tests (previously 406) with 100% pass rate
+
+### Validated
+- **Real-World Testing**: Validated on Official Temporal Python samples repository (20+ workflows) and production AI agent workflow
+- **Success Rate**: 100% of real-world workflows now analyze successfully (up from 33% before fixes)
+- See `REAL_WORLD_TESTING_REPORT.md` for complete validation details
+
 ### Planned
 - CLI interface for command-line workflow analysis
 - Multiple output formats (JSON, DOT/Graphviz)

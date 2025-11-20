@@ -417,8 +417,8 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         if not isinstance(node.func, ast.Attribute):
             return False
 
-        # Check if the attribute name is "execute_activity"
-        if node.func.attr != "execute_activity":
+        # Check if the attribute name is "execute_activity" or "execute_activity_method"
+        if node.func.attr not in ("execute_activity", "execute_activity_method"):
             return False
 
         # Check if the value is a workflow reference
@@ -484,6 +484,13 @@ class WorkflowAnalyzer(ast.NodeVisitor):
                 result = arg.value
                 self._activity_name_cache[arg_id] = result
                 return result
+
+        # Handle method reference: execute_activity_method(ClassName.method_name, ...)
+        if isinstance(arg, ast.Attribute):
+            # Extract the method name from the attribute access
+            result = arg.attr
+            self._activity_name_cache[arg_id] = result
+            return result
 
         # If we can't extract the activity name, log a warning and return placeholder
         placeholder = f"<unknown_activity_{arg_id}>"

@@ -127,12 +127,12 @@ class DecisionDetector(ast.NodeVisitor):
             def visit_Await(self, node: ast.Await) -> None:
                 if isinstance(node.value, ast.Call):
                     call = node.value
-                    # Check for workflow.execute_activity or execute_activity
+                    # Check for workflow.execute_activity, execute_activity_method, or standalone
                     if isinstance(call.func, ast.Attribute):
-                        if call.func.attr == "execute_activity":
+                        if call.func.attr in ("execute_activity", "execute_activity_method"):
                             activity_lines.append(node.lineno)
                     elif isinstance(call.func, ast.Name):
-                        if call.func.id == "execute_activity":
+                        if call.func.id in ("execute_activity", "execute_activity_method"):
                             activity_lines.append(node.lineno)
                 self.generic_visit(node)
 
@@ -422,12 +422,12 @@ class SignalDetector(ast.NodeVisitor):
             def visit_Await(self, node: ast.Await) -> None:
                 if isinstance(node.value, ast.Call):
                     call = node.value
-                    # Check for workflow.execute_activity or execute_activity
+                    # Check for workflow.execute_activity, execute_activity_method, or standalone
                     if isinstance(call.func, ast.Attribute):
-                        if call.func.attr == "execute_activity":
+                        if call.func.attr in ("execute_activity", "execute_activity_method"):
                             activity_lines.append(node.lineno)
                     elif isinstance(call.func, ast.Name):
-                        if call.func.id == "execute_activity":
+                        if call.func.id in ("execute_activity", "execute_activity_method"):
                             activity_lines.append(node.lineno)
                 self.generic_visit(node)
 
@@ -439,22 +439,32 @@ class SignalDetector(ast.NodeVisitor):
     def _is_wait_condition_call(self, node: ast.Call) -> bool:
         """Check if a Call node is a wait_condition() function call.
 
-        This helper method identifies calls to the wait_condition() function by matching
-        against the function name. It handles both simple names and attribute access.
+        This helper method identifies calls to our custom wait_condition() helper
+        (imported from temporalio_graphs.helpers). It distinguishes between:
+
+        - Our custom helper: wait_condition(condition, timeout, name) - 3 args
+        - Temporal built-in: workflow.wait_condition(lambda: ...) - 1 arg
+
+        The distinction is made by checking argument count:
+        - 3 args: Our custom helper (detected)
+        - 1 arg: Temporal's built-in (ignored)
 
         Args:
             node: AST Call node to check.
 
         Returns:
-            True if the call is to wait_condition(), False otherwise.
+            True if the call is to our custom wait_condition() helper, False otherwise.
         """
         # Check for simple name: wait_condition(...)
-        if isinstance(node.func, ast.Name):
-            return node.func.id == "wait_condition"
+        if isinstance(node.func, ast.Name) and node.func.id == "wait_condition":
+            return True
 
         # Check for attribute access: workflow.wait_condition(...)
-        if isinstance(node.func, ast.Attribute):
-            return node.func.attr == "wait_condition"
+        # We need to distinguish between our helper and Temporal's built-in by arg count
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "wait_condition":
+            # Our custom helper has 3 args, Temporal's built-in has 1 arg
+            # Only process if it has 3 args (our custom helper)
+            return len(node.args) == 3
 
         return False
 
@@ -684,6 +694,24 @@ class ChildWorkflowDetector(ast.NodeVisitor):
         # Handle string literal: execute_child_workflow("MyWorkflow", ...)
         if isinstance(workflow_arg, ast.Constant) and isinstance(workflow_arg.value, str):
             return workflow_arg.value
+
+        # Handle attribute access: execute_child_workflow(MyWorkflow.run, ...)
+        # Extract the class name from the attribute access
+        if isinstance(workflow_arg, ast.Attribute):
+            if isinstance(workflow_arg.value, ast.Name):
+                return workflow_arg.value.id
+            else:
+                # Handle more complex attribute chains if needed
+                type_name = type(workflow_arg.value).__name__
+                raise WorkflowParseError(
+                    file_path=Path("unknown"),
+                    line=node.lineno,
+                    message=(
+                        f"execute_child_workflow() attribute access too complex. "
+                        f"Expected ClassName.run, got nested {type_name}"
+                    ),
+                    suggestion="Use simple pattern: workflow.execute_child_workflow(ChildWorkflow.run, ...)",
+                )
 
         # Workflow argument is not a class reference or string literal
         type_name = type(workflow_arg).__name__

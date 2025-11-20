@@ -60,3 +60,7 @@ dmypy.json
 # Output files
 *.mermaid
 graph_output.md
+
+.bmad/
+.claude/
+.opencode/
