@@ -146,12 +146,6 @@ class GraphGenerationError(TemporalioGraphsError): ...
       ├── approach3_static_analysis.py  # ✅ RECOMMENDED
       └── run_all_approaches.py
 
-/Temporalio.Graphs/              # Reference .NET implementation
-  ├── Temporalio.Graphs/         # Core library
-  │   ├── GraphBuilder.cs        # Main interceptor
-  │   └── RuntimeContext.cs      # State management
-  └── Samples/MoneyTransferWorker/  # Example workflow
-
 /src/temporalio_graphs/          # Python implementation (IMPLEMENTED)
   ├── __init__.py                # Public API (analyze_workflow)
   ├── analyzer.py                # WorkflowAnalyzer (AST parsing)
@@ -252,4 +246,4 @@ s((Start)) --> Withdraw --> 0{NeedToConvert} -- yes --> CurrencyConvert --> 1{Is
 - `/spike/EXECUTIVE_SUMMARY.md` - Architecture decision rationale
 - `/spike/findings.md` - 2,500+ word technical deep dive
 - `/spike/temporal-spike/approach3_static_analysis.py` - Working AST prototype
-- `/Temporalio.Graphs/Temporalio.Graphs/GraphBuilder.cs` - .NET reference implementation
+- [.NET reference implementation](https://github.com/oleg-shilo/Temporalio.Graphs) - Original Temporalio.Graphs (external repo)
