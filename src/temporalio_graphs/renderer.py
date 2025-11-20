@@ -171,8 +171,60 @@ class MermaidRenderer:
                     is_decision = step.node_type == 'decision'
                     is_signal = step.node_type == 'signal'
                     is_child_workflow = step.node_type == 'child_workflow'
+                    is_external_signal = step.node_type == 'external_signal'
 
-                    if is_signal:
+                    if is_external_signal:
+                        # External signal node - skip if show_external_signals is False
+                        if not context.show_external_signals:
+                            continue
+
+                        # Use deterministic ID: ext_sig_{signal_name}_{line_number}
+                        if step.line_number is None:
+                            raise ValueError(
+                                f"External signal step '{step.name}' missing line_number "
+                                f"in path {path.path_id}"
+                            )
+
+                        node_id = f"ext_sig_{step.name}_{step.line_number}"
+
+                        # Format label based on external_signal_label_style
+                        if context.external_signal_label_style == "target-pattern":
+                            target = step.target_workflow_pattern or "<unknown>"
+                            display_name = f"Signal '{step.name}' to {target}"
+                        else:  # "name-only"
+                            display_name = f"Signal '{step.name}'"
+
+                        # Add external signal node definition (deduplicated by dict key)
+                        if node_id not in node_definitions:
+                            external_signal_node = GraphNode(
+                                node_id, NodeType.EXTERNAL_SIGNAL, display_name
+                            )
+                            node_definitions[node_id] = external_signal_node.to_mermaid()
+
+                        # Add dashed edge from previous node to external signal node
+                        edge_label = ""
+                        if prev_node_id in path.decisions:
+                            decision_value = path.decisions[prev_node_id]
+                            edge_label = (
+                                context.decision_true_label
+                                if decision_value
+                                else context.decision_false_label
+                            )
+                        elif prev_node_id in signal_outcomes[path.path_id]:
+                            edge_label = signal_outcomes[path.path_id][prev_node_id]
+
+                        edge_key = (prev_node_id, node_id, edge_label)
+                        if edge_key not in seen_edges:
+                            if edge_label:
+                                edge = f"{prev_node_id} -- {edge_label} -.signal.-> {node_id}"
+                                edges.append(edge)
+                            else:
+                                edges.append(f"{prev_node_id} -.signal.-> {node_id}")
+                            seen_edges.add(edge_key)
+
+                        prev_node_id = node_id
+
+                    elif is_signal:
                         # Signal node - use signal name as node ID for reconvergence
                         node_id = step.name
 
@@ -203,10 +255,18 @@ class MermaidRenderer:
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
-                            if edge_label:
-                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            # Use dashed edge if previous node is external signal
+                            if prev_node_id.startswith("ext_sig_"):
+                                if edge_label:
+                                    edge = f"{prev_node_id} -- {edge_label} -.signal.-> {node_id}"
+                                    edges.append(edge)
+                                else:
+                                    edges.append(f"{prev_node_id} -.signal.-> {node_id}")
                             else:
-                                edges.append(f"{prev_node_id} --> {node_id}")
+                                if edge_label:
+                                    edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                                else:
+                                    edges.append(f"{prev_node_id} --> {node_id}")
                             seen_edges.add(edge_key)
 
                         prev_node_id = node_id
@@ -248,10 +308,18 @@ class MermaidRenderer:
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
-                            if edge_label:
-                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            # Use dashed edge if previous node is external signal
+                            if prev_node_id.startswith("ext_sig_"):
+                                if edge_label:
+                                    edge = f"{prev_node_id} -- {edge_label} -.signal.-> {node_id}"
+                                    edges.append(edge)
+                                else:
+                                    edges.append(f"{prev_node_id} -.signal.-> {node_id}")
                             else:
-                                edges.append(f"{prev_node_id} --> {node_id}")
+                                if edge_label:
+                                    edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                                else:
+                                    edges.append(f"{prev_node_id} --> {node_id}")
                             seen_edges.add(edge_key)
 
                         prev_node_id = node_id
@@ -296,10 +364,18 @@ class MermaidRenderer:
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
-                            if edge_label:
-                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            # Use dashed edge if previous node is external signal
+                            if prev_node_id.startswith("ext_sig_"):
+                                if edge_label:
+                                    edge = f"{prev_node_id} -- {edge_label} -.signal.-> {node_id}"
+                                    edges.append(edge)
+                                else:
+                                    edges.append(f"{prev_node_id} -.signal.-> {node_id}")
                             else:
-                                edges.append(f"{prev_node_id} --> {node_id}")
+                                if edge_label:
+                                    edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                                else:
+                                    edges.append(f"{prev_node_id} --> {node_id}")
                             seen_edges.add(edge_key)
 
                         prev_node_id = node_id
@@ -336,10 +412,18 @@ class MermaidRenderer:
 
                         edge_key = (prev_node_id, node_id, edge_label)
                         if edge_key not in seen_edges:
-                            if edge_label:
-                                edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                            # Use dashed edge if previous node is external signal
+                            if prev_node_id.startswith("ext_sig_"):
+                                if edge_label:
+                                    edge = f"{prev_node_id} -- {edge_label} -.signal.-> {node_id}"
+                                    edges.append(edge)
+                                else:
+                                    edges.append(f"{prev_node_id} -.signal.-> {node_id}")
                             else:
-                                edges.append(f"{prev_node_id} --> {node_id}")
+                                if edge_label:
+                                    edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                                else:
+                                    edges.append(f"{prev_node_id} --> {node_id}")
                             seen_edges.add(edge_key)
 
                         prev_node_id = node_id
@@ -365,10 +449,18 @@ class MermaidRenderer:
 
                 edge_key = (prev_node_id, "e", edge_label_to_end)
                 if edge_key not in seen_edges:
-                    if edge_label_to_end:
-                        edges.append(f"{prev_node_id} -- {edge_label_to_end} --> e")
+                    # Use dashed edge if previous node is external signal
+                    if prev_node_id.startswith("ext_sig_"):
+                        if edge_label_to_end:
+                            edge = f"{prev_node_id} -- {edge_label_to_end} -.signal.-> e"
+                            edges.append(edge)
+                        else:
+                            edges.append(f"{prev_node_id} -.signal.-> e")
                     else:
-                        edges.append(f"{prev_node_id} --> e")
+                        if edge_label_to_end:
+                            edges.append(f"{prev_node_id} -- {edge_label_to_end} --> e")
+                        else:
+                            edges.append(f"{prev_node_id} --> e")
                     seen_edges.add(edge_key)
 
         # Second pass: build output with nodes first, then edges
@@ -401,6 +493,11 @@ class MermaidRenderer:
         # Add all edge definitions
         for edge in edges:
             lines.append(edge)
+
+        # Add style directives for external signal nodes (orange/amber color)
+        for node_id, node_def in node_definitions.items():
+            if node_id.startswith("ext_sig_"):
+                lines.append(f"style {node_id} fill:#fff4e6,stroke:#ffa500")
 
         # Close Mermaid fence
         lines.append("```")

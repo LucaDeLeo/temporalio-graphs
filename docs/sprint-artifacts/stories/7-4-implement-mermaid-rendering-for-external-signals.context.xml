@@ -1,0 +1,259 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>4</storyId>
+    <title>Implement Mermaid Rendering for External Signals</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/7-4-implement-mermaid-rendering-for-external-signals.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>external signals to appear as distinct trapezoid shapes in Mermaid diagrams</iWant>
+    <soThat>I can visually distinguish peer-to-peer signals from other workflow patterns</soThat>
+    <tasks>
+      <task>Extend NodeType enum with EXTERNAL_SIGNAL</task>
+      <task>Add configuration options to GraphBuildingContext (show_external_signals, external_signal_label_style)</task>
+      <task>Implement trapezoid shape rendering in MermaidRenderer</task>
+      <task>Write comprehensive unit tests for rendering</task>
+      <task>Validate integration test with Mermaid output</task>
+      <task>Verify no regressions and test coverage</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">Trapezoid Shape Rendering - MermaidRenderer handles NodeType.EXTERNAL_SIGNAL and renders nodes with trapezoid syntax: node_id[/Signal Name\]</criterion>
+    <criterion id="AC2">Signal Label Formatting - External signal labels display target workflow pattern based on GraphBuildingContext.external_signal_label_style (name-only or target-pattern mode)</criterion>
+    <criterion id="AC3">Dashed Edge Style - External signal edges render with dashed style -.signal.-> to distinguish asynchronous signal flow</criterion>
+    <criterion id="AC4">Color Styling - External signal nodes have orange/amber color styling via Mermaid style directive: style ext_sig_1 fill:#fff4e6,stroke:#ffa500</criterion>
+    <criterion id="AC5">NodeType Enum Extension - NodeType enum includes EXTERNAL_SIGNAL = "external_signal" value</criterion>
+    <criterion id="AC6">Configuration Options - GraphBuildingContext includes show_external_signals and external_signal_label_style fields</criterion>
+    <criterion id="AC7">Valid Mermaid Syntax - Generated Mermaid syntax with trapezoid nodes is valid and renders correctly in Mermaid Live Editor</criterion>
+    <criterion id="AC8">Unit Tests for Rendering - New unit tests in tests/test_renderer.py validate trapezoid syntax, dashed edges, label formatting, color styling, and configuration options</criterion>
+    <criterion id="AC9">Integration Test Validation - Integration test validates external signal nodes appear in Mermaid output with correct trapezoid syntax and dashed edges</criterion>
+    <criterion id="AC10">Performance Target - Rendering completes in &lt;1ms for graphs with 10 external signal nodes</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Mermaid Rendering (lines 782-850, 1626-1634)</section>
+        <snippet>Trapezoid shape syntax [/SignalName\], dashed edge style -.signal.->, orange/amber color fill:#fff4e6,stroke:#ffa500. Label styles: name-only (default) shows Signal 'ship_order', target-pattern shows Signal 'ship_order' to shipping-{*}. Configuration options: show_external_signals, external_signal_label_style.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>NodeType Enum Extension (lines 591-602)</section>
+        <snippet>NodeType enum includes EXTERNAL_SIGNAL = "external_signal" value after CHILD_WORKFLOW. Distinct from SIGNAL (internal wait_condition) and CHILD_WORKFLOW (parent-child orchestration).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>GraphBuildingContext Extension (lines 451-464, 1631-1634)</section>
+        <snippet>Add show_external_signals: bool = True to toggle visibility. Add external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only" to control label verbosity.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>MermaidRenderer Extension API (lines 265-298)</section>
+        <snippet>_render_node() handles NodeType.EXTERNAL_SIGNAL with trapezoid syntax. _render_edge() uses dashed style for external signal edges. _apply_styling() adds orange/amber color to external signal nodes.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/7-3-integrate-external-signal-detection-into-analysis-pipeline.md</path>
+        <title>Story 7.3: Integration Pipeline Complete</title>
+        <section>Data Flow Established</section>
+        <snippet>Workflow source → AST → ExternalSignalDetector → WorkflowMetadata.external_signals → PathPermutationGenerator → GraphPath with external_signal steps → MermaidRenderer (THIS STORY). PathStep.node_type includes 'external_signal', PathStep.target_workflow_pattern field added.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/stories/6-2-implement-child-workflow-node-rendering-in-mermaid.md</path>
+        <title>Story 6.2: Child Workflow Rendering Pattern</title>
+        <section>Rendering Implementation</section>
+        <snippet>Child workflow nodes use double-bracket syntax [[ChildWorkflow]]. Node IDs are deterministic: child_{workflow_name}_{line}. GraphNode.to_mermaid() handles NodeType.CHILD_WORKFLOW case. Follow same pattern for EXTERNAL_SIGNAL.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>Mermaid Generation Optimization (ADR-001)</section>
+        <snippet>Static analysis architecture using AST traversal. No workflow execution. MermaidRenderer is stateless, converts GraphPath to Mermaid flowchart LR syntax. Strategy pattern for multiple output formats.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>renderer</kind>
+        <symbol>MermaidRenderer</symbol>
+        <lines>1-410</lines>
+        <reason>Main rendering class. Extend _render_node() to handle EXTERNAL_SIGNAL node type with trapezoid syntax. Extend _render_edge() to use dashed style for external signal edges. Add color styling in to_mermaid() for external signal nodes.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>method</kind>
+        <symbol>MermaidRenderer._render_node</symbol>
+        <lines>159-306</lines>
+        <reason>Node rendering logic for different node types. Currently handles activity, decision, signal, child_workflow. Add case for external_signal with trapezoid syntax: node_id[/label\]</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/renderer.py</path>
+        <kind>method</kind>
+        <symbol>MermaidRenderer.to_mermaid</symbol>
+        <lines>39-408</lines>
+        <reason>Main rendering orchestration. Add logic after edge generation to append color styling for external signal nodes: style ext_sig_X fill:#fff4e6,stroke:#ffa500</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/context.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphBuildingContext</symbol>
+        <lines>12-121</lines>
+        <reason>Configuration context for graph generation. Add show_external_signals: bool = True and external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only" fields after existing child_workflow_expansion field.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>enum</kind>
+        <symbol>NodeType</symbol>
+        <lines>13-34</lines>
+        <reason>Node type classification enum. Add EXTERNAL_SIGNAL = "external_signal" after CHILD_WORKFLOW (line 33). Update enum docstring to document external signal node type.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>GraphNode.to_mermaid</symbol>
+        <lines>84-116</lines>
+        <reason>Converts graph node to Mermaid syntax. Shows pattern for different node types (START/END: double parens, ACTIVITY: square brackets, DECISION: curly braces, SIGNAL: double curly braces, CHILD_WORKFLOW: double square brackets). Add EXTERNAL_SIGNAL case with trapezoid syntax.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>dataclass</kind>
+        <symbol>PathStep</symbol>
+        <lines>12-58</lines>
+        <reason>Represents single step in path. node_type includes 'external_signal'. Has target_workflow_pattern field for external signals. MermaidRenderer reads these fields to determine rendering.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>dataclass</kind>
+        <symbol>ExternalSignalCall</symbol>
+        <lines>374-415</lines>
+        <reason>External signal metadata from Story 7.1/7.2. Contains signal_name, target_workflow_pattern, source_line, node_id fields. MermaidRenderer uses this data to format labels and node IDs.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_renderer.py</path>
+        <kind>test</kind>
+        <symbol>test_to_mermaid_*</symbol>
+        <lines>1-150</lines>
+        <reason>Unit test patterns for MermaidRenderer. Shows test structure for node rendering, edge rendering, configuration options. Add parallel tests for external signal rendering following same patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_external_signals.py</path>
+        <kind>test</kind>
+        <symbol>order_workflow_with_external_signal</symbol>
+        <lines>18-54</lines>
+        <reason>Integration test fixture from Story 7.3. Creates workflow with external signal. Extend test assertions to validate Mermaid output contains trapezoid syntax, dashed edges, color styling.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1" />
+        <package name="pytest" version=">=8.0.0" dev="true" />
+        <package name="pytest-asyncio" version=">=0.23.0" dev="true" />
+        <package name="mypy" version=">=1.8.0" dev="true" />
+        <package name="ruff" version=">=0.2.0" dev="true" />
+        <package name="pytest-cov" version=">=4.1.0" dev="true" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>ADR-001 Static Analysis: MermaidRenderer is final stage of static analysis pipeline. No workflow execution. Pure AST-to-syntax transformation.</constraint>
+    <constraint>ADR-006 Type Safety: All type hints must pass mypy strict mode. Literal type for external_signal_label_style configuration.</constraint>
+    <constraint>Immutable Configuration: GraphBuildingContext is frozen dataclass. All new fields must have defaults for backward compatibility.</constraint>
+    <constraint>Mermaid Flowchart Syntax: Trapezoid shape uses [/label\] syntax (forward slash and backslash). Distinct from rectangles [label], diamonds {label}, hexagons {{label}}, subroutines [[label]].</constraint>
+    <constraint>Dashed Edge Syntax: Mermaid dashed edges use -.-> or -.label.->. External signals use -.signal.-> to indicate asynchronous flow.</constraint>
+    <constraint>Visual Differentiation Strategy: Each workflow pattern has unique visual representation. External signals: trapezoid + dashed edges + orange color. Activities: rectangle + solid edges + blue. Decisions: diamond + labeled edges + yellow. Internal signals: hexagon + solid edges + green.</constraint>
+    <constraint>Performance Target NFR-PERF-1: Rendering must complete in &lt;1ms for graphs with 10 external signal nodes. No performance degradation from new node type.</constraint>
+    <constraint>No Regressions: All Epic 1-6 tests must continue passing. Test coverage must remain >=80%. Mypy strict and ruff linting must pass.</constraint>
+    <constraint>Test Organization: Unit tests in test_renderer.py follow pattern test_render_X_node(), test_render_X_edge(), test_X_configuration(). Integration tests extend existing test_external_signals.py.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>MermaidRenderer._render_node</name>
+      <kind>method</kind>
+      <signature>def _render_node(self, node: GraphNode, context: GraphBuildingContext) -> str</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>Add case for NodeType.EXTERNAL_SIGNAL. Extract signal metadata from step. Format label based on context.external_signal_label_style. Return trapezoid syntax: node_id[/label\]</description>
+    </interface>
+    <interface>
+      <name>MermaidRenderer._render_edge</name>
+      <kind>method</kind>
+      <signature>Inferred from renderer.py structure</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>Check if edge connects from/to external signal node. Use dashed edge syntax -.signal.-> instead of solid edge --></description>
+    </interface>
+    <interface>
+      <name>MermaidRenderer.to_mermaid</name>
+      <kind>method</kind>
+      <signature>def to_mermaid(self, paths: list[GraphPath], context: GraphBuildingContext) -> str</signature>
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>After generating nodes and edges, iterate external signal nodes to append style directives: style node_id fill:#fff4e6,stroke:#ffa500</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext.show_external_signals</name>
+      <kind>field</kind>
+      <signature>show_external_signals: bool = True</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Boolean toggle to include/exclude external signal nodes from graph output. If False, skip external signal nodes during rendering.</description>
+    </interface>
+    <interface>
+      <name>GraphBuildingContext.external_signal_label_style</name>
+      <kind>field</kind>
+      <signature>external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"</signature>
+      <path>src/temporalio_graphs/context.py</path>
+      <description>Controls external signal label verbosity. "name-only": Signal 'ship_order'. "target-pattern": Signal 'ship_order' to shipping-{*}</description>
+    </interface>
+    <interface>
+      <name>NodeType.EXTERNAL_SIGNAL</name>
+      <kind>enum value</kind>
+      <signature>EXTERNAL_SIGNAL = "external_signal"</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Enum value for external signal node type. Distinct from SIGNAL (internal wait_condition), ACTIVITY, DECISION, CHILD_WORKFLOW.</description>
+    </interface>
+    <interface>
+      <name>PathStep.node_type</name>
+      <kind>field</kind>
+      <signature>node_type: Literal['activity', 'decision', 'signal', 'child_workflow', 'external_signal']</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>PathStep nodes from generator have node_type='external_signal' for external signals. Renderer checks this to determine rendering.</description>
+    </interface>
+    <interface>
+      <name>PathStep.target_workflow_pattern</name>
+      <kind>field</kind>
+      <signature>target_workflow_pattern: str | None</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Target workflow pattern for external signals (e.g., "shipping-{*}", "shipping-123", or None). Used for target-pattern label style.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing follows pytest framework with comprehensive unit and integration tests. Unit tests in tests/test_renderer.py validate rendering logic in isolation using GraphPath fixtures. Integration tests in tests/integration/test_external_signals.py validate complete pipeline with real workflow files. Test coverage target: >=80% overall, >=90% for renderer.py. All tests must pass mypy strict type checking. Performance tests use time.perf_counter() to validate rendering completes in &lt;1ms. Mermaid syntax validation: copy output to Mermaid Live Editor (https://mermaid.live/) to verify visual rendering.
+    </standards>
+    <locations>
+      <location>tests/test_renderer.py - Unit tests for MermaidRenderer</location>
+      <location>tests/integration/test_external_signals.py - Integration tests for external signal pipeline</location>
+    </locations>
+    <ideas>
+      <idea criterion="AC1">test_external_signal_trapezoid_shape() - Create GraphPath with external signal step, render to Mermaid, assert output contains [/Signal 'ship_order'\] trapezoid syntax</idea>
+      <idea criterion="AC2">test_external_signal_label_name_only() - Create context with external_signal_label_style="name-only", render external signal, assert label is [/Signal 'ship_order'\] without target pattern</idea>
+      <idea criterion="AC2">test_external_signal_label_target_pattern() - Create context with external_signal_label_style="target-pattern", render external signal with target="shipping-{*}", assert label is [/Signal 'ship_order' to shipping-{*}\]</idea>
+      <idea criterion="AC3">test_external_signal_dashed_edge() - Create path with Activity1 → ExternalSignal → Activity2, render to Mermaid, assert edges use -.signal.-> dashed style</idea>
+      <idea criterion="AC4">test_external_signal_color_styling() - Render graph with external signal, assert output contains style ext_sig_X fill:#fff4e6,stroke:#ffa500</idea>
+      <idea criterion="AC6">test_show_external_signals_false() - Create context with show_external_signals=False, render graph with external signal, assert external signal node does NOT appear in output</idea>
+      <idea criterion="AC10">test_rendering_performance_10_external_signals() - Create graph with 10 external signal nodes, measure rendering time using time.perf_counter(), assert time &lt; 1ms (0.001 seconds)</idea>
+      <idea criterion="AC7,AC9">Extend integration test test_external_signal_appears_in_paths() - Add assertions for Mermaid output: assert "[/Signal 'ship_order'" in result, assert "-.signal.->" in result, assert "style ext_sig_" in result</idea>
+      <idea criterion="AC7">Manual validation - Copy Mermaid output from test, paste into https://mermaid.live/, verify trapezoid nodes render correctly, verify dashed edges appear, verify orange/amber color</idea>
+    </ideas>
+  </tests>
+</story-context>

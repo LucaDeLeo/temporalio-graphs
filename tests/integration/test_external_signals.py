@@ -13,6 +13,7 @@ import pytest
 from temporalio_graphs.analyzer import WorkflowAnalyzer
 from temporalio_graphs.context import GraphBuildingContext
 from temporalio_graphs.generator import PathPermutationGenerator
+from temporalio_graphs.renderer import MermaidRenderer
 
 
 @pytest.fixture
@@ -122,7 +123,11 @@ class TestExternalSignalDetectionIntegration:
     def test_external_signal_appears_in_paths(
         self, order_workflow_with_external_signal: Path
     ) -> None:
-        """Validate PathPermutationGenerator includes external signal node in paths."""
+        """Validate PathPermutationGenerator includes external signal node in paths.
+
+        Also validates AC7, AC9: Mermaid rendering of external signals with
+        trapezoid syntax, dashed edges, and color styling.
+        """
         # Analyze workflow file
         context = GraphBuildingContext()
         analyzer = WorkflowAnalyzer()
@@ -149,6 +154,31 @@ class TestExternalSignalDetectionIntegration:
 
         assert path.steps[2].node_type == "activity"
         assert path.steps[2].name == "complete_order"
+
+        # AC7, AC9: Validate Mermaid rendering
+        renderer = MermaidRenderer()
+        mermaid_output = renderer.to_mermaid(paths, context)
+
+        # Validate trapezoid shape appears (AC7)
+        assert "[/Signal 'ship_order'\\]" in mermaid_output, (
+            "External signal should render with trapezoid syntax in Mermaid output"
+        )
+
+        # Validate dashed edge appears (AC7)
+        assert "-.signal.->" in mermaid_output, (
+            "External signal edges should use dashed style in Mermaid output"
+        )
+
+        # Validate color styling appears (AC7)
+        assert "style ext_sig_" in mermaid_output, (
+            "External signal color styling directive should appear in Mermaid output"
+        )
+        assert "fill:#fff4e6" in mermaid_output, (
+            "External signal should have orange/amber fill color"
+        )
+        assert "stroke:#ffa500" in mermaid_output, (
+            "External signal should have orange stroke color"
+        )
 
     def test_external_signal_node_ordering(
         self, order_workflow_with_external_signal: Path

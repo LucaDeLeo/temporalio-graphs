@@ -11,16 +11,17 @@ from temporalio_graphs._internal.graph_models import (
 
 
 def test_node_type_enum_values() -> None:
-    """Verify NodeType enum has all 6 values with correct string representations."""
+    """Verify NodeType enum has all 7 values with correct string representations."""
     assert NodeType.START.value == "start"
     assert NodeType.END.value == "end"
     assert NodeType.ACTIVITY.value == "activity"
     assert NodeType.DECISION.value == "decision"
     assert NodeType.SIGNAL.value == "signal"
     assert NodeType.CHILD_WORKFLOW.value == "child_workflow"
+    assert NodeType.EXTERNAL_SIGNAL.value == "external_signal"
 
-    # Verify all 6 members exist (Epic 6 adds CHILD_WORKFLOW)
-    assert len(NodeType) == 6
+    # Verify all 7 members exist (Epic 7 adds EXTERNAL_SIGNAL)
+    assert len(NodeType) == 7
 
 
 def test_graph_node_to_mermaid_start() -> None:
@@ -51,6 +52,13 @@ def test_graph_node_to_mermaid_signal() -> None:
     """GraphNode with SIGNAL type renders with double curly braces."""
     node = GraphNode("2", NodeType.SIGNAL, "WaitApproval", source_line=67)
     assert node.to_mermaid() == "2{{WaitApproval}}"
+
+
+def test_graph_node_to_mermaid_external_signal() -> None:
+    """GraphNode with EXTERNAL_SIGNAL type renders with trapezoid syntax."""
+    node = GraphNode("ext_sig_ship_order_50", NodeType.EXTERNAL_SIGNAL,
+                     "Signal 'ship_order'", source_line=50)
+    assert node.to_mermaid() == "ext_sig_ship_order_50[/Signal 'ship_order'\\]"
 
 
 def test_graph_edge_to_mermaid_no_label() -> None:

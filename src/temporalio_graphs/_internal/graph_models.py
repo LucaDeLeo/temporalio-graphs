@@ -23,6 +23,7 @@ class NodeType(Enum):
         DECISION: Conditional branching point (diamond node).
         SIGNAL: Signal wait or condition check (hexagonal node).
         CHILD_WORKFLOW: Child workflow execution (subroutine node).
+        EXTERNAL_SIGNAL: External signal sent to peer workflow (trapezoid node).
     """
 
     START = "start"
@@ -31,6 +32,7 @@ class NodeType(Enum):
     DECISION = "decision"
     SIGNAL = "signal"
     CHILD_WORKFLOW = "child_workflow"
+    EXTERNAL_SIGNAL = "external_signal"
 
 
 @dataclass
@@ -82,7 +84,7 @@ class GraphNode:
     source_line: int | None = None
 
     def to_mermaid(self) -> str:
-        """Generate Mermaid syntax for this node.
+        r"""Generate Mermaid syntax for this node.
 
         Returns the node representation in Mermaid flowchart syntax, with the
         shape determined by node_type:
@@ -91,6 +93,8 @@ class GraphNode:
         - ACTIVITY: Square brackets for rectangular nodes: 1[ActivityName]
         - DECISION: Curly braces for diamond nodes: 0{DecisionName}
         - SIGNAL: Double curly braces for hexagonal nodes: 2{{SignalName}}
+        - CHILD_WORKFLOW: Double square brackets for subroutine: 3[[ChildWorkflow]]
+        - EXTERNAL_SIGNAL: Trapezoid for async signal: 4[/ExternalSignal\]
 
         Returns:
             Mermaid node syntax string.
@@ -113,6 +117,9 @@ class GraphNode:
             case NodeType.CHILD_WORKFLOW:
                 # Child workflow nodes render with double brackets (subroutine notation)
                 return f"{self.node_id}[[{self.display_name}]]"
+            case NodeType.EXTERNAL_SIGNAL:
+                # External signal nodes render with trapezoid (forward/backslash)
+                return f"{self.node_id}[/{self.display_name}\\]"
 
 
 @dataclass

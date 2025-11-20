@@ -906,7 +906,324 @@ def test_mermaid_output_valid_with_signals(
     # Validate hexagon syntax is correct (double braces)
     assert "{{" in result and "}}" in result, \
         "Hexagon syntax requires double braces"
-    
+
     # No syntax errors (basic check)
     assert "{{" not in result.replace("{{", "").replace("}}", ""), \
         "No unmatched braces should exist"
+
+
+# ============================================================================
+# Epic 7: External Signal Rendering Tests
+# ============================================================================
+
+
+def test_external_signal_trapezoid_shape(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test AC1: External signal nodes render with trapezoid syntax [/Signal Name\\].
+
+    Validates that external signals use the correct Mermaid trapezoid shape
+    syntax with forward slash and backslash.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_activity("ProcessOrder")
+    # Add external signal using PathStep with all required fields
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+    path.add_activity("CompleteOrder")
+
+    result = renderer.to_mermaid([path], default_context)
+
+    # Verify trapezoid syntax appears
+    assert "[/Signal 'ship_order'\\]" in result, \
+        "External signal should render with trapezoid syntax [/...\\]"
+
+    # Verify node ID format
+    assert "ext_sig_ship_order_50" in result, \
+        "External signal node ID should follow ext_sig_{name}_{line} format"
+
+
+def test_external_signal_label_name_only(
+    renderer: MermaidRenderer
+) -> None:
+    """Test AC2: External signal labels display in name-only mode (default).
+
+    Validates that name-only mode shows just the signal name without target pattern.
+    """
+    context = GraphBuildingContext(external_signal_label_style="name-only")
+
+    path = GraphPath(path_id="path_0")
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    result = renderer.to_mermaid([path], context)
+
+    # Verify name-only label (no target pattern)
+    assert "[/Signal 'ship_order'\\]" in result, \
+        "Name-only mode should show Signal 'name' without target"
+    assert "to shipping" not in result, \
+        "Name-only mode should NOT include target pattern"
+
+
+def test_external_signal_label_target_pattern(
+    renderer: MermaidRenderer
+) -> None:
+    """Test AC2: External signal labels display in target-pattern mode.
+
+    Validates that target-pattern mode shows both signal name and target workflow.
+    """
+    context = GraphBuildingContext(external_signal_label_style="target-pattern")
+
+    path = GraphPath(path_id="path_0")
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    result = renderer.to_mermaid([path], context)
+
+    # Verify target-pattern label includes both name and target
+    assert "[/Signal 'ship_order' to shipping-{*}\\]" in result, \
+        "Target-pattern mode should show Signal 'name' to target"
+
+
+def test_external_signal_dashed_edge(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test AC3: External signal edges render with dashed style -.signal.->.
+
+    Validates that edges connecting to/from external signals use dashed notation
+    to indicate asynchronous communication.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_activity("ProcessOrder")
+
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    path.add_activity("CompleteOrder")
+
+    result = renderer.to_mermaid([path], default_context)
+
+    # Verify dashed edges appear
+    assert "-.signal.->" in result, \
+        "External signal edges should use dashed style -.signal.->"
+
+    # Verify both edges use dashed style
+    # Edge from ProcessOrder to external signal
+    assert "ProcessOrder -.signal.-> ext_sig_ship_order_50" in result or \
+           "ProcessOrder-.signal.->ext_sig_ship_order_50" in result.replace(" ", ""), \
+        "Edge TO external signal should be dashed"
+
+    # Edge from external signal to CompleteOrder
+    assert "ext_sig_ship_order_50 -.signal.-> CompleteOrder" in result or \
+           "ext_sig_ship_order_50-.signal.->CompleteOrder" in result.replace(" ", ""), \
+        "Edge FROM external signal should be dashed"
+
+
+def test_external_signal_color_styling(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test AC4: External signal nodes have orange/amber color styling.
+
+    Validates that style directive is generated with correct fill and stroke colors.
+    """
+    path = GraphPath(path_id="path_0")
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    result = renderer.to_mermaid([path], default_context)
+
+    # Verify style directive exists
+    assert "style ext_sig_ship_order_50 fill:#fff4e6,stroke:#ffa500" in result, \
+        "External signal should have orange/amber color styling"
+
+
+def test_show_external_signals_false(
+    renderer: MermaidRenderer
+) -> None:
+    """Test AC6: Configuration option show_external_signals=False suppresses external signals.
+
+    Validates that external signal nodes are completely excluded from output
+    when show_external_signals is False.
+    """
+    context = GraphBuildingContext(show_external_signals=False)
+
+    path = GraphPath(path_id="path_0")
+    path.add_activity("ProcessOrder")
+
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    path.add_activity("CompleteOrder")
+
+    result = renderer.to_mermaid([path], context)
+
+    # Verify external signal does NOT appear
+    assert "ext_sig_ship_order_50" not in result, \
+        "External signal node should be suppressed when show_external_signals=False"
+    assert "[/Signal" not in result, \
+        "Trapezoid syntax should not appear when external signals are suppressed"
+
+    # Verify activities still appear
+    assert "ProcessOrder" in result, \
+        "Activities should still render when external signals are suppressed"
+    assert "CompleteOrder" in result, \
+        "Activities should still render when external signals are suppressed"
+
+
+def test_rendering_performance_10_external_signals(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test AC10: Rendering completes in <1ms for graphs with 10 external signals.
+
+    Performance test to ensure external signal rendering doesn't degrade performance.
+    """
+    path = GraphPath(path_id="path_0")
+
+    from temporalio_graphs.path import PathStep
+
+    # Add 10 external signal nodes
+    for i in range(10):
+        signal_step = PathStep(
+            node_type='external_signal',
+            name=f'signal_{i}',
+            line_number=100 + i,
+            target_workflow_pattern=f'workflow-{i}'
+        )
+        path.steps.append(signal_step)
+
+    # Measure rendering time
+    start_time = time.perf_counter()
+    result = renderer.to_mermaid([path], default_context)
+    end_time = time.perf_counter()
+
+    rendering_time = end_time - start_time
+
+    # Verify rendering completed
+    assert len(result) > 0, "Rendering should produce output"
+
+    # Verify performance target (<1ms = 0.001 seconds)
+    # Allow 10ms for safety (CI systems can be slower)
+    assert rendering_time < 0.010, \
+        f"Rendering 10 external signals should complete in <10ms, took {rendering_time*1000:.2f}ms"
+
+    # Verify all external signals rendered
+    for i in range(10):
+        assert f"ext_sig_signal_{i}_{100+i}" in result, \
+            f"External signal {i} should be rendered"
+
+
+def test_external_signal_with_decisions(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test external signals work correctly with decision nodes.
+
+    Validates that external signals can appear in decision branches and edges
+    are labeled correctly.
+    """
+    path = GraphPath(path_id="path_0")
+    path.add_activity("CheckInventory")
+    decision_id = path.add_decision("d0", True, "InStock")
+
+    from temporalio_graphs.path import PathStep
+    external_signal_step = PathStep(
+        node_type='external_signal',
+        name='notify_warehouse',
+        line_number=75,
+        target_workflow_pattern='warehouse-{*}'
+    )
+    path.steps.append(external_signal_step)
+
+    path.add_activity("ShipOrder")
+
+    result = renderer.to_mermaid([path], default_context)
+
+    # Verify decision node appears
+    assert "d0{InStock}" in result or "d0{In Stock}" in result, \
+        "Decision node should render"
+
+    # Verify external signal appears
+    assert "ext_sig_notify_warehouse_75" in result, \
+        "External signal should render"
+
+    # Verify edge from decision to external signal has label
+    assert "-- yes -.signal.-> ext_sig_notify_warehouse_75" in result or \
+           "d0 -- yes -.signal.-> ext_sig_notify_warehouse_75" in result, \
+        "Edge from decision to external signal should have yes label and dashed style"
+
+
+def test_external_signal_multiple_paths(
+    renderer: MermaidRenderer, default_context: GraphBuildingContext
+) -> None:
+    """Test external signals are deduplicated across multiple paths.
+
+    Validates that when the same external signal appears in multiple paths,
+    it's rendered only once with proper edge deduplication.
+    """
+    from temporalio_graphs.path import PathStep
+
+    # Path 1
+    path1 = GraphPath(path_id="path_0")
+    path1.add_activity("ProcessOrder")
+    signal_step1 = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path1.steps.append(signal_step1)
+
+    # Path 2 - same external signal
+    path2 = GraphPath(path_id="path_1")
+    path2.add_activity("ProcessOrder")
+    signal_step2 = PathStep(
+        node_type='external_signal',
+        name='ship_order',
+        line_number=50,
+        target_workflow_pattern='shipping-{*}'
+    )
+    path2.steps.append(signal_step2)
+
+    result = renderer.to_mermaid([path1, path2], default_context)
+
+    # Count occurrences of external signal node definition
+    node_count = result.count("ext_sig_ship_order_50[/Signal 'ship_order'\\]")
+
+    # Should appear exactly once (deduplicated)
+    assert node_count == 1, \
+        f"External signal node should be deduplicated, found {node_count} definitions"

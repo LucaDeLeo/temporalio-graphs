@@ -11,7 +11,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class GraphBuildingContext:
-    """Configuration context for workflow graph generation.
+    r"""Configuration context for workflow graph generation.
 
     This immutable configuration object controls all aspects of graph building,
     including output options, node labeling, and resource limits. Once created,
@@ -77,6 +77,16 @@ class GraphBuildingContext:
             - "subgraph": Renders workflows as Mermaid subgraphs with clear workflow
               boundaries and transitions between parent and child workflows.
             Default: "reference".
+        show_external_signals: Include external signal nodes in graph output (Epic 7).
+            When True, external signals appear as trapezoid nodes with dashed edges.
+            When False, external signal nodes are suppressed from the output.
+            Default: True.
+        external_signal_label_style: Control external signal label verbosity (Epic 7).
+            Two modes:
+            - "name-only" (default): Shows just signal name: [/Signal 'ship_order'\]
+            - "target-pattern": Includes target workflow pattern:
+              [/Signal 'ship_order' to shipping-{*}\]
+            Default: "name-only".
 
     Example:
         >>> # Basic usage with defaults
@@ -118,3 +128,5 @@ class GraphBuildingContext:
     output_format: Literal["mermaid", "paths", "full"] = "full"
     max_expansion_depth: int = 2
     child_workflow_expansion: Literal["reference", "inline", "subgraph"] = "reference"
+    show_external_signals: bool = True
+    external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"
