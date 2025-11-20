@@ -371,6 +371,49 @@ class ChildWorkflowCall:
     parent_workflow: str
 
 
+@dataclass(frozen=True)
+class ExternalSignalCall:
+    """Represents a peer-to-peer signal sent to an external workflow.
+
+    An external signal call is detected when a workflow uses
+    workflow.get_external_workflow_handle() to obtain a handle to another workflow
+    and then calls .signal() on that handle to send a signal. This enables
+    peer-to-peer communication visualization between workflows.
+
+    The frozen=True attribute ensures ExternalSignalCall instances are immutable,
+    preventing accidental modifications to signal metadata once created.
+
+    Args:
+        signal_name: Name of the signal being sent (from first argument to .signal()).
+        target_workflow_pattern: Pattern describing the target workflow ID.
+            Can be: exact string literal ("shipping-123"), wildcard pattern for
+            f-strings ("ship-{*}"), or "<dynamic>" for variables/function calls.
+        source_line: Line number in source code where the signal call is made.
+        node_id: Unique identifier for this signal node in the graph.
+            Format: ext_sig_{signal_name}_{line_number}
+        source_workflow: Name of the workflow class sending the signal.
+
+    Example:
+        >>> signal_call = ExternalSignalCall(
+        ...     signal_name="ship_order",
+        ...     target_workflow_pattern="shipping-123",
+        ...     source_line=45,
+        ...     node_id="ext_sig_ship_order_45",
+        ...     source_workflow="OrderWorkflow"
+        ... )
+        >>> signal_call.signal_name
+        'ship_order'
+        >>> signal_call.target_workflow_pattern
+        'shipping-123'
+    """
+
+    signal_name: str
+    target_workflow_pattern: str
+    source_line: int
+    node_id: str
+    source_workflow: str
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.

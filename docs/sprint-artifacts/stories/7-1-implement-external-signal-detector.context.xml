@@ -1,0 +1,263 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>7.1</storyId>
+    <title>Implement External Signal Detector</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/7-1-implement-external-signal-detector.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library developer</asA>
+    <iWant>to detect `get_external_workflow_handle()` and `.signal()` calls in workflow code</iWant>
+    <soThat>I can identify peer-to-peer signal communication for visualization</soThat>
+    <tasks>
+      - Implement ExternalSignalDetector class structure (AC: 1, 9)
+      - Implement handle assignment detection (AC: 2)
+      - Implement signal call detection (AC: 3, 4, 6)
+      - Implement target pattern extraction (AC: 5)
+      - Implement error handling and validation (AC: 10)
+      - Add comprehensive unit tests (AC: 11)
+      - Verify no regressions (AC: 12)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. ExternalSignalDetector class exists in `src/temporalio_graphs/detector.py` (after ChildWorkflowDetector ~line 756) extending `ast.NodeVisitor` following established pattern
+    2. Detector implements `visit_Assign()` to track `workflow.get_external_workflow_handle()` calls and stores handle assignments as `{var_name: (target_pattern, line_number)}`
+    3. Detector implements `visit_Await()` to detect `.signal()` method calls on external workflow handles
+    4. Detector extracts signal name from first argument of `.signal()` call
+    5. Detector extracts target workflow pattern from `get_external_workflow_handle()` argument: string literal (exact), format string (`"prefix-{*}"` wildcard pattern), or `&lt;dynamic&gt;` for variables/function calls
+    6. Detector handles two-step pattern (`handle = get_external_workflow_handle(...); await handle.signal(...)`) and inline pattern (`await get_external_workflow_handle(...).signal(...)`)
+    7. Detector generates deterministic signal node IDs using format: `ext_sig_{signal_name}_{line_number}`
+    8. Detector has property `external_signals` returning `list[ExternalSignalCall]` with all detected signals
+    9. Detector has `set_source_workflow(workflow_name: str)` method to store source workflow context for signal metadata
+    10. Detector raises `WorkflowParseError` for invalid signal patterns with actionable error messages including line numbers and suggestions
+    11. Unit tests in `tests/test_detector.py` achieve 100% coverage for ExternalSignalDetector
+    12. All existing Epic 1-6 tests continue passing with no failures
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>ExternalSignalDetector API (lines 191-307)</section>
+        <snippet>Defines ExternalSignalDetector class to detect `get_external_workflow_handle()` and `.signal()` calls in AST. Handles two-step pattern (handle assignment + signal call) and inline pattern (chained call). Extracts signal names and target workflow patterns (string literal, format string, dynamic). See lines 280-307 for AST detection pseudo-code.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>AST Node Patterns (lines 501-566)</section>
+        <snippet>Documents AST structure for two-step pattern (Assign node for handle, Await node for signal) and inline pattern (chained Call with attribute access). Shows AST representation of format strings (`ast.JoinedStr` with `FormattedValue` nodes) for pattern extraction. See lines 543-566 for format string example.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>ExternalSignalCall Data Model (lines 573-589)</section>
+        <snippet>Defines frozen dataclass `ExternalSignalCall` with fields: signal_name, target_workflow_pattern (string ID, pattern, or "&lt;dynamic&gt;"), source_line, node_id (format: `ext_sig_{name}_{line}`), source_workflow. Used by ExternalSignalDetector to store detected signals.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Algorithm: External Signal Detection (lines 605-644)</section>
+        <snippet>Pseudo-code for detection algorithm: `visit_Assign` tracks handle assignments in dict, `visit_Await` detects `.signal()` calls, `extract_workflow_id_pattern` handles string literals, f-strings (wildcard pattern), and variables (dynamic fallback). Generates node ID using `ext_sig_{signal_name}_{line}` format.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Edge Cases and Error Handling (lines 647-686)</section>
+        <snippet>Documents edge cases: inline signal calls (no intermediate handle), dynamic workflow IDs (fallback to "&lt;dynamic&gt;"), conditional signals (detect inside if block), multiple signals to same target, invalid signal call error handling. All errors must include line numbers and actionable suggestions.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>ADR-001: Static Analysis Over Runtime Interceptors (lines 1357-1380)</section>
+        <snippet>Decision to use static code analysis (Python AST) instead of runtime interceptors. Rationale: Python SDK cannot mock activity returns, static analysis is faster (&lt;1ms), generates ALL paths without execution. Consequence: requires explicit marking, cannot detect runtime-only patterns. Status: Accepted.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>ADR-006: mypy Strict Mode for Type Safety (lines 1489-1512)</section>
+        <snippet>Decision to use mypy strict mode for all source code. Rationale: NFR-QUAL-1 requirement (100% type hint coverage), excellent IDE support, catch errors before runtime. Consequences: More upfront effort, stricter than typical Python. Status: Accepted. All detector methods must have complete type hints.</snippet>
+      </artifact>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>module</kind>
+        <symbol>DecisionDetector</symbol>
+        <lines>36-311</lines>
+        <reason>Reference pattern for ExternalSignalDetector. Shows AST visitor pattern: extends `ast.NodeVisitor`, implements `visit_*` methods, uses helper methods prefixed with `_`, stores results in private list, exposes via property. Line 61-64: initialization pattern. Lines 68-113: `visit_Call` pattern with error handling. Lines 187-208: helper method pattern.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>module</kind>
+        <symbol>SignalDetector</symbol>
+        <lines>313-560</lines>
+        <reason>Another detector reference pattern. Shows `visit_Call` implementation (lines 346-369), signal metadata extraction (lines 471-533), deterministic ID generation (lines 535-550), and property pattern (lines 552-559). Similar structure to what ExternalSignalDetector needs.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>module</kind>
+        <symbol>ChildWorkflowDetector</symbol>
+        <lines>562-756</lines>
+        <reason>Most similar detector to ExternalSignalDetector (both detect external workflow calls). Shows: `set_parent_workflow` method pattern (lines 594-600), attribute access checking (lines 635-654), workflow name extraction from class reference or string (lines 656-729), call ID generation (lines 731-746). ExternalSignalDetector will follow similar pattern but detect `.signal()` instead of `execute_child_workflow()`.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>ChildWorkflowCall</symbol>
+        <lines>334-372</lines>
+        <reason>Reference for ExternalSignalCall dataclass structure (Story 7.2). Shows frozen dataclass pattern with workflow name, call site line, call ID, parent workflow fields. ExternalSignalCall will have similar structure: signal_name, target_workflow_pattern, source_line, node_id, source_workflow.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>module</kind>
+        <symbol>DecisionPoint</symbol>
+        <lines>244-291</lines>
+        <reason>Shows frozen dataclass pattern with complete docstring. ExternalSignalCall should follow same documentation style: class docstring explaining purpose, Args section with field descriptions, Example section showing usage. Note frozen=True for immutability.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/exceptions.py</path>
+        <kind>module</kind>
+        <symbol>WorkflowParseError</symbol>
+        <lines>26-77</lines>
+        <reason>Exception class to use for invalid signal patterns. Constructor takes file_path, line, message, suggestion. Formats error with file path, line number, and actionable suggestion (lines 67-72). ExternalSignalDetector should raise this for invalid `.signal()` calls.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_detector.py</path>
+        <kind>test_module</kind>
+        <symbol>TestDecisionDetectorBasic</symbol>
+        <lines>28-78</lines>
+        <reason>Test structure pattern for ExternalSignalDetector tests. Shows: class-based test organization, single detection test (lines 31-42), multiple detection test (lines 44-59), nested detection test (lines 61-77). Use similar structure for `TestExternalSignalDetector`.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_detector.py</path>
+        <kind>test_module</kind>
+        <symbol>TestSignalDetectorBasic</symbol>
+        <lines>594-646</lines>
+        <reason>Test pattern for signal detection. Shows: fixture creation with sample source (lines 599-601), AST parsing (line 602), detector instantiation and visit (lines 603-604), assertions (lines 606-607). ExternalSignalDetector tests should follow same pattern.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_detector.py</path>
+        <kind>test_module</kind>
+        <symbol>TestChildWorkflowDetectorBasic</symbol>
+        <lines>938-999</lines>
+        <reason>Test pattern most similar to what ExternalSignalDetector needs. Tests class reference detection (lines 941-953), string literal detection (lines 955-967), multiple calls (lines 969-984), and filtering non-matching calls (lines 986-998). Use same test structure for external signal detection.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <package>temporalio</package>
+        <version>>=1.7.1</version>
+        <reason>Required for workflow type definitions and decorators. No execution, just AST analysis of Temporal workflow code.</reason>
+      </python>
+      <python>
+        <package>ast</package>
+        <version>stdlib</version>
+        <reason>Built-in Python module for AST parsing and traversal. Core dependency for static analysis. Use `ast.parse()`, `ast.NodeVisitor`, `ast.Assign`, `ast.Await`, `ast.Call`, `ast.Attribute`, `ast.Constant`, `ast.JoinedStr`.</reason>
+      </python>
+      <python>
+        <package>logging</package>
+        <version>stdlib</version>
+        <reason>Built-in logging module. Use `logging.getLogger(__name__)` pattern for debug messages during detection.</reason>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - **AST Visitor Pattern (ADR-001)**: ExternalSignalDetector MUST extend `ast.NodeVisitor` and follow established detector pattern from Epic 3, 4, 6. Use `visit_Assign()` for handle assignments, `visit_Await()` for signal calls, helper methods prefixed with `_`.
+
+    - **Static Analysis Only**: Detection is purely AST-based with no workflow execution. Cannot resolve dynamic workflow IDs (variables, function calls) at static analysis time - these MUST fallback to `&lt;dynamic&gt;` pattern.
+
+    - **Immutable Data (Story 7.2)**: ExternalSignalCall will be frozen dataclass. Detector MUST return copy of `_external_signals` list via property to prevent external mutation.
+
+    - **Error Handling**: MUST raise `WorkflowParseError` (from `src/temporalio_graphs/exceptions.py`) for invalid patterns. Error messages MUST include file path, line number, and actionable suggestions per Architecture NFR-USE-2.
+
+    - **Type Safety (ADR-006)**: Complete type hints required for mypy strict mode. All methods, parameters, return types MUST be fully typed. Use `ast.expr` for AST expression nodes, `ast.Call` for call nodes, `ast.Assign` for assignments.
+
+    - **File Location**: Add ExternalSignalDetector class to `src/temporalio_graphs/detector.py` after line 756 (after ChildWorkflowDetector). Extend existing test file `tests/test_detector.py` with new test class.
+
+    - **Node ID Format**: MUST use format `ext_sig_{signal_name}_{line_number}` for deterministic node IDs. Replace spaces in signal name with underscores, lowercase.
+
+    - **100% Test Coverage**: All ExternalSignalDetector branches, edge cases, error conditions MUST be tested. Use `pytest --cov=src/temporalio_graphs/detector.py --cov-report=term-missing` to verify.
+
+    - **No Regressions**: All existing 547+ Epic 1-6 tests MUST continue passing. Run full test suite after implementation.
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ast.NodeVisitor</name>
+      <kind>base class</kind>
+      <signature>class ast.NodeVisitor: visit(node), generic_visit(node)</signature>
+      <path>ast (stdlib)</path>
+      <reason>Base class for ExternalSignalDetector. Must implement `visit_Assign(node: ast.Assign)` and `visit_Await(node: ast.Await)` methods. Always call `generic_visit(node)` to continue traversal.</reason>
+    </interface>
+
+    <interface>
+      <name>WorkflowParseError</name>
+      <kind>exception class</kind>
+      <signature>WorkflowParseError(file_path: Path, line: int, message: str, suggestion: str)</signature>
+      <path>src/temporalio_graphs/exceptions.py</path>
+      <reason>Exception to raise for invalid signal patterns. Must provide file path, line number, descriptive message, and actionable suggestion for fixing the error.</reason>
+    </interface>
+
+    <interface>
+      <name>ExternalSignalCall (Story 7.2)</name>
+      <kind>dataclass</kind>
+      <signature>@dataclass(frozen=True) ExternalSignalCall: signal_name, target_workflow_pattern, source_line, node_id, source_workflow</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <reason>Data model for storing detected external signal calls. Will be created in Story 7.2. ExternalSignalDetector will create instances of this class. Reference ChildWorkflowCall (lines 334-372) for structure.</reason>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest >=8.0.0 with pytest-asyncio for async test support. Test organization: class-based test suites mirroring source structure (TestExternalSignalDetector in tests/test_detector.py). Fixtures: create reusable AST fixtures for sample workflows with external signals. Coverage: Use pytest-cov to measure coverage, target 100% for ExternalSignalDetector. Assertions: Use descriptive assertions with clear failure messages. Edge cases: Test all branches, error conditions, and AST patterns documented in tech spec.
+    </standards>
+
+    <locations>
+      tests/test_detector.py - Extend existing file with new TestExternalSignalDetector class after TestChildWorkflowEdgeCases
+      tests/fixtures/sample_workflows/ - Optional: create fixture files for complex test scenarios
+    </locations>
+
+    <ideas>
+      - test_single_external_signal_two_step_pattern: Basic two-step pattern (handle = get_external_workflow_handle(...); await handle.signal(...)) with string literal target. Verify signal_name, target_workflow_pattern (exact string), node_id format.
+
+      - test_single_external_signal_inline_pattern: Chained call pattern (await get_external_workflow_handle(...).signal(...)). Verify detection works without intermediate handle variable.
+
+      - test_multiple_external_signals_to_different_targets: Workflow with 2+ external signals to different workflows. Verify all signals detected, each with correct target pattern and node ID.
+
+      - test_multiple_external_signals_to_same_target: Multiple signals sent to same workflow. Verify each signal gets unique node ID (different line numbers).
+
+      - test_format_string_target_pattern_extraction: F-string workflow ID like `f"shipping-{order_id}"`. Verify target_workflow_pattern becomes `"shipping-{*}"` (wildcard pattern).
+
+      - test_format_string_multiple_placeholders: F-string with multiple placeholders `f"ship-{a}-{b}"`. Verify pattern becomes `"ship-{*}-{*}"`.
+
+      - test_dynamic_target_fallback: Variable or function call as target (e.g., `workflow_id` variable, `compute_id()` call). Verify target_workflow_pattern is `"&lt;dynamic&gt;"`.
+
+      - test_signal_inside_conditional_if_block: Signal call inside if statement. Verify detection works in nested code structures.
+
+      - test_signal_inside_loop_for_block: Signal call inside for loop. Verify detection works (AC doesn't mention branching for loops, just detect the call).
+
+      - test_invalid_signal_call_no_arguments: `.signal()` with no arguments. Verify raises WorkflowParseError with message about missing signal name, includes line number and suggestion.
+
+      - test_invalid_signal_call_not_on_handle: `.signal()` called on non-handle variable. Verify detector handles gracefully (may not match pattern, just don't crash).
+
+      - test_external_signal_node_id_format_deterministic: Verify node ID format is `ext_sig_{signal_name}_{line}`, spaces replaced with underscores, lowercase.
+
+      - test_source_workflow_context_stored: Use `set_source_workflow("WorkflowA")`, verify ExternalSignalCall has source_workflow="WorkflowA".
+
+      - test_external_signals_property_returns_list: Verify `detector.external_signals` returns list[ExternalSignalCall].
+
+      - test_external_signals_property_immutable: Verify modifying returned list doesn't affect detector internal state (returns copy).
+
+      - test_detector_reuse_creates_fresh_state: Create two detector instances, verify independent state (no shared mutable data).
+    </ideas>
+  </tests>
+</story-context>

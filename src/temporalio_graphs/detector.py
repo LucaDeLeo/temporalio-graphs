@@ -27,7 +27,12 @@ import ast
 import logging
 from pathlib import Path
 
-from temporalio_graphs._internal.graph_models import ChildWorkflowCall, DecisionPoint, SignalPoint
+from temporalio_graphs._internal.graph_models import (
+    ChildWorkflowCall,
+    DecisionPoint,
+    ExternalSignalCall,
+    SignalPoint,
+)
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 logger = logging.getLogger(__name__)
@@ -710,7 +715,10 @@ class ChildWorkflowDetector(ast.NodeVisitor):
                         f"execute_child_workflow() attribute access too complex. "
                         f"Expected ClassName.run, got nested {type_name}"
                     ),
-                    suggestion="Use simple pattern: workflow.execute_child_workflow(ChildWorkflow.run, ...)",
+                    suggestion=(
+                        "Use simple pattern: "
+                        "workflow.execute_child_workflow(ChildWorkflow.run, ...)"
+                    ),
                 )
 
         # Workflow argument is not a class reference or string literal
@@ -753,3 +761,256 @@ class ChildWorkflowDetector(ast.NodeVisitor):
             List of ChildWorkflowCall objects extracted during AST traversal.
         """
         return self._child_calls
+
+
+class ExternalSignalDetector(ast.NodeVisitor):
+    """AST visitor to detect external workflow signal calls.
+
+    This detector identifies peer-to-peer workflow signaling patterns where one workflow
+    obtains a handle to another workflow via workflow.get_external_workflow_handle()
+    and sends a signal via .signal(). Supports both two-step pattern (handle assignment
+    followed by signal call) and inline pattern (chained call).
+
+    The detector extracts signal names and target workflow patterns, which can be:
+    - Exact string literal: "shipping-123"
+    - Wildcard pattern from f-string: f"ship-{order_id}" → "ship-{*}"
+    - Dynamic fallback: variable or function call → "<dynamic>"
+
+    Usage:
+        >>> source = '''
+        ... import temporalio.workflow as workflow
+        ... @workflow.defn
+        ... class OrderWorkflow:
+        ...     @workflow.run
+        ...     async def run(self):
+        ...         handle = workflow.get_external_workflow_handle("shipping-123")
+        ...         await handle.signal("ship_order", order_data)
+        ... '''
+        >>> tree = ast.parse(source)
+        >>> detector = ExternalSignalDetector()
+        >>> detector.set_source_workflow("OrderWorkflow")
+        >>> detector.visit(tree)
+        >>> signals = detector.external_signals
+        >>> len(signals)
+        1
+        >>> signals[0].signal_name
+        'ship_order'
+        >>> signals[0].target_workflow_pattern
+        'shipping-123'
+    """
+
+    def __init__(self) -> None:
+        """Initialize ExternalSignalDetector with empty state."""
+        self._external_signals: list[ExternalSignalCall] = []
+        self._handle_assignments: dict[str, tuple[str, int]] = {}
+        self._source_workflow: str = ""
+        self._file_path: Path = Path("")
+
+    def set_source_workflow(self, workflow_name: str) -> None:
+        """Set the source workflow context for signal metadata.
+
+        Args:
+            workflow_name: Name of the workflow class containing signal calls.
+        """
+        self._source_workflow = workflow_name
+
+    def set_file_path(self, file_path: Path) -> None:
+        """Set file path for error reporting.
+
+        Args:
+            file_path: Path to the workflow source file being analyzed.
+        """
+        self._file_path = file_path
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Detect handle = workflow.get_external_workflow_handle(...) assignments.
+
+        Tracks handle variable assignments to map signal calls to target workflows.
+
+        Args:
+            node: AST Assign node to check for handle assignment.
+        """
+        # Check if this is a get_external_workflow_handle() call
+        if isinstance(node.value, ast.Call):
+            if self._is_get_external_workflow_handle_call(node.value):
+                # Extract variable name from targets[0]
+                if node.targets and isinstance(node.targets[0], ast.Name):
+                    var_name = node.targets[0].id
+                    # Extract target workflow pattern from first argument
+                    if node.value.args:
+                        target_pattern = self._extract_target_pattern(node.value.args[0])
+                        line_num = node.lineno
+                        self._handle_assignments[var_name] = (target_pattern, line_num)
+
+        self.generic_visit(node)
+
+    def visit_Await(self, node: ast.Await) -> None:
+        """Detect await handle.signal(...) or await get_external_workflow_handle(...).signal(...).
+
+        Handles both two-step pattern (using stored handle assignment) and inline pattern
+        (chained call).
+
+        Args:
+            node: AST Await node to check for signal call.
+        """
+        if isinstance(node.value, ast.Call):
+            # Check if this is a .signal() call
+            if isinstance(node.value.func, ast.Attribute) and node.value.func.attr == "signal":
+                # Two-step pattern: await handle_var.signal(...)
+                if isinstance(node.value.func.value, ast.Name):
+                    var_name = node.value.func.value.id
+                    if var_name in self._handle_assignments:
+                        self._process_signal_call(
+                            node.value,
+                            self._handle_assignments[var_name][0],
+                            node.lineno,
+                        )
+                # Inline pattern: await get_external_workflow_handle(...).signal(...)
+                elif isinstance(node.value.func.value, ast.Call):
+                    if self._is_get_external_workflow_handle_call(node.value.func.value):
+                        # Extract target pattern from get_external_workflow_handle argument
+                        if node.value.func.value.args:
+                            target_pattern = self._extract_target_pattern(
+                                node.value.func.value.args[0]
+                            )
+                            self._process_signal_call(
+                                node.value, target_pattern, node.lineno
+                            )
+
+        self.generic_visit(node)
+
+    def _is_get_external_workflow_handle_call(self, node: ast.Call) -> bool:
+        """Check if node is workflow.get_external_workflow_handle() call.
+
+        Args:
+            node: AST Call node to check.
+
+        Returns:
+            True if this is a get_external_workflow_handle() call.
+        """
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr == "get_external_workflow_handle":
+                # Check if called on workflow module
+                if isinstance(node.func.value, ast.Name):
+                    return node.func.value.id == "workflow"
+        return False
+
+    def _process_signal_call(
+        self, signal_call: ast.Call, target_pattern: str, line: int
+    ) -> None:
+        """Process a detected signal call and create ExternalSignalCall.
+
+        Args:
+            signal_call: AST Call node for the .signal() call.
+            target_pattern: Target workflow pattern from handle assignment.
+            line: Line number of signal call.
+
+        Raises:
+            WorkflowParseError: If signal call has invalid arguments.
+        """
+        # Validate signal call has at least 1 argument (signal name)
+        if not signal_call.args:
+            raise WorkflowParseError(
+                file_path=self._file_path,
+                line=line,
+                message="signal() requires at least 1 argument (signal name)",
+                suggestion="Use handle.signal('signal_name', payload)",
+            )
+
+        # Extract signal name from first argument (must be string literal)
+        signal_name_arg = signal_call.args[0]
+        if isinstance(signal_name_arg, ast.Constant) and isinstance(
+            signal_name_arg.value, str
+        ):
+            signal_name = signal_name_arg.value
+        else:
+            raise WorkflowParseError(
+                file_path=self._file_path,
+                line=line,
+                message="signal() first argument must be a string literal",
+                suggestion=(
+                    "Use a constant string for signal name: "
+                    "handle.signal('signal_name', ...)"
+                ),
+            )
+
+        # Generate node ID: ext_sig_{signal_name}_{line}
+        node_id = self._generate_node_id(signal_name, line)
+
+        # Create ExternalSignalCall
+        signal_call_obj = ExternalSignalCall(
+            signal_name=signal_name,
+            target_workflow_pattern=target_pattern,
+            source_line=line,
+            node_id=node_id,
+            source_workflow=self._source_workflow,
+        )
+
+        self._external_signals.append(signal_call_obj)
+
+    def _extract_target_pattern(self, arg_node: ast.expr) -> str:
+        """Extract target workflow pattern from argument node.
+
+        Args:
+            arg_node: AST expression node representing the workflow ID argument.
+
+        Returns:
+            String pattern: exact string, wildcard pattern, or "<dynamic>".
+        """
+        # String literal: exact pattern
+        if isinstance(arg_node, ast.Constant) and isinstance(arg_node.value, str):
+            return arg_node.value
+
+        # F-string: convert to wildcard pattern
+        if isinstance(arg_node, ast.JoinedStr):
+            return self._convert_fstring_to_pattern(arg_node)
+
+        # Variable or function call: dynamic fallback
+        if isinstance(arg_node, (ast.Name, ast.Call)):
+            return "<dynamic>"
+
+        # Unknown node type
+        return "<unknown>"
+
+    def _convert_fstring_to_pattern(self, fstring_node: ast.JoinedStr) -> str:
+        """Convert f-string AST node to wildcard pattern.
+
+        Args:
+            fstring_node: AST JoinedStr node representing an f-string.
+
+        Returns:
+            Wildcard pattern with {*} placeholders.
+        """
+        parts = []
+        for value in fstring_node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                # String literal part: use as-is
+                parts.append(value.value)
+            elif isinstance(value, ast.FormattedValue):
+                # Formatted value: replace with {*}
+                parts.append("{*}")
+        return "".join(parts)
+
+    def _generate_node_id(self, signal_name: str, line: int) -> str:
+        """Generate deterministic node ID for signal call.
+
+        Args:
+            signal_name: Name of the signal.
+            line: Line number of signal call.
+
+        Returns:
+            Node ID in format: ext_sig_{signal_name}_{line}
+        """
+        # Replace spaces with underscores, lowercase
+        normalized_name = signal_name.replace(" ", "_").lower()
+        return f"ext_sig_{normalized_name}_{line}"
+
+    @property
+    def external_signals(self) -> list[ExternalSignalCall]:
+        """Read-only list of detected external signal calls.
+
+        Returns:
+            List of ExternalSignalCall objects extracted during AST traversal.
+        """
+        # Return copy for immutability
+        return list(self._external_signals)

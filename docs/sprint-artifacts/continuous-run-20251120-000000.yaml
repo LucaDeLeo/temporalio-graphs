@@ -1,0 +1,53 @@
+run_id: continuous-run-20251120-000000
+run_started: 2025-11-20T00:00:00Z
+branch: main
+initial_commit: 4371a885489a57218ed2ad2280388688dc60c07f
+configuration:
+  auto_context_epics: true
+  max_epic_validation_attempts: 3
+  max_stories: null
+  max_validation_attempts: 3
+  max_review_cycles: 3
+  max_consecutive_failures: 5
+  auto_commit: true
+  auto_push: true
+  dry_run: false
+  skip_validation_failures: true
+  skip_review_failures: true
+  skip_blocked_stories: true
+  stop_on_git_failure: false
+  verbose_logging: true
+
+# Epic contexting phase results
+epics_contexting:
+  total_backlog_epics: 1
+  contexted_successfully: 1
+  blocked_validation: 0
+  skipped_already_contexted: 0
+
+epics_processed:
+  - epic_id: 7
+    epic_title: "Peer-to-Peer Workflow Signaling Visualization"
+    outcome: success
+    validation_attempts: 1
+    validation_score: 100
+    tech_spec_path: "docs/sprint-artifacts/tech-spec-epic-7.md"
+    duration_seconds: 120
+stories_pending:
+  - 7-1-implement-external-signal-detector
+  - 7-2-create-external-signal-call-data-model
+  - 7-3-integrate-external-signal-detection-into-analysis-pipeline
+  - 7-4-implement-mermaid-rendering-for-external-signals
+  - 7-5-add-peer-signal-workflow-example-and-documentation
+stories_processed: []
+
+statistics:
+  epics_contexted: 1
+  epics_blocked: 0
+  total_stories: 5
+  success_count: 0
+  blocked_validation_count: 0
+  blocked_review_count: 0
+  blocked_external_count: 0
+  blocked_git_count: 0
+  consecutive_failures: 0

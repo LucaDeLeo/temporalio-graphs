@@ -20,8 +20,18 @@ from pathlib import Path
 
 import pytest
 
-from temporalio_graphs._internal.graph_models import ChildWorkflowCall, DecisionPoint, SignalPoint
-from temporalio_graphs.detector import ChildWorkflowDetector, DecisionDetector, SignalDetector
+from temporalio_graphs._internal.graph_models import (
+    ChildWorkflowCall,
+    DecisionPoint,
+    ExternalSignalCall,
+    SignalPoint,
+)
+from temporalio_graphs.detector import (
+    ChildWorkflowDetector,
+    DecisionDetector,
+    ExternalSignalDetector,
+    SignalDetector,
+)
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
 
@@ -1362,3 +1372,408 @@ workflow.execute_child_workflow()  # Line 3 - missing workflow arg
 
         error_msg = str(exc_info.value).lower()
         assert "class reference or string" in error_msg
+
+
+# =====================================================================
+# External Signal Detector Tests (Epic 7)
+# =====================================================================
+
+
+class TestExternalSignalDetectorBasic:
+    """Basic external signal detection tests."""
+
+    def test_single_external_signal_two_step_pattern(self) -> None:
+        """Test basic two-step pattern: handle = get_external_workflow_handle(...); await handle.signal(...)."""
+        source = """
+import temporalio.workflow as workflow
+
+@workflow.defn
+class OrderWorkflow:
+    @workflow.run
+    async def run(self):
+        handle = workflow.get_external_workflow_handle("shipping-123")
+        await handle.signal("ship_order", order_data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].signal_name == "ship_order"
+        assert signals[0].target_workflow_pattern == "shipping-123"
+        assert signals[0].source_workflow == "OrderWorkflow"
+        assert signals[0].source_line == 9
+        assert signals[0].node_id == "ext_sig_ship_order_9"
+
+    def test_single_external_signal_inline_pattern(self) -> None:
+        """Test inline pattern: await get_external_workflow_handle(...).signal(...)."""
+        source = """
+handle = await workflow.get_external_workflow_handle("inventory-456").signal("check_stock", product_id)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("CheckoutWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].signal_name == "check_stock"
+        assert signals[0].target_workflow_pattern == "inventory-456"
+        assert signals[0].source_workflow == "CheckoutWorkflow"
+        assert signals[0].node_id == "ext_sig_check_stock_2"
+
+    def test_multiple_external_signals_to_different_targets(self) -> None:
+        """Test workflow with multiple external signals to different workflows."""
+        source = """
+handle1 = workflow.get_external_workflow_handle("shipping-123")
+await handle1.signal("ship_order", order_data)
+
+handle2 = workflow.get_external_workflow_handle("payment-456")
+await handle2.signal("process_payment", payment_data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 2
+        assert signals[0].signal_name == "ship_order"
+        assert signals[0].target_workflow_pattern == "shipping-123"
+        assert signals[1].signal_name == "process_payment"
+        assert signals[1].target_workflow_pattern == "payment-456"
+
+    def test_multiple_external_signals_to_same_target(self) -> None:
+        """Test multiple signals sent to same workflow (unique node IDs)."""
+        source = """
+handle = workflow.get_external_workflow_handle("shipping-123")
+await handle.signal("ship_order", order_data)
+await handle.signal("update_tracking", tracking_data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 2
+        assert signals[0].signal_name == "ship_order"
+        assert signals[0].node_id == "ext_sig_ship_order_3"
+        assert signals[1].signal_name == "update_tracking"
+        assert signals[1].node_id == "ext_sig_update_tracking_4"
+
+
+class TestExternalSignalDetectorPatternExtraction:
+    """Test target workflow pattern extraction."""
+
+    def test_format_string_target_pattern_extraction(self) -> None:
+        """Test f-string workflow ID converted to wildcard pattern."""
+        source = """
+handle = workflow.get_external_workflow_handle(f"shipping-{order_id}")
+await handle.signal("ship_order", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].target_workflow_pattern == "shipping-{*}"
+
+    def test_format_string_multiple_placeholders(self) -> None:
+        """Test f-string with multiple placeholders."""
+        source = """
+handle = workflow.get_external_workflow_handle(f"ship-{region}-{order_id}")
+await handle.signal("ship", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].target_workflow_pattern == "ship-{*}-{*}"
+
+    def test_dynamic_target_fallback_variable(self) -> None:
+        """Test variable workflow ID falls back to <dynamic>."""
+        source = """
+handle = workflow.get_external_workflow_handle(workflow_id)
+await handle.signal("notify", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].target_workflow_pattern == "<dynamic>"
+
+    def test_dynamic_target_fallback_function_call(self) -> None:
+        """Test function call workflow ID falls back to <dynamic>."""
+        source = """
+handle = workflow.get_external_workflow_handle(compute_workflow_id())
+await handle.signal("notify", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].target_workflow_pattern == "<dynamic>"
+
+    def test_unknown_target_pattern_fallback(self) -> None:
+        """Test unknown AST node type falls back to <unknown>."""
+        # Create an AST tree with a complex expression that doesn't match known patterns
+        # Use a binary operation as workflow ID (not typical but tests edge case)
+        source = """
+handle = workflow.get_external_workflow_handle(prefix + suffix)
+await handle.signal("notify", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        # Binary operation (BinOp) is not Name or Call, so falls back to <unknown>
+        assert signals[0].target_workflow_pattern == "<unknown>"
+
+
+class TestExternalSignalDetectorEdgeCases:
+    """Edge case tests for external signal detection."""
+
+    def test_signal_inside_conditional_if_block(self) -> None:
+        """Test signal call inside if statement."""
+        source = """
+if condition:
+    handle = workflow.get_external_workflow_handle("shipping-123")
+    await handle.signal("ship_order", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].signal_name == "ship_order"
+
+    def test_signal_inside_loop_for_block(self) -> None:
+        """Test signal call inside for loop."""
+        source = """
+for item in items:
+    handle = workflow.get_external_workflow_handle(f"process-{item}")
+    await handle.signal("process", item)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("BatchWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].signal_name == "process"
+        assert signals[0].target_workflow_pattern == "process-{*}"
+
+    def test_external_signals_property_returns_list(self) -> None:
+        """Test external_signals property returns list."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("test_signal", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("TestWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert isinstance(signals, list)
+        assert len(signals) == 1
+
+    def test_external_signals_property_immutable(self) -> None:
+        """Test modifying returned list doesn't affect detector internal state."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("test_signal", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("TestWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals1 = detector.external_signals
+        signals1.clear()
+        signals2 = detector.external_signals
+        assert len(signals2) == 1
+
+    def test_detector_reuse_creates_fresh_state(self) -> None:
+        """Test creating two detector instances have independent state."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("test_signal", data)
+"""
+        tree = ast.parse(source)
+
+        detector1 = ExternalSignalDetector()
+        detector1.set_source_workflow("Workflow1")
+        detector1.set_file_path(Path("workflow1.py"))
+        detector1.visit(tree)
+
+        detector2 = ExternalSignalDetector()
+        detector2.set_source_workflow("Workflow2")
+        detector2.set_file_path(Path("workflow2.py"))
+        detector2.visit(tree)
+
+        assert len(detector1.external_signals) == 1
+        assert len(detector2.external_signals) == 1
+        assert detector1.external_signals[0].source_workflow == "Workflow1"
+        assert detector2.external_signals[0].source_workflow == "Workflow2"
+
+
+class TestExternalSignalDetectorNodeIdFormat:
+    """Test node ID format generation."""
+
+    def test_external_signal_node_id_format_deterministic(self) -> None:
+        """Test node ID format is ext_sig_{signal_name}_{line}."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("ship_order", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].node_id == "ext_sig_ship_order_3"
+
+    def test_node_id_spaces_replaced_with_underscores(self) -> None:
+        """Test node ID replaces spaces with underscores."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("Ship Order Now", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].node_id == "ext_sig_ship_order_now_3"
+
+    def test_node_id_lowercase(self) -> None:
+        """Test node ID is lowercase."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("ShipOrder", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].node_id == "ext_sig_shiporder_3"
+
+
+class TestExternalSignalDetectorSourceWorkflowContext:
+    """Test source workflow context tracking."""
+
+    def test_source_workflow_context_stored(self) -> None:
+        """Test source workflow is stored in ExternalSignalCall."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal("test_signal", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("WorkflowA")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 1
+        assert signals[0].source_workflow == "WorkflowA"
+
+
+class TestExternalSignalDetectorErrorHandling:
+    """Test error handling for invalid signal patterns."""
+
+    def test_invalid_signal_call_no_arguments(self) -> None:
+        """Test error handling for .signal() with no arguments."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal()
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error = exc_info.value
+        assert error.line == 3
+        assert "at least 1 argument" in error.message
+        assert "signal_name" in error.suggestion
+
+    def test_invalid_signal_call_non_string_signal_name(self) -> None:
+        """Test error handling for .signal() with non-string signal name."""
+        source = """
+handle = workflow.get_external_workflow_handle("test-123")
+await handle.signal(123, data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+
+        with pytest.raises(WorkflowParseError) as exc_info:
+            detector.visit(tree)
+
+        error = exc_info.value
+        assert error.line == 3
+        assert "string literal" in error.message
+
+    def test_signal_not_on_handle_ignored(self) -> None:
+        """Test .signal() called on non-handle variable is ignored."""
+        source = """
+other_var = some_object()
+await other_var.signal("test", data)
+"""
+        tree = ast.parse(source)
+        detector = ExternalSignalDetector()
+        detector.set_source_workflow("OrderWorkflow")
+        detector.set_file_path(Path("workflow.py"))
+        detector.visit(tree)
+
+        signals = detector.external_signals
+        assert len(signals) == 0
