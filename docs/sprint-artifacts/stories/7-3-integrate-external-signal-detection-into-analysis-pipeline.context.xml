@@ -1,0 +1,266 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>3</storyId>
+    <title>Integrate External Signal Detection into Analysis Pipeline</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/stories/7-3-integrate-external-signal-detection-into-analysis-pipeline.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>library user</asA>
+    <iWant>external signals to be detected automatically when I analyze workflows</iWant>
+    <soThat>peer-to-peer communication appears in my generated diagrams</soThat>
+    <tasks>
+      - Integrate ExternalSignalDetector into WorkflowAnalyzer (AC: 1, 2, 3, 4)
+      - Update WorkflowMetadata dataclass to include external_signals field (AC: 2)
+      - Extend PathPermutationGenerator to handle external signals (AC: 5, 6, 7)
+      - Create comprehensive integration test (AC: 8, 10)
+      - Verify no regressions (AC: 9, 10)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. WorkflowAnalyzer Integration - WorkflowAnalyzer in analyzer.py instantiates ExternalSignalDetector and runs detector.visit(tree) alongside DecisionDetector, SignalDetector, and ChildWorkflowDetector
+    2. Metadata Collection - Analyzer collects external signals from detector into WorkflowMetadata.external_signals tuple field (immutable collection)
+    3. Source Workflow Context - Analyzer calls detector.set_source_workflow(workflow_name) before running visitor to provide context for signal metadata
+    4. File Path Context - Analyzer calls detector.set_file_path(file_path) before running visitor to enable error reporting with file locations
+    5. PathPermutationGenerator Support - PathPermutationGenerator in generator.py handles external signal nodes as sequential nodes (no branching) by adding them to paths like activity nodes
+    6. Node Ordering - External signal nodes appear in paths at their source line position relative to activities and other nodes, maintaining correct execution sequence
+    7. No Path Explosion - External signals do not create additional path permutations (they are one-way sends, not decision points), so path count remains 2^n for n decision points
+    8. Integration Test - New integration test in tests/integration/test_external_signals.py validates complete pipeline: workflow file with external signal → WorkflowAnalyzer → WorkflowMetadata contains ExternalSignalCall → PathPermutationGenerator includes signal nodes → paths contain external signal references
+    9. No Regressions - All existing Epic 1-6 integration tests continue passing (MoneyTransfer, SignalWorkflow, ParentChild examples)
+    10. Test Coverage - Overall test coverage remains >=80%, new integration test achieves 100% coverage for external signal integration code paths
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Story 7.3: Integration into Analysis Pipeline</section>
+        <snippet>Epic 7 tech spec lines 775-780 detail Story 7.3: Modify WorkflowAnalyzer to instantiate ExternalSignalDetector, run detector.visit(tree) alongside existing detectors, collect external_signals into WorkflowMetadata. Write integration test validating end-to-end detection. Acceptance: External signals appear in WorkflowMetadata, integration test passes.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Source Tree Changes - analyzer.py</section>
+        <snippet>Lines 203-205: Import and instantiate ExternalSignalDetector, add external_signals to WorkflowMetadata, run detector alongside DecisionDetector/SignalDetector/ChildWorkflowDetector (~10 lines of code).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-7-peer-to-peer-signals.md</path>
+        <title>Epic 7 Technical Specification</title>
+        <section>Implementation Details - Integration Points</section>
+        <snippet>Lines 363-386: analyzer.py → detector.py integration pattern. WorkflowAnalyzer instantiates ExternalSignalDetector, runs detector.visit(tree) alongside existing detectors, collects external_signals list into WorkflowMetadata. generator.py → graph_models.py: PathPermutationGenerator receives ExternalSignalCall objects, adds external signal nodes to path generation (treated like activities), no branching (signals are one-way sends, not decisions).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>ADR-001 Static Analysis over Runtime Interception</section>
+        <snippet>Lines 1-100: Static analysis pipeline pattern established. AST visitor pattern for workflow analysis. WorkflowAnalyzer orchestrates multiple detectors (DecisionDetector, SignalDetector, ChildWorkflowDetector) and aggregates results into WorkflowMetadata.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/sprint-artifacts/stories/7-1-implement-external-signal-detector.md</path>
+        <title>Story 7.1 - ExternalSignalDetector Implementation (DONE)</title>
+        <section>Learnings from Previous Story</section>
+        <snippet>ExternalSignalDetector completed in detector.py lines 758-1011. Detects two-step pattern and inline pattern. ExternalSignalCall data model in graph_models.py lines 374-414. Must call set_source_workflow() and set_file_path() BEFORE visit(tree). WorkflowMetadata field must be tuple (immutable). Integration pattern from Epic 6 ChildWorkflowDetector provides exact template.</snippet>
+      </artifact>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>src/temporalio_graphs/analyzer.py</path>
+        <kind>analyzer</kind>
+        <symbol>WorkflowAnalyzer</symbol>
+        <lines>1-503</lines>
+        <reason>Core integration point. Must add ExternalSignalDetector instantiation (line ~29 imports, line ~73 __init__), call set_source_workflow() and set_file_path() before visit(tree) (lines ~209-212), add external_signals to WorkflowMetadata creation (line ~252). Pattern follows existing DecisionDetector, SignalDetector, ChildWorkflowDetector integration at lines 199-212.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>data_model</kind>
+        <symbol>WorkflowMetadata</symbol>
+        <lines>417-528</lines>
+        <reason>WorkflowMetadata dataclass (ends at line 528) does NOT have external_signals field. MUST ADD: external_signals: tuple[ExternalSignalCall, ...] = () after child_workflow_calls field (line ~481). Update __init__ signature and docstring. Follows same immutable tuple pattern as decision_points, signal_points, child_workflow_calls.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/_internal/graph_models.py</path>
+        <kind>data_model</kind>
+        <symbol>ExternalSignalCall</symbol>
+        <lines>374-414</lines>
+        <reason>Already implemented in Story 7.1. Frozen dataclass with fields: signal_name, target_workflow_pattern, source_line, node_id, source_workflow. This is the data model that WorkflowAnalyzer will collect from ExternalSignalDetector and add to WorkflowMetadata.external_signals tuple.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>detector</kind>
+        <symbol>ExternalSignalDetector</symbol>
+        <lines>766-1016</lines>
+        <reason>Already implemented in Story 7.1. WorkflowAnalyzer will instantiate this detector, call set_source_workflow(workflow_name) and set_file_path(file_path), then run visit(tree). Read-only property external_signals returns list[ExternalSignalCall] which WorkflowAnalyzer converts to tuple for WorkflowMetadata.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/detector.py</path>
+        <kind>detector</kind>
+        <symbol>ChildWorkflowDetector</symbol>
+        <lines>562-763</lines>
+        <reason>Integration pattern reference. Lines 208-212 in analyzer.py show ChildWorkflowDetector integration: instantiate in __init__, call set_parent_workflow() before visit(tree), collect child_calls into WorkflowMetadata.child_workflow_calls tuple. ExternalSignalDetector follows exact same pattern with set_source_workflow() and set_file_path().</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>path_generator</kind>
+        <symbol>PathPermutationGenerator</symbol>
+        <lines>1-821</lines>
+        <reason>Must extend to handle external signals as sequential nodes. In _create_linear_path() (lines 247-299) and _generate_paths_with_branches() (lines 301-515), merge external_signals with activities/child_workflows, sort by source_line, add to paths without creating branches. External signals are one-way sends (no permutations) like activities and child workflows.</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>path_generator</kind>
+        <symbol>_create_linear_path</symbol>
+        <lines>247-299</lines>
+        <reason>Linear path creation pattern. Lines 269-297 show merging activities and child_workflows into execution_order list, sorting by line_num, adding in sequence. External signals follow same pattern: add ('external_signal', ext_signal, ext_signal.source_line) tuples to execution_order, sort, add via path.add_external_signal().</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/generator.py</path>
+        <kind>path_generator</kind>
+        <symbol>_generate_paths_with_branches</symbol>
+        <lines>301-515</lines>
+        <reason>Branching workflow path generation. Lines 364-381 merge activities, decisions, signals, child_workflows with line numbers, sort by execution order. Lines 412-512 process each node type. Must add external_signal handling alongside activity/child_workflow sequential node processing (no branching).</reason>
+      </artifact>
+      <artifact>
+        <path>src/temporalio_graphs/path.py</path>
+        <kind>data_model</kind>
+        <symbol>GraphPath</symbol>
+        <lines>complete file</lines>
+        <reason>MUST ADD add_external_signal() method following add_child_workflow() pattern. Signature: def add_external_signal(self, signal_name: str, target_pattern: str, line_number: int) -> str. Creates PathStep with node_type='external_signal'. Returns node_id. PathStep.node_type Literal (line 42) must be extended to include 'external_signal': Literal['activity', 'decision', 'signal', 'child_workflow', 'external_signal'].</reason>
+      </artifact>
+      <artifact>
+        <path>tests/integration/test_parent_child_workflow.py</path>
+        <kind>integration_test</kind>
+        <symbol>TestParentChildWorkflowIntegration</symbol>
+        <lines>1-80</lines>
+        <reason>Integration test pattern reference. Shows tmp_path fixture usage, workflow code as string constant, write to temp file, call analyze_workflow(), assert on Mermaid output. New test_external_signals.py follows exact same pattern but tests ExternalSignalCall detection and rendering.</reason>
+      </artifact>
+      <artifact>
+        <path>tests/test_detector.py</path>
+        <kind>unit_test</kind>
+        <symbol>TestDecisionDetectorBasic</symbol>
+        <lines>1-80</lines>
+        <reason>Unit test pattern for detectors. Shows ast.parse(source), detector.visit(tree), assertions on detector.decisions. ExternalSignalDetector already has 21 unit tests in this file (Story 7.1). Integration test will test end-to-end pipeline not just detector.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="temporalio" version=">=1.7.1">Temporal SDK for workflow type definitions</package>
+        <package name="pytest" version=">=8.0.0">Test framework for integration tests</package>
+        <package name="pytest-asyncio" version=">=0.23.0">Async test support</package>
+        <package name="pytest-cov" version=">=4.1.0">Coverage measurement (>=80% requirement)</package>
+        <package name="mypy" version=">=1.8.0">Type checking (strict mode)</package>
+        <package name="ruff" version=">=0.2.0">Linting and formatting</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>IMMUTABLE METADATA PATTERN: WorkflowMetadata.external_signals must be tuple[ExternalSignalCall, ...] (not list). Follows pattern from decision_points, signal_points, child_workflow_calls fields. Created from detector's list via tuple(self._external_signal_detector.external_signals).</constraint>
+    <constraint>SEQUENTIAL NODE PATTERN: External signals are treated like activities and child workflows - sequential nodes that don't create branching. Unlike decisions (2 branches) or signals with timeouts (2 outcomes), external signal sends are one-way fire-and-forget operations. Add to all paths without permutations.</constraint>
+    <constraint>NODE ORDERING BY SOURCE LINE: PathPermutationGenerator must respect source code order. Activities, external signals, and child workflows should appear in paths based on their source line numbers from AST, maintaining correct execution sequence. Merge all nodes, sort by line_num/source_line/call_site_line, then process in order.</constraint>
+    <constraint>DETECTOR CONTEXT SETUP: Must call detector.set_source_workflow(workflow_name) and detector.set_file_path(file_path) BEFORE detector.visit(tree). This provides context for ExternalSignalCall metadata (source_workflow field) and enables error reporting with file locations. Pattern from Story 7.1 lines 273-274.</constraint>
+    <constraint>TYPE SAFETY (ADR-006): Complete type hints required for mypy strict mode. All new methods and fields must have full type annotations. WorkflowMetadata.external_signals: tuple[ExternalSignalCall, ...] = () default value ensures type safety.</constraint>
+    <constraint>NO PATH EXPLOSION: External signals must NOT create additional path permutations. Path count formula remains 2^(num_decisions + num_signals) where signals are internal wait_condition signals only. External signals are sequential operations added to all paths without branching.</constraint>
+    <constraint>INTEGRATION PATTERN FROM EPIC 6: ChildWorkflowDetector integration (analyzer.py lines 208-212) provides exact template. Instantiate detector in __init__, call context setters, run visit(tree), collect results into WorkflowMetadata tuple field. Follow this proven pattern exactly.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ExternalSignalDetector.set_source_workflow()</name>
+      <kind>method</kind>
+      <signature>def set_source_workflow(self, workflow_name: str) -> None</signature>
+      <path>src/temporalio_graphs/detector.py:809-815</path>
+      <description>Sets the source workflow context for signal metadata. Must be called before visit(tree) to populate ExternalSignalCall.source_workflow field.</description>
+    </interface>
+    <interface>
+      <name>ExternalSignalDetector.set_file_path()</name>
+      <kind>method</kind>
+      <signature>def set_file_path(self, file_path: Path) -> None</signature>
+      <path>src/temporalio_graphs/detector.py:817-823</path>
+      <description>Sets file path for error reporting. Must be called before visit(tree) to enable WorkflowParseError exceptions with correct file paths.</description>
+    </interface>
+    <interface>
+      <name>ExternalSignalDetector.external_signals</name>
+      <kind>property</kind>
+      <signature>@property def external_signals(self) -> list[ExternalSignalCall]</signature>
+      <path>src/temporalio_graphs/detector.py:1008-1016</path>
+      <description>Read-only property returning list of detected external signal calls. WorkflowAnalyzer converts this to tuple for WorkflowMetadata.external_signals immutable field.</description>
+    </interface>
+    <interface>
+      <name>WorkflowMetadata.__init__()</name>
+      <kind>constructor</kind>
+      <signature>WorkflowMetadata(workflow_class, workflow_run_method, activities, decision_points, signal_points, source_file, total_paths, child_workflow_calls=(), external_signals=())</signature>
+      <path>src/temporalio_graphs/_internal/graph_models.py:417-481</path>
+      <description>Must add external_signals parameter after child_workflow_calls. Default value: external_signals: tuple[ExternalSignalCall, ...] = (). Update all existing WorkflowMetadata creations in analyzer.py to include external_signals=tuple(self._external_signal_detector.external_signals).</description>
+    </interface>
+    <interface>
+      <name>GraphPath.add_activity()</name>
+      <kind>method</kind>
+      <signature>def add_activity(self, name: str) -> None</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Pattern for adding sequential nodes to path. Creates PathStep with node_type='activity'. External signals follow same pattern with add_external_signal() method creating node_type='external_signal'.</description>
+    </interface>
+    <interface>
+      <name>GraphPath.add_child_workflow()</name>
+      <kind>method</kind>
+      <signature>def add_child_workflow(self, workflow_name: str, line_number: int) -> None</signature>
+      <path>src/temporalio_graphs/path.py</path>
+      <description>Pattern for adding child workflow nodes. Creates PathStep with node_type='child_workflow'. External signals follow exact same pattern with node_type='external_signal'.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      TESTING FRAMEWORK: pytest >=8.0.0 with pytest-asyncio for async support
+
+      COVERAGE TARGET: >=80% overall project coverage (pyproject.toml requirement)
+
+      INTEGRATION TEST PATTERN: tmp_path fixture for temp workflow files, workflow code as module-level string constant, write_text() to create file, analyze_workflow() call, assert on Mermaid output and WorkflowMetadata fields
+
+      UNIT TEST PATTERN: ast.parse(source), detector.visit(tree), assertions on detector results. ExternalSignalDetector already has 21 unit tests (100% coverage) from Story 7.1
+
+      REGRESSION TESTING: All existing Epic 1-6 integration tests must pass (test_simple_linear.py, test_money_transfer.py, test_signal_workflow.py, test_parent_child_workflow.py)
+
+      TYPE CHECKING: mypy strict mode must pass with no errors
+
+      LINTING: ruff check must pass with no violations
+    </standards>
+
+    <locations>
+      tests/integration/ - Integration test directory
+      tests/test_detector.py - Unit tests for detectors (ExternalSignalDetector already tested)
+      tests/integration/test_external_signals.py - NEW file for Story 7.3 integration test
+    </locations>
+
+    <ideas>
+      <test_idea ac="1,2,3,4">
+        test_external_signal_detected_in_metadata() - Create workflow with external signal, analyze with WorkflowAnalyzer, assert WorkflowMetadata.external_signals contains ExternalSignalCall with correct signal_name, target_workflow_pattern, source_line, source_workflow fields. Validates complete detector integration.
+      </test_idea>
+      <test_idea ac="5,6,7">
+        test_external_signal_appears_in_paths() - Create workflow with 1 activity + 1 external signal + 1 activity, generate paths with PathPermutationGenerator, assert 1 path generated (no branching), assert path.steps contains external signal node between two activity nodes in correct source line order.
+      </test_idea>
+      <test_idea ac="7">
+        test_external_signal_no_path_explosion() - Create workflow with 2 external signals and 0 decisions, generate paths, assert path count is 1 (not 4). Validates external signals don't create permutations.
+      </test_idea>
+      <test_idea ac="5,6,7">
+        test_external_signal_with_decision() - Create workflow with 1 decision and 1 external signal, generate paths, assert path count is 2 (2^1 from decision only), assert external signal appears in both paths at same position.
+      </test_idea>
+      <test_idea ac="8">
+        test_end_to_end_pipeline() - Create workflow file with external signal using tmp_path, analyze with analyze_workflow(), assert Mermaid output contains external signal reference, validates complete pipeline from AST → detection → path generation → rendering.
+      </test_idea>
+      <test_idea ac="9">
+        test_no_regressions() - Run all existing integration tests to verify Epic 1-6 workflows still work correctly. Run with pytest command to verify 547 existing tests still pass.
+      </test_idea>
+      <test_idea ac="10">
+        test_coverage_maintained() - Run pytest --cov to verify overall coverage stays >=80%, new integration test achieves 100% coverage for analyzer.py ExternalSignalDetector lines and generator.py external signal handling lines.
+      </test_idea>
+    </ideas>
+  </tests>
+</story-context>

@@ -440,6 +440,11 @@ class WorkflowMetadata:
         source_file: Path to the Python source file containing the workflow.
         total_paths: Total number of execution paths that will be generated,
             calculated as 2^(len(decision_points) + len(signal_points)).
+        child_workflow_calls: List of child workflow calls detected in the workflow
+            (from Epic 6).
+        external_signals: Tuple of external signals sent to peer workflows
+            (from Epic 7). External signals are sequential nodes that don't
+            create branching.
 
     Example:
         >>> from pathlib import Path
@@ -479,6 +484,7 @@ class WorkflowMetadata:
     source_file: Path
     total_paths: int
     child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
+    external_signals: tuple[ExternalSignalCall, ...] = ()
 
     @staticmethod
     def calculate_total_paths(num_decisions: int, num_signals: int) -> int:

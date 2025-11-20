@@ -18,13 +18,16 @@ class PathStep:
     making the code more robust and type-safe.
 
     Args:
-        node_type: Type of node ('activity', 'decision', 'signal', 'child_workflow')
-        name: Human-readable name (e.g., 'withdraw_funds', 'NeedToConvert', 'PaymentWorkflow')
+        node_type: Type of node ('activity', 'decision', 'signal', 'child_workflow',
+            'external_signal')
+        name: Human-readable name (e.g., 'withdraw_funds', 'NeedToConvert',
+            'PaymentWorkflow')
         decision_id: Unique decision ID (e.g., 'd0', 'd1'), only for decisions
         decision_value: Boolean value for this path (True/False), only for decisions
         signal_outcome: Signal result ('Signaled'/'Timeout'), only for signals (Epic 4)
         line_number: Source line number where this step occurs, used for child
             workflow node IDs (Epic 6)
+        target_workflow_pattern: Target workflow pattern for external signals (Epic 7)
 
     Example:
         >>> # Activity step
@@ -38,13 +41,20 @@ class PathStep:
         >>> # Child workflow step
         >>> PathStep('child_workflow', 'PaymentWorkflow', line_number=45)
         PathStep(node_type='child_workflow', name='PaymentWorkflow', line_number=45)
+
+        >>> # External signal step
+        >>> PathStep('external_signal', 'ship_order', line_number=50,
+        ...          target_workflow_pattern='shipping-{*}')
+        PathStep(node_type='external_signal', name='ship_order', line_number=50,
+            target_workflow_pattern='shipping-{*}')
     """
-    node_type: Literal['activity', 'decision', 'signal', 'child_workflow']
+    node_type: Literal['activity', 'decision', 'signal', 'child_workflow', 'external_signal']
     name: str
     decision_id: str | None = None
     decision_value: bool | None = None
     signal_outcome: str | None = None  # Epic 4: 'Signaled' or 'Timeout'
     line_number: int | None = None  # Epic 6: Source line for child workflow node IDs
+    target_workflow_pattern: str | None = None  # Epic 7: Target workflow for external signals
 
 
 @dataclass
@@ -273,5 +283,54 @@ class GraphPath:
         # Generate deterministic node ID based on workflow name and line number
         # Format: child_{workflow_name}_{line} (lowercase for consistency)
         node_id = f"child_{name.lower()}_{line_number}"
+
+        return node_id
+
+    def add_external_signal(
+        self, signal_name: str, target_pattern: str, line_number: int
+    ) -> str:
+        """Add an external signal call to this execution path.
+
+        Records the external signal name, target workflow pattern, and source line
+        number for this path, adds the external signal to the steps list, and generates
+        a unique node ID for the external signal node in the graph.
+
+        This method is called during path generation in PathPermutationGenerator
+        to track external signal calls encountered along each execution path. External
+        signals are treated like activities (linear nodes with no branching).
+
+        Args:
+            signal_name: Name of the signal being sent (e.g., "ship_order").
+            target_pattern: Target workflow pattern (e.g., "shipping-{*}", "<dynamic>").
+            line_number: Source line number where the external signal is called.
+                Used to generate deterministic node IDs in format: ext_sig_{signal}_{line}.
+
+        Returns:
+            Node ID for the external signal node in format: ext_sig_{signal_name}_{line}.
+            External signal IDs are deterministic and include the signal name for
+            traceability.
+
+        Example:
+            >>> path = GraphPath(path_id="path_0")
+            >>> node_id = path.add_external_signal("ship_order", "shipping-{*}", 50)
+            >>> node_id
+            'ext_sig_ship_order_50'
+            >>> [step.name for step in path.steps]
+            ['ship_order']
+            >>> [step.target_workflow_pattern for step in path.steps]
+            ['shipping-{*}']
+        """
+        # Add external signal step to the steps list with type information
+        step = PathStep(
+            node_type='external_signal',
+            name=signal_name,
+            line_number=line_number,
+            target_workflow_pattern=target_pattern
+        )
+        self.steps.append(step)
+
+        # Generate deterministic node ID based on signal name and line number
+        # Format: ext_sig_{signal_name}_{line} (matches ExternalSignalDetector pattern)
+        node_id = f"ext_sig_{signal_name}_{line_number}"
 
         return node_id

@@ -15,6 +15,7 @@ from temporalio_graphs._internal.graph_models import (
     Activity,
     ChildWorkflowCall,
     DecisionPoint,
+    ExternalSignalCall,
     MultiWorkflowPath,
     SignalPoint,
     WorkflowCallGraph,
@@ -216,11 +217,16 @@ class PathPermutationGenerator:
         # Log path generation start
         if total_branch_points == 0:
             logger.debug(
-                f"Generating paths for linear workflow with {len(metadata.activities)} activities "
-                f"and {len(metadata.child_workflow_calls)} child workflows"
+                f"Generating paths for linear workflow with {len(metadata.activities)} activities, "
+                f"{len(metadata.child_workflow_calls)} child workflows, and "
+                f"{len(metadata.external_signals)} external signals"
             )
             # Create single linear path for linear workflows
-            path = self._create_linear_path(metadata.activities, metadata.child_workflow_calls)
+            path = self._create_linear_path(
+                metadata.activities,
+                metadata.child_workflow_calls,
+                metadata.external_signals,
+            )
             logger.debug(f"Created path with ID: {path.path_id}")
             return [path]
         else:
@@ -236,6 +242,7 @@ class PathPermutationGenerator:
                 metadata.signal_points,
                 metadata.activities,
                 metadata.child_workflow_calls,
+                metadata.external_signals,
                 context,
             )
             logger.debug(
@@ -245,29 +252,38 @@ class PathPermutationGenerator:
             return paths
 
     def _create_linear_path(
-        self, activities: list[Activity], child_workflows: list[ChildWorkflowCall]
+        self,
+        activities: list[Activity],
+        child_workflows: list[ChildWorkflowCall],
+        external_signals: tuple[ExternalSignalCall, ...],
     ) -> GraphPath:
-        """Create a single linear path from activity and child workflow sequence.
+        """Create a single linear path from activity, child workflow, and external signal sequence.
 
-        Helper method that constructs a GraphPath with all activities and child workflows
-        in execution order based on source line numbers. This implements the Epic 2 algorithm
-        extended for Epic 6: create path with path_id="path_0", add each activity and child
-        workflow sequentially in source code order, return the path.
+        Helper method that constructs a GraphPath with all activities, child workflows, and
+        external signals in execution order based on source line numbers. This implements the
+        Epic 2 algorithm extended for Epic 6 and Epic 7: create path with path_id="path_0",
+        add each activity, child workflow, and external signal sequentially in source code order,
+        return the path.
 
         Args:
             activities: List of Activity objects in order from workflow analysis.
                 May be empty for workflows with no activities.
             child_workflows: List of ChildWorkflowCall objects in order from workflow analysis.
                 May be empty for workflows with no child workflow calls.
+            external_signals: Tuple of ExternalSignalCall objects in order from workflow analysis.
+                May be empty for workflows with no external signals.
 
         Returns:
-            GraphPath with path_id="path_0" and all activities/child workflows added in
-            source line order via add_activity() and add_child_workflow() calls.
+            GraphPath with path_id="path_0" and all activities/child workflows/external signals
+            added in source line order via add_activity(), add_child_workflow(), and
+            add_external_signal() calls.
         """
         path = GraphPath(path_id="path_0")
 
-        # Merge activities and child workflows, then sort by line number
-        execution_order: list[tuple[str, Activity | ChildWorkflowCall | str, int]] = []
+        # Merge activities, child workflows, and external signals, then sort by line number
+        execution_order: list[
+            tuple[str, Activity | ChildWorkflowCall | ExternalSignalCall | str, int]
+        ] = []
         for activity in activities:
             # Handle both Activity objects and strings for backward compatibility
             if isinstance(activity, str):
@@ -278,6 +294,10 @@ class PathPermutationGenerator:
         for child_workflow in child_workflows:
             execution_order.append(
                 ("child_workflow", child_workflow, child_workflow.call_site_line)
+            )
+        for external_signal in external_signals:
+            execution_order.append(
+                ("external_signal", external_signal, external_signal.source_line)
             )
 
         # Sort by line number to get execution order
@@ -295,6 +315,11 @@ class PathPermutationGenerator:
             elif node_type == "child_workflow":
                 assert isinstance(node, ChildWorkflowCall)
                 path.add_child_workflow(node.workflow_name, node.call_site_line)
+            elif node_type == "external_signal":
+                assert isinstance(node, ExternalSignalCall)
+                path.add_external_signal(
+                    node.signal_name, node.target_workflow_pattern, node.source_line
+                )
 
         return path
 
@@ -304,34 +329,37 @@ class PathPermutationGenerator:
         signals: list[SignalPoint],
         activities: list[Activity],
         child_workflows: list[ChildWorkflowCall],
+        external_signals: tuple[ExternalSignalCall, ...],
         context: GraphBuildingContext,
     ) -> list[GraphPath]:
         """Generate 2^n execution paths for workflows with decision and signal points.
 
         Uses itertools.product to efficiently generate all 2^n boolean combinations
         for the given decision and signal points. For each combination, creates a GraphPath
-        that records the decisions, signals, activities, and child workflows in PROPER
-        EXECUTION ORDER by merging and sorting them by source line number.
+        that records the decisions, signals, activities, child workflows, and external signals
+        in PROPER EXECUTION ORDER by merging and sorting them by source line number.
 
-        This method implements the Epic 3/4/6 path permutation algorithm using the
+        This method implements the Epic 3/4/6/7 path permutation algorithm using the
         efficient C-optimized itertools.product function, maintaining O(2^n)
         time complexity while avoiding manual recursion.
 
-        CRITICAL: Activities, decisions, signals, and child workflows are interleaved
-        based on their source line numbers to generate correct branching topology instead
-        of incorrect sequential linear topology.
+        CRITICAL: Activities, decisions, signals, child workflows, and external signals are
+        interleaved based on their source line numbers to generate correct branching topology
+        instead of incorrect sequential linear topology. External signals do NOT create
+        branches - they are sequential nodes like activities.
 
         Args:
             decisions: List of DecisionPoint objects from workflow analysis.
             signals: List of SignalPoint objects from workflow analysis.
             activities: List of Activity objects from workflow analysis.
             child_workflows: List of ChildWorkflowCall objects from workflow analysis.
+            external_signals: Tuple of ExternalSignalCall objects from workflow analysis.
             context: GraphBuildingContext for configuration (branch labels, etc.).
 
         Returns:
             List of GraphPath objects, one for each 2^n permutation. Each path
-            contains the activities, decisions, signals, and child workflows for that
-            specific execution path in correct source code order.
+            contains the activities, decisions, signals, child workflows, and external
+            signals for that specific execution path in correct source code order.
 
         Example:
             >>> from temporalio_graphs._internal.graph_models import Activity
@@ -361,10 +389,17 @@ class PathPermutationGenerator:
         total_branches = num_decisions + num_signals
         paths: list[GraphPath] = []
 
-        # Merge activities, decisions, signals, and child workflows with their positions
+        # Import ExternalSignalCall for type checking
+        from temporalio_graphs._internal.graph_models import ExternalSignalCall
+
+        # Merge activities, decisions, signals, child workflows, and external signals with positions
         # Each element is a tuple: (node_type, node_object, line_number)
         execution_order: list[
-            tuple[str, Activity | DecisionPoint | SignalPoint | ChildWorkflowCall, int]
+            tuple[
+                str,
+                Activity | DecisionPoint | SignalPoint | ChildWorkflowCall | ExternalSignalCall,
+                int,
+            ]
         ] = []
         for i, activity in enumerate(activities):
             execution_order.append(("activity", activity, activity.line_num))
@@ -375,6 +410,10 @@ class PathPermutationGenerator:
         for child_workflow in child_workflows:
             execution_order.append(
                 ("child_workflow", child_workflow, child_workflow.call_site_line)
+            )
+        for external_signal in external_signals:
+            execution_order.append(
+                ("external_signal", external_signal, external_signal.source_line)
             )
 
         # Sort by line number to get execution order
@@ -509,6 +548,42 @@ class PathPermutationGenerator:
                     # Only add child workflow if it should execute in this path
                     if should_include_child_workflow:
                         path.add_child_workflow(node.workflow_name, node.call_site_line)
+
+                elif node_type == "external_signal":
+                    # node is ExternalSignalCall object
+                    assert isinstance(node, ExternalSignalCall)
+                    # External signals are treated like activities (linear, no branching)
+                    # Add them unconditionally unless they're in a conditional branch
+                    external_signal_line = node.source_line
+                    should_include_external_signal = True
+
+                    # Check if this external signal is conditional on any decision
+                    for decision in decisions_encountered:
+                        if external_signal_line in decision.true_branch_activities:
+                            if not decision_value_map[decision.id]:
+                                should_include_external_signal = False
+                                break
+                        elif external_signal_line in decision.false_branch_activities:
+                            if decision_value_map[decision.id]:
+                                should_include_external_signal = False
+                                break
+
+                    # Check if this external signal is conditional on any signal
+                    for signal in signals_encountered:
+                        if external_signal_line in signal.signaled_branch_activities:
+                            if not signal_value_map[signal.node_id]:
+                                should_include_external_signal = False
+                                break
+                        elif external_signal_line in signal.timeout_branch_activities:
+                            if signal_value_map[signal.node_id]:
+                                should_include_external_signal = False
+                                break
+
+                    # Only add external signal if it should execute in this path
+                    if should_include_external_signal:
+                        path.add_external_signal(
+                            node.signal_name, node.target_workflow_pattern, node.source_line
+                        )
 
             paths.append(path)
 
