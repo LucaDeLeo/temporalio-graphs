@@ -1,11 +1,17 @@
 """Unit tests for internal graph models."""
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
+import pytest
+
 from temporalio_graphs._internal.graph_models import (
+    ExternalSignalCall,
     GraphEdge,
     GraphNode,
     NodeType,
+    PeerSignalGraph,
+    SignalConnection,
     SignalHandler,
     WorkflowMetadata,
 )
@@ -213,3 +219,273 @@ def test_workflow_metadata_signal_handlers_immutable() -> None:
 
     # Verify tuple has no append method (unlike list)
     assert not hasattr(metadata.signal_handlers, "append")
+
+
+# =============================================================================
+# SignalConnection Tests
+# =============================================================================
+
+
+def test_signal_connection_creation() -> None:
+    """Test SignalConnection instantiation with all fields."""
+    conn = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+    assert conn.sender_workflow == "OrderWorkflow"
+    assert conn.receiver_workflow == "ShippingWorkflow"
+    assert conn.signal_name == "ship_order"
+    assert conn.sender_line == 56
+    assert conn.receiver_line == 67
+    assert conn.sender_node_id == "ext_sig_ship_order_56"
+    assert conn.receiver_node_id == "sig_handler_ship_order_67"
+
+
+def test_signal_connection_frozen() -> None:
+    """Test SignalConnection is immutable (frozen)."""
+    conn = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+    with pytest.raises(FrozenInstanceError):
+        conn.sender_workflow = "NewWorkflow"  # type: ignore[misc]
+
+
+def test_signal_connection_field_access() -> None:
+    """Test all SignalConnection fields are accessible."""
+    conn = SignalConnection(
+        sender_workflow="ParentWorkflow",
+        receiver_workflow="ChildWorkflow",
+        signal_name="notify",
+        sender_line=100,
+        receiver_line=200,
+        sender_node_id="ext_sig_notify_100",
+        receiver_node_id="sig_handler_notify_200",
+    )
+    # Access all 7 fields
+    assert isinstance(conn.sender_workflow, str)
+    assert isinstance(conn.receiver_workflow, str)
+    assert isinstance(conn.signal_name, str)
+    assert isinstance(conn.sender_line, int)
+    assert isinstance(conn.receiver_line, int)
+    assert isinstance(conn.sender_node_id, str)
+    assert isinstance(conn.receiver_node_id, str)
+
+
+def test_signal_connection_equality() -> None:
+    """Test SignalConnection dataclass equality."""
+    conn1 = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+    conn2 = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+    conn3 = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="different_signal",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_different_signal_56",
+        receiver_node_id="sig_handler_different_signal_67",
+    )
+    assert conn1 == conn2
+    assert conn1 != conn3
+
+
+# =============================================================================
+# PeerSignalGraph Tests
+# =============================================================================
+
+
+def test_peer_signal_graph_creation() -> None:
+    """Test PeerSignalGraph instantiation with all fields."""
+    # Create sample WorkflowMetadata
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order.py"),
+        total_paths=1,
+    )
+    shipping_metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping.py"),
+        total_paths=1,
+    )
+
+    # Create sample SignalHandler
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+
+    # Create sample SignalConnection
+    conn = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+
+    # Create PeerSignalGraph
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={
+            "OrderWorkflow": order_metadata,
+            "ShippingWorkflow": shipping_metadata,
+        },
+        signal_handlers={"ship_order": [handler]},
+        connections=[conn],
+        unresolved_signals=[],
+    )
+
+    assert graph.root_workflow == order_metadata
+    assert len(graph.workflows) == 2
+    assert "OrderWorkflow" in graph.workflows
+    assert "ShippingWorkflow" in graph.workflows
+    assert len(graph.signal_handlers) == 1
+    assert "ship_order" in graph.signal_handlers
+    assert len(graph.connections) == 1
+    assert graph.connections[0] == conn
+    assert len(graph.unresolved_signals) == 0
+
+
+def test_peer_signal_graph_frozen() -> None:
+    """Test PeerSignalGraph is immutable (frozen)."""
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order.py"),
+        total_paths=1,
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={"OrderWorkflow": order_metadata},
+        signal_handlers={},
+        connections=[],
+        unresolved_signals=[],
+    )
+
+    with pytest.raises(FrozenInstanceError):
+        graph.root_workflow = order_metadata  # type: ignore[misc]
+
+
+def test_peer_signal_graph_field_access() -> None:
+    """Test all PeerSignalGraph fields are accessible with correct types."""
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order.py"),
+        total_paths=1,
+    )
+
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="OrderWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+
+    conn = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+
+    unresolved = ExternalSignalCall(
+        signal_name="missing_signal",
+        target_workflow_pattern="unknown-{*}",
+        source_line=100,
+        node_id="ext_sig_missing_signal_100",
+        source_workflow="OrderWorkflow",
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={"OrderWorkflow": order_metadata},
+        signal_handlers={"ship_order": [handler]},
+        connections=[conn],
+        unresolved_signals=[unresolved],
+    )
+
+    # Verify all 5 fields have correct types
+    assert isinstance(graph.root_workflow, WorkflowMetadata)
+    assert isinstance(graph.workflows, dict)
+    assert isinstance(graph.signal_handlers, dict)
+    assert isinstance(graph.connections, list)
+    assert isinstance(graph.unresolved_signals, list)
+
+
+def test_peer_signal_graph_with_empty_collections() -> None:
+    """Test PeerSignalGraph with empty collections."""
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order.py"),
+        total_paths=1,
+    )
+
+    # Create graph with minimal data (just root workflow, empty collections)
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={"OrderWorkflow": order_metadata},
+        signal_handlers={},
+        connections=[],
+        unresolved_signals=[],
+    )
+
+    assert graph.root_workflow.workflow_class == "OrderWorkflow"
+    assert len(graph.workflows) == 1
+    assert len(graph.signal_handlers) == 0
+    assert len(graph.connections) == 0
+    assert len(graph.unresolved_signals) == 0

@@ -1,0 +1,605 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8-5: Signal Connection Model
+  Generated: 2025-11-26
+  Epic: 8 - Cross-Workflow Signal Visualization
+  Status: Ready for Implementation
+-->
+<story-context>
+  <metadata>
+    <story-key>8-5-signal-connection-model</story-key>
+    <story-title>Signal Connection Model</story-title>
+    <epic-id>8</epic-id>
+    <status>todo</status>
+    <generated-date>2025-11-26</generated-date>
+  </metadata>
+
+  <story-reference>
+    <file-path>docs/sprint-artifacts/stories/8-5-signal-connection-model.md</file-path>
+    <description>
+      Creates SignalConnection and PeerSignalGraph frozen dataclasses in graph_models.py
+      to represent cross-workflow signal relationships. These data models are used by
+      PeerSignalGraphAnalyzer (Story 8.6) to build and store connected workflow graphs
+      for visualization.
+    </description>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec-path>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec-path>
+    <epic-goal>
+      Complete cross-workflow signal visualization showing both sender and receiver
+      workflows connected together with signal flow clearly visible between them.
+    </epic-goal>
+    <story-dependencies>
+      <dependency story="8-1">SignalHandlerDetector (status: done) - Detects @workflow.signal handlers</dependency>
+      <dependency story="8-2">Signal Handler Data Model (status: done) - SignalHandler dataclass in WorkflowMetadata</dependency>
+      <dependency story="8-3">Signal Name Resolver (status: done) - Resolves signals to handlers by name</dependency>
+      <dependency story="8-4">Search Path Scanning (status: done) - Directory scanning and handler indexing</dependency>
+    </story-dependencies>
+    <dependents>
+      <dependent story="8-6">PeerSignalGraphAnalyzer - Uses SignalConnection and PeerSignalGraph models</dependent>
+      <dependent story="8-7">Subgraph Rendering - Renders PeerSignalGraph as Mermaid subgraphs</dependent>
+    </dependents>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact type="architecture">
+      <path>docs/architecture.md</path>
+      <relevance>
+        ADR-001 (Static Analysis), ADR-006 (mypy strict), ADR-013 (Cross-Workflow Signal Visualization)
+        define architectural constraints for the data model implementation.
+      </relevance>
+      <key-sections>
+        - ADR-001: Static analysis only, immutable data structures
+        - ADR-006: Complete type hints for mypy strict mode
+        - ADR-013: PeerSignalGraph structure, signal connection model, visualization strategy
+      </key-sections>
+    </artifact>
+    <artifact type="tech-spec">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <relevance>
+        SignalConnection dataclass specification (lines 189-214), PeerSignalGraph dataclass
+        specification (lines 216-241), acceptance criteria AC12-AC13 (lines 985-1001),
+        entity relationships (lines 283-293).
+      </relevance>
+      <key-sections>
+        - SignalConnection dataclass (lines 189-214): 7 fields for connection metadata
+        - PeerSignalGraph dataclass (lines 216-241): 5 fields for complete workflow graph
+        - Entity Relationships (lines 283-293): How models relate to each other
+        - AC12: PeerSignalGraph model requirements
+        - AC13: SignalConnection model requirements
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface type="target-file">
+      <name>graph_models.py</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>1-693</lines>
+      <description>
+        Internal graph data models module where SignalConnection and PeerSignalGraph
+        will be added. Contains existing frozen dataclasses (SignalHandler, ExternalSignalCall,
+        WorkflowMetadata) that these new models will reference.
+      </description>
+      <existing-patterns>
+        - All dataclasses use @dataclass(frozen=True) for immutability
+        - Complete Google-style docstrings with Args and Example sections
+        - Type hints using Python 3.10+ union syntax (|)
+        - Fields use appropriate types: str, int, Path, list, dict, tuple
+      </existing-patterns>
+      <imports-available>
+        from dataclasses import dataclass, field
+        from pathlib import Path
+        # Note: Other dataclasses in same file - no imports needed
+      </imports-available>
+    </interface>
+
+    <interface type="referenced-dataclass">
+      <name>WorkflowMetadata</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>466-587</lines>
+      <description>
+        Metadata describing workflow structure. Used as field type in PeerSignalGraph:
+        root_workflow (single) and workflows dict (mapping name to metadata).
+      </description>
+      <relevant-fields>
+        - workflow_class: str - Name of workflow class
+        - source_file: Path - Path to workflow source file
+        - signal_handlers: tuple[SignalHandler, ...] = () - Handlers in this workflow
+        - external_signals: tuple[ExternalSignalCall, ...] = () - Signals sent by this workflow
+      </relevant-fields>
+      <usage-in-story>
+        - PeerSignalGraph.root_workflow: WorkflowMetadata (entry point workflow)
+        - PeerSignalGraph.workflows: dict[str, WorkflowMetadata] (all discovered workflows)
+      </usage-in-story>
+    </interface>
+
+    <interface type="referenced-dataclass">
+      <name>SignalHandler</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>424-463</lines>
+      <description>
+        Frozen dataclass representing @workflow.signal decorated method. Used in
+        PeerSignalGraph.signal_handlers index and SignalConnection.receiver_node_id.
+      </description>
+      <fields>
+        - signal_name: str - Name of signal this handler receives
+        - method_name: str - Actual Python method name
+        - workflow_class: str - Name of workflow class containing handler
+        - source_line: int - Line number where method is defined
+        - node_id: str - Format: sig_handler_{signal_name}_{line_number}
+      </fields>
+      <usage-in-story>
+        - PeerSignalGraph.signal_handlers: dict[str, list[SignalHandler]]
+        - SignalConnection.receiver_node_id references handler.node_id
+        - SignalConnection.receiver_line references handler.source_line
+      </usage-in-story>
+    </interface>
+
+    <interface type="referenced-dataclass">
+      <name>ExternalSignalCall</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>382-422</lines>
+      <description>
+        Frozen dataclass representing peer-to-peer signal sent to external workflow.
+        Used in PeerSignalGraph.unresolved_signals for signals without matching handlers.
+      </description>
+      <fields>
+        - signal_name: str - Name of signal being sent
+        - target_workflow_pattern: str - Pattern describing target workflow ID
+        - source_line: int - Line number in source code
+        - node_id: str - Format: ext_sig_{signal_name}_{line_number}
+        - source_workflow: str - Name of workflow class sending the signal
+      </fields>
+      <usage-in-story>
+        - PeerSignalGraph.unresolved_signals: list[ExternalSignalCall]
+        - SignalConnection.sender_node_id references signal.node_id
+        - SignalConnection.sender_line references signal.source_line
+      </usage-in-story>
+    </interface>
+
+    <interface type="export-file">
+      <name>__init__.py</name>
+      <file-path>src/temporalio_graphs/__init__.py</file-path>
+      <lines>1-411</lines>
+      <description>
+        Public API exports module. SignalConnection and PeerSignalGraph need to be
+        added to __all__ and imported from graph_models.
+      </description>
+      <current-exports>
+        - GraphBuildingContext, analyze_workflow, analyze_workflow_graph
+        - to_decision, wait_condition
+        - ValidationWarning, ValidationReport
+        - Exception classes: TemporalioGraphsError, WorkflowParseError, etc.
+        - MultiWorkflowPath
+      </current-exports>
+      <export-pattern>
+        ```python
+        from temporalio_graphs._internal.graph_models import MultiWorkflowPath
+
+        __all__ = [
+            ...
+            "MultiWorkflowPath",
+        ]
+        ```
+      </export-pattern>
+      <required-changes>
+        Add imports and exports for SignalConnection and PeerSignalGraph:
+        ```python
+        from temporalio_graphs._internal.graph_models import (
+            MultiWorkflowPath,
+            SignalConnection,    # NEW
+            PeerSignalGraph,     # NEW
+        )
+
+        __all__ = [
+            ...
+            "SignalConnection",   # NEW
+            "PeerSignalGraph",    # NEW
+        ]
+        ```
+      </required-changes>
+    </interface>
+
+    <interface type="test-file">
+      <name>test_graph_models.py</name>
+      <file-path>tests/test_graph_models.py</file-path>
+      <lines>1-216</lines>
+      <description>
+        Unit tests for internal graph models. Tests for SignalConnection and PeerSignalGraph
+        should be added following the existing patterns in this file.
+      </description>
+      <test-patterns>
+        - Function-based tests (not class-based): test_workflow_metadata_signal_handlers_default()
+        - Each test focuses on single behavior
+        - Import from temporalio_graphs._internal.graph_models
+        - Use pytest.raises for immutability tests
+        - Test instantiation, field access, default values, immutability
+      </test-patterns>
+      <existing-tests>
+        - test_workflow_metadata_signal_handlers_default()
+        - test_workflow_metadata_signal_handlers_populated()
+        - test_workflow_metadata_signal_handlers_immutable()
+      </existing-tests>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint type="frozen-dataclass">
+      <description>Both dataclasses MUST be immutable (frozen=True)</description>
+      <implementation>
+        @dataclass(frozen=True)
+        class SignalConnection:
+            ...
+
+        @dataclass(frozen=True)
+        class PeerSignalGraph:
+            ...
+      </implementation>
+      <rationale>ADR Immutability Pattern - ensures data integrity and supports future caching/hashing</rationale>
+    </constraint>
+
+    <constraint type="type-safety">
+      <description>ADR-006: Complete type hints for mypy strict mode compliance</description>
+      <types>
+        SignalConnection fields:
+        - sender_workflow: str
+        - receiver_workflow: str
+        - signal_name: str
+        - sender_line: int
+        - receiver_line: int
+        - sender_node_id: str
+        - receiver_node_id: str
+
+        PeerSignalGraph fields:
+        - root_workflow: WorkflowMetadata
+        - workflows: dict[str, WorkflowMetadata]
+        - signal_handlers: dict[str, list[SignalHandler]]
+        - connections: list[SignalConnection]
+        - unresolved_signals: list[ExternalSignalCall]
+      </types>
+    </constraint>
+
+    <constraint type="docstring-format">
+      <description>Google-style docstrings with Args and Example sections</description>
+      <template>
+        ```python
+        @dataclass(frozen=True)
+        class SignalConnection:
+            """Represents a signal flow between two workflows.
+
+            Captures the relationship between an external signal send
+            (ExternalSignalCall) and a signal handler (SignalHandler).
+
+            Args:
+                sender_workflow: Name of workflow sending the signal.
+                receiver_workflow: Name of workflow receiving the signal.
+                signal_name: Name of the signal being sent/received.
+                sender_line: Line number in sender where signal() is called.
+                receiver_line: Line number in receiver where @workflow.signal is.
+                sender_node_id: Node ID of the external signal node.
+                receiver_node_id: Node ID of the signal handler node.
+
+            Example:
+                >>> conn = SignalConnection(
+                ...     sender_workflow="OrderWorkflow",
+                ...     receiver_workflow="ShippingWorkflow",
+                ...     signal_name="ship_order",
+                ...     sender_line=56,
+                ...     receiver_line=67,
+                ...     sender_node_id="ext_sig_ship_order_56",
+                ...     receiver_node_id="sig_handler_ship_order_67",
+                ... )
+            """
+        ```
+      </template>
+    </constraint>
+
+    <constraint type="no-default-factory-for-mutable">
+      <description>Cannot use mutable default values directly - use field(default_factory=...) if defaults needed</description>
+      <note>
+        PeerSignalGraph has collection fields (dict, list) that typically need defaults.
+        However, the story specifies these as required fields, so no defaults are needed.
+        If defaults are added later, use:
+        ```python
+        workflows: dict[str, WorkflowMetadata] = field(default_factory=dict)
+        connections: list[SignalConnection] = field(default_factory=list)
+        ```
+      </note>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <internal-references>
+      <reference>
+        WorkflowMetadata - already in graph_models.py, no import needed
+      </reference>
+      <reference>
+        SignalHandler - already in graph_models.py, no import needed
+      </reference>
+      <reference>
+        ExternalSignalCall - already in graph_models.py, no import needed
+      </reference>
+    </internal-references>
+    <stdlib>
+      <import>from dataclasses import dataclass, field (already imported)</import>
+      <import>from pathlib import Path (already imported, used by WorkflowMetadata)</import>
+    </stdlib>
+  </dependencies>
+
+  <testing-context>
+    <test-file>tests/test_graph_models.py (EXISTING - add new tests)</test-file>
+    <test-patterns>
+      <pattern type="fixture">
+        No complex fixtures needed - dataclasses can be instantiated directly in tests.
+        May want helper fixtures for common test data:
+        ```python
+        @pytest.fixture
+        def sample_signal_connection() -> SignalConnection:
+            return SignalConnection(
+                sender_workflow="OrderWorkflow",
+                receiver_workflow="ShippingWorkflow",
+                signal_name="ship_order",
+                sender_line=56,
+                receiver_line=67,
+                sender_node_id="ext_sig_ship_order_56",
+                receiver_node_id="sig_handler_ship_order_67",
+            )
+
+        @pytest.fixture
+        def sample_workflow_metadata() -> WorkflowMetadata:
+            return WorkflowMetadata(
+                workflow_class="TestWorkflow",
+                workflow_run_method="run",
+                activities=[],
+                decision_points=[],
+                signal_points=[],
+                source_file=Path("test.py"),
+                total_paths=1,
+            )
+        ```
+      </pattern>
+      <pattern type="test-organization">
+        Function-based tests following existing file pattern:
+        - test_signal_connection_creation()
+        - test_signal_connection_frozen()
+        - test_signal_connection_field_access()
+        - test_signal_connection_equality()
+        - test_peer_signal_graph_creation()
+        - test_peer_signal_graph_frozen()
+        - test_peer_signal_graph_field_access()
+        - test_peer_signal_graph_with_empty_collections()
+      </pattern>
+      <pattern type="immutability-test">
+        ```python
+        import pytest
+        from dataclasses import FrozenInstanceError
+
+        def test_signal_connection_frozen() -> None:
+            """Test SignalConnection is immutable."""
+            conn = SignalConnection(
+                sender_workflow="OrderWorkflow",
+                receiver_workflow="ShippingWorkflow",
+                signal_name="ship_order",
+                sender_line=56,
+                receiver_line=67,
+                sender_node_id="ext_sig_ship_order_56",
+                receiver_node_id="sig_handler_ship_order_67",
+            )
+            with pytest.raises(FrozenInstanceError):
+                conn.sender_workflow = "NewWorkflow"  # type: ignore[misc]
+        ```
+      </pattern>
+    </test-patterns>
+    <expected-test-count>8-10 new tests</expected-test-count>
+    <coverage-target>100% for new dataclasses</coverage-target>
+    <test-categories>
+      <category name="SignalConnection">4 tests - creation, frozen, field access, equality</category>
+      <category name="PeerSignalGraph">4 tests - creation, frozen, field access, empty collections</category>
+    </test-categories>
+  </testing-context>
+
+  <implementation-notes>
+    <signal-connection-structure>
+      ```python
+      @dataclass(frozen=True)
+      class SignalConnection:
+          """Represents a signal flow between two workflows.
+
+          Captures the relationship between an external signal send
+          (ExternalSignalCall) and a signal handler (SignalHandler).
+
+          Args:
+              sender_workflow: Name of workflow sending the signal.
+              receiver_workflow: Name of workflow receiving the signal.
+              signal_name: Name of the signal being sent/received.
+              sender_line: Line number in sender where signal() is called.
+              receiver_line: Line number in receiver where @workflow.signal is.
+              sender_node_id: Node ID of the external signal node.
+              receiver_node_id: Node ID of the signal handler node.
+
+          Example:
+              >>> conn = SignalConnection(
+              ...     sender_workflow="OrderWorkflow",
+              ...     receiver_workflow="ShippingWorkflow",
+              ...     signal_name="ship_order",
+              ...     sender_line=56,
+              ...     receiver_line=67,
+              ...     sender_node_id="ext_sig_ship_order_56",
+              ...     receiver_node_id="sig_handler_ship_order_67",
+              ... )
+          """
+          sender_workflow: str
+          receiver_workflow: str
+          signal_name: str
+          sender_line: int
+          receiver_line: int
+          sender_node_id: str
+          receiver_node_id: str
+      ```
+    </signal-connection-structure>
+
+    <peer-signal-graph-structure>
+      ```python
+      @dataclass(frozen=True)
+      class PeerSignalGraph:
+          """Complete graph of workflows connected by peer-to-peer signals.
+
+          The result of cross-workflow signal analysis, containing all
+          discovered workflows, their signal handlers, and the connections
+          between them.
+
+          Args:
+              root_workflow: Entry point workflow for the analysis.
+              workflows: All workflows discovered during analysis.
+                  Maps workflow class name to WorkflowMetadata.
+              signal_handlers: All signal handlers discovered.
+                  Maps signal name to list of handlers (multiple workflows
+                  may handle the same signal).
+              connections: All signal connections between workflows.
+              unresolved_signals: External signals where no target was found.
+
+          Example:
+              >>> graph = PeerSignalGraph(
+              ...     root_workflow=order_metadata,
+              ...     workflows={"OrderWorkflow": order_metadata, "ShippingWorkflow": shipping_metadata},
+              ...     signal_handlers={"ship_order": [handler]},
+              ...     connections=[SignalConnection(...)],
+              ...     unresolved_signals=[],
+              ... )
+          """
+          root_workflow: WorkflowMetadata
+          workflows: dict[str, WorkflowMetadata]
+          signal_handlers: dict[str, list[SignalHandler]]
+          connections: list[SignalConnection]
+          unresolved_signals: list[ExternalSignalCall]
+      ```
+    </peer-signal-graph-structure>
+
+    <entity-relationships>
+      PeerSignalGraph (1) ──&lt; (n) WorkflowMetadata (via workflows dict)
+      PeerSignalGraph (1) ──&lt; (n) SignalConnection (via connections list)
+      PeerSignalGraph (1) ──&lt; (n) ExternalSignalCall (via unresolved_signals)
+
+      WorkflowMetadata (1) ──&lt; (n) SignalHandler (via signal_handlers tuple)
+      WorkflowMetadata (1) ──&lt; (n) ExternalSignalCall (via external_signals tuple)
+
+      SignalConnection (1) ──&lt; (1) ExternalSignalCall (sender side - via node_id reference)
+      SignalConnection (1) ──&lt; (1) SignalHandler (receiver side - via node_id reference)
+    </entity-relationships>
+
+    <placement-in-file>
+      Add SignalConnection after ExternalSignalCall (line 422), before SignalHandler (line 424).
+      Add PeerSignalGraph after WorkflowCallGraph (line 693), at end of file.
+
+      Suggested order in graph_models.py:
+      1. NodeType enum
+      2. GraphNode
+      3. GraphEdge
+      4. Activity
+      5. DecisionPoint
+      6. SignalPoint
+      7. ChildWorkflowCall
+      8. ExternalSignalCall
+      9. SignalConnection (NEW - references ExternalSignalCall)
+      10. SignalHandler
+      11. WorkflowMetadata
+      12. MultiWorkflowPath
+      13. WorkflowCallGraph
+      14. PeerSignalGraph (NEW - references all above)
+    </placement-in-file>
+  </implementation-notes>
+
+  <learnings-from-previous-stories>
+    <learning story="8-1">
+      SignalHandler dataclass is frozen and located in graph_models.py (lines 424-463).
+      Has fields: signal_name, method_name, workflow_class, source_line, node_id.
+    </learning>
+    <learning story="8-2">
+      WorkflowMetadata has signal_handlers: tuple[SignalHandler, ...] = () field.
+      Pattern: use tuple for immutable collections in frozen dataclasses.
+    </learning>
+    <learning story="8-3">
+      SignalNameResolver builds handler index as dict[str, list[tuple[Path, SignalHandler]]].
+      PeerSignalGraph.signal_handlers uses similar but simpler structure: dict[str, list[SignalHandler]].
+    </learning>
+    <learning story="8-4">
+      Search path scanning discovers workflows across directories.
+      PeerSignalGraph.workflows aggregates discovered WorkflowMetadata instances.
+    </learning>
+    <learning from="epic-7">
+      ExternalSignalCall dataclass pattern with frozen=True and comprehensive docstring.
+      node_id format: ext_sig_{signal_name}_{line_number}
+    </learning>
+    <learning from="test-file">
+      Tests use FrozenInstanceError for immutability testing (from dataclasses module).
+      Tests follow function-based pattern, not class-based.
+    </learning>
+  </learnings-from-previous-stories>
+
+  <acceptance-criteria-mapping>
+    <criterion ac="1" fr="FR86" spec-line="985-992">
+      PeerSignalGraph frozen dataclass exists with 5 fields:
+      root_workflow, workflows, signal_handlers, connections, unresolved_signals
+    </criterion>
+    <criterion ac="2" spec-line="994-1001">
+      SignalConnection frozen dataclass exists with 7 fields:
+      sender_workflow, receiver_workflow, signal_name, sender_line, receiver_line,
+      sender_node_id, receiver_node_id
+    </criterion>
+    <criterion ac="3" adr="Immutability">
+      Both dataclasses use @dataclass(frozen=True)
+    </criterion>
+    <criterion ac="4" adr="ADR-006">
+      All fields have complete type hints for mypy strict mode
+    </criterion>
+    <criterion ac="5">
+      Both dataclasses have comprehensive Google-style docstrings
+    </criterion>
+    <criterion ac="6">
+      SignalConnection and PeerSignalGraph exported from __init__.py
+    </criterion>
+    <criterion ac="7">
+      Unit tests verify instantiation, field access, frozen behavior, defaults
+    </criterion>
+    <criterion ac="8">
+      All existing Epic 1-8.4 tests continue passing (no regressions)
+    </criterion>
+  </acceptance-criteria-mapping>
+
+  <validation-checklist>
+    <check>SignalConnection dataclass in graph_models.py with 7 fields</check>
+    <check>PeerSignalGraph dataclass in graph_models.py with 5 fields</check>
+    <check>Both use @dataclass(frozen=True)</check>
+    <check>Both have Google-style docstrings with Args and Example</check>
+    <check>All fields have type hints</check>
+    <check>Both exported in __init__.py __all__</check>
+    <check>8-10 unit tests added to test_graph_models.py</check>
+    <check>pytest passes with no failures</check>
+    <check>mypy src/temporalio_graphs/ passes</check>
+    <check>ruff check src/temporalio_graphs/ passes</check>
+    <check>Test coverage remains >=80%</check>
+  </validation-checklist>
+
+  <references>
+    <reference type="tech-spec">
+      docs/sprint-artifacts/tech-spec-epic-8.md (lines 189-241, 283-293, 985-1001)
+    </reference>
+    <reference type="architecture">
+      docs/architecture.md (ADR-001, ADR-006, ADR-013)
+    </reference>
+    <reference type="story">
+      docs/sprint-artifacts/stories/8-5-signal-connection-model.md
+    </reference>
+    <reference type="implementation-target">
+      src/temporalio_graphs/_internal/graph_models.py
+    </reference>
+    <reference type="export-target">
+      src/temporalio_graphs/__init__.py
+    </reference>
+    <reference type="test-target">
+      tests/test_graph_models.py
+    </reference>
+  </references>
+</story-context>

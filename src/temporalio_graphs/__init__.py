@@ -12,7 +12,11 @@ Quick start:
 from pathlib import Path
 from typing import Literal
 
-from temporalio_graphs._internal.graph_models import MultiWorkflowPath
+from temporalio_graphs._internal.graph_models import (
+    MultiWorkflowPath,
+    PeerSignalGraph,
+    SignalConnection,
+)
 from temporalio_graphs.analyzer import WorkflowAnalyzer
 from temporalio_graphs.call_graph_analyzer import WorkflowCallGraphAnalyzer
 from temporalio_graphs.context import GraphBuildingContext
@@ -46,6 +50,8 @@ __all__ = [
     "GraphGenerationError",
     "InvalidDecisionError",
     "MultiWorkflowPath",
+    "PeerSignalGraph",
+    "SignalConnection",
 ]
 
 

@@ -422,6 +422,43 @@ class ExternalSignalCall:
 
 
 @dataclass(frozen=True)
+class SignalConnection:
+    """Represents a signal flow between two workflows.
+
+    Captures the relationship between an external signal send
+    (ExternalSignalCall) and a signal handler (SignalHandler).
+
+    Args:
+        sender_workflow: Name of workflow sending the signal.
+        receiver_workflow: Name of workflow receiving the signal.
+        signal_name: Name of the signal being sent/received.
+        sender_line: Line number in sender where signal() is called.
+        receiver_line: Line number in receiver where @workflow.signal is.
+        sender_node_id: Node ID of the external signal node.
+        receiver_node_id: Node ID of the signal handler node.
+
+    Example:
+        >>> conn = SignalConnection(
+        ...     sender_workflow="OrderWorkflow",
+        ...     receiver_workflow="ShippingWorkflow",
+        ...     signal_name="ship_order",
+        ...     sender_line=56,
+        ...     receiver_line=67,
+        ...     sender_node_id="ext_sig_ship_order_56",
+        ...     receiver_node_id="sig_handler_ship_order_67",
+        ... )
+    """
+
+    sender_workflow: str
+    receiver_workflow: str
+    signal_name: str
+    sender_line: int
+    receiver_line: int
+    sender_node_id: str
+    receiver_node_id: str
+
+
+@dataclass(frozen=True)
 class SignalHandler:
     """Represents a @workflow.signal decorated method in a workflow class.
 
@@ -690,3 +727,38 @@ class WorkflowCallGraph:
     call_relationships: list[tuple[str, str]]
     all_child_calls: list[ChildWorkflowCall]
     total_workflows: int
+
+
+@dataclass(frozen=True)
+class PeerSignalGraph:
+    """Complete graph of workflows connected by peer-to-peer signals.
+
+    The result of cross-workflow signal analysis, containing all
+    discovered workflows, their signal handlers, and the connections
+    between them.
+
+    Args:
+        root_workflow: Entry point workflow for the analysis.
+        workflows: All workflows discovered during analysis.
+            Maps workflow class name to WorkflowMetadata.
+        signal_handlers: All signal handlers discovered.
+            Maps signal name to list of handlers (multiple workflows
+            may handle the same signal).
+        connections: All signal connections between workflows.
+        unresolved_signals: External signals where no target was found.
+
+    Example:
+        >>> graph = PeerSignalGraph(
+        ...     root_workflow=order_metadata,
+        ...     workflows={"OrderWorkflow": order_metadata, "ShippingWorkflow": shipping_metadata},
+        ...     signal_handlers={"ship_order": [handler]},
+        ...     connections=[SignalConnection(...)],
+        ...     unresolved_signals=[],
+        ... )
+    """
+
+    root_workflow: WorkflowMetadata
+    workflows: dict[str, WorkflowMetadata]
+    signal_handlers: dict[str, list[SignalHandler]]
+    connections: list[SignalConnection]
+    unresolved_signals: list[ExternalSignalCall]

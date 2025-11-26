@@ -354,6 +354,7 @@ class TestAnalyzeWorkflowSignature:
         # Updated in Story 5.1 to include validation APIs
         # Updated in Story 5.2 to include exception classes
         # Updated in Epic 6 to include cross-workflow APIs
+        # Updated in Story 8.5 to include cross-workflow signal models
         assert set(exported) == {
             "GraphBuildingContext",
             "analyze_workflow",
@@ -368,6 +369,8 @@ class TestAnalyzeWorkflowSignature:
             "GraphGenerationError",
             "InvalidDecisionError",
             "MultiWorkflowPath",
+            "PeerSignalGraph",
+            "SignalConnection",
         }
         # Verify internal components not exported
         assert "WorkflowAnalyzer" not in exported
