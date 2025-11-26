@@ -421,6 +421,48 @@ class ExternalSignalCall:
     source_workflow: str
 
 
+@dataclass(frozen=True)
+class SignalHandler:
+    """Represents a @workflow.signal decorated method in a workflow class.
+
+    A signal handler is a method that can receive external signals from other
+    workflows. Signal handlers are detected via @workflow.signal decorator on
+    async or sync methods. The signal name can be explicitly provided via the
+    name= argument or defaults to the method name.
+
+    The frozen=True attribute ensures SignalHandler instances are immutable,
+    preventing accidental modifications to handler metadata once created.
+
+    Args:
+        signal_name: Name of the signal this handler receives. Either explicitly
+            provided via @workflow.signal(name="custom") or defaults to method name.
+        method_name: Actual Python method name of the signal handler.
+        workflow_class: Name of the workflow class containing this signal handler.
+        source_line: Line number in source code where the method is defined.
+        node_id: Unique identifier for this handler in the graph.
+            Format: sig_handler_{signal_name}_{line_number}
+
+    Example:
+        >>> signal_handler = SignalHandler(
+        ...     signal_name="ship_order",
+        ...     method_name="ship_order",
+        ...     workflow_class="ShippingWorkflow",
+        ...     source_line=67,
+        ...     node_id="sig_handler_ship_order_67"
+        ... )
+        >>> signal_handler.signal_name
+        'ship_order'
+        >>> signal_handler.workflow_class
+        'ShippingWorkflow'
+    """
+
+    signal_name: str
+    method_name: str
+    workflow_class: str
+    source_line: int
+    node_id: str
+
+
 @dataclass
 class WorkflowMetadata:
     """Metadata describing a workflow and its graph characteristics.

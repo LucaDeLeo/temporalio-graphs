@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>8-1-signal-handler-detector</story-key>
+    <story-title>Signal Handler Detector</story-title>
+    <epic>Epic 8: Cross-Workflow Signal Visualization</epic>
+    <status>drafted</status>
+    <generated-date>2025-11-26</generated-date>
+  </metadata>
+
+  <story-reference>
+    <path>docs/sprint-artifacts/stories/8-1-signal-handler-detector.md</path>
+    <description>Story file with acceptance criteria, tasks, and dev notes for SignalHandlerDetector implementation</description>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec>
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Epic 8 Technical Specification - Cross-Workflow Signal Visualization with detailed API specs and acceptance criteria</description>
+      <relevant-sections>
+        <section lines="296-372">SignalHandlerDetector API specification with visit_AsyncFunctionDef, visit_FunctionDef, _is_signal_decorator, _extract_signal_name</section>
+        <section lines="154-187">SignalHandler Dataclass specification with frozen=True, all fields documented</section>
+        <section lines="920-957">AC1-AC5 Acceptance Criteria for signal handler detection and metadata</section>
+      </relevant-sections>
+    </tech-spec>
+    <architecture>
+      <path>docs/architecture.md</path>
+      <description>Project architecture document with ADRs and implementation patterns</description>
+      <relevant-sections>
+        <section name="ADR-001">Static Analysis vs Runtime Interceptors - detection via AST only, no workflow execution</section>
+        <section name="ADR-006">mypy strict mode - complete type hints required</section>
+        <section name="ADR-010">pytest 80% coverage requirement</section>
+        <section name="ADR-013">Cross-Workflow Signal Visualization Strategy - signal handler detection approach</section>
+        <section name="Implementation Patterns">AST Visitor Pattern, Naming conventions, Test organization</section>
+      </relevant-sections>
+    </architecture>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact type="project-readme">
+      <path>CLAUDE.md</path>
+      <description>Project overview, commands, architecture, and conventions</description>
+      <relevance>Establishes project conventions, testing standards (pytest), code quality tools (mypy, ruff)</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface type="detector-pattern">
+      <path>src/temporalio_graphs/detector.py</path>
+      <description>Contains DecisionDetector, SignalDetector, ChildWorkflowDetector, ExternalSignalDetector - established detector patterns to follow</description>
+      <relevance>SignalHandlerDetector should follow same patterns: ast.NodeVisitor, private _handlers list, property for read access, visit_* methods, helper methods _is_*, _extract_*</relevance>
+      <key-patterns>
+        <pattern name="ExternalSignalDetector" lines="766-1017">Most recent detector, provides template for SignalHandlerDetector structure including set_* methods, _generate_node_id, property returning copy</pattern>
+        <pattern name="DecisionDetector" lines="41-316">Original detector pattern with visit_Call, visit_If, _is_*_call helper, property</pattern>
+        <pattern name="SignalDetector" lines="318-564">Signal/wait_condition detection pattern with metadata extraction</pattern>
+        <pattern name="ChildWorkflowDetector" lines="567-763">Child workflow detection with set_parent_workflow context method</pattern>
+      </key-patterns>
+      <insert-location>After ExternalSignalDetector class (line 1017+), add SignalHandlerDetector class</insert-location>
+    </interface>
+
+    <interface type="data-models">
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Graph data models including Activity, DecisionPoint, SignalPoint, ChildWorkflowCall, ExternalSignalCall, WorkflowMetadata</description>
+      <relevance>SignalHandler dataclass will be added here in Story 8.2; SignalHandlerDetector will create SignalHandler instances</relevance>
+      <key-patterns>
+        <pattern name="frozen-dataclass" lines="381-422">ExternalSignalCall frozen dataclass pattern - SignalHandler should follow same pattern</pattern>
+        <pattern name="WorkflowMetadata" lines="424-541">Will need signal_handlers field added in Story 8.2</pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="test-patterns">
+      <path>tests/test_detector.py</path>
+      <description>Existing detector unit tests with comprehensive coverage patterns</description>
+      <relevance>SignalHandlerDetector tests should follow same organization: TestSignalHandlerDetectorBasic, TestSignalHandlerNameExtraction, TestSignalHandlerMetadata, etc.</relevance>
+      <key-patterns>
+        <pattern name="ExternalSignalDetector-tests" lines="1382-1780">Most recent detector tests - comprehensive coverage of basic detection, pattern extraction, edge cases, error handling, node ID format, property behavior</pattern>
+        <pattern name="test-class-organization">Separate test classes for: Basic detection, Name extraction, Metadata, Edge cases, Property behavior, Error handling</pattern>
+        <pattern name="ast-fixture-pattern">Create source code strings, ast.parse(), create detector, detector.visit(tree), assert on detector.property</pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="workflow-example">
+      <path>examples/peer_signal_workflow/shipping_workflow.py</path>
+      <description>Example workflow with @workflow.signal decorator - real-world signal handler pattern</description>
+      <relevance>Shows the exact AST pattern SignalHandlerDetector must detect: @workflow.signal decorated async method</relevance>
+      <code-sample lines="66-78">
+        <![CDATA[
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        """Receive ship_order signal from Order workflow."""
+        self.should_ship = True
+        self.order_id = order_id
+        ]]>
+      </code-sample>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint type="architecture" source="ADR-001">
+      <description>Static Analysis Only - Detection via AST traversal, no workflow execution</description>
+      <impact>SignalHandlerDetector must analyze decorator patterns in AST, not execute workflows</impact>
+    </constraint>
+
+    <constraint type="type-safety" source="ADR-006">
+      <description>mypy strict mode - Complete type hints for all methods, parameters, return types</description>
+      <impact>All SignalHandlerDetector methods must have full type annotations</impact>
+    </constraint>
+
+    <constraint type="test-coverage" source="ADR-010">
+      <description>pytest 80%+ coverage, 100% for core graph generation logic</description>
+      <impact>SignalHandlerDetector requires 100% test coverage per story requirements</impact>
+    </constraint>
+
+    <constraint type="immutability" source="tech-spec">
+      <description>Detector returns copy of _handlers list via property to prevent external mutation</description>
+      <impact>handlers property must return list(self._handlers), not self._handlers directly</impact>
+    </constraint>
+
+    <constraint type="visitor-pattern" source="architecture">
+      <description>All AST visitors follow established pattern: extend ast.NodeVisitor, implement visit_* methods, call generic_visit(node) to continue traversal</description>
+      <impact>SignalHandlerDetector must call generic_visit(node) at end of visit_AsyncFunctionDef and visit_FunctionDef</impact>
+    </constraint>
+
+    <constraint type="node-id-format" source="tech-spec">
+      <description>Node ID format: sig_handler_{signal_name}_{line_number}</description>
+      <impact>_generate_node_id method must normalize signal name (spaces to underscores, lowercase) and append line number</impact>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <external-dependency>
+      <package>temporalio</package>
+      <version>>=1.7.1</version>
+      <usage>workflow decorators for type validation, but no runtime execution</usage>
+    </external-dependency>
+
+    <internal-dependency>
+      <module>ast</module>
+      <usage>Python built-in AST parsing and NodeVisitor base class</usage>
+      <types>ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.Attribute, ast.Call, ast.expr, ast.Constant</types>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs._internal.graph_models</module>
+      <usage>SignalHandler dataclass (created in Story 8.2)</usage>
+      <note>Story 8.1 can stub SignalHandler or be implemented alongside Story 8.2</note>
+    </internal-dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-location>tests/test_detector.py</test-location>
+    <test-class-name>TestSignalHandlerDetector</test-class-name>
+    <test-framework>pytest</test-framework>
+    <async-support>pytest-asyncio (not needed for detector tests - pure AST analysis)</async-support>
+    <coverage-target>100%</coverage-target>
+    <coverage-command>pytest --cov=src/temporalio_graphs/detector.py --cov-report=term-missing tests/test_detector.py</coverage-command>
+
+    <test-cases-required>
+      <test-case id="1">test_detect_async_signal_handler - basic @workflow.signal async def detection</test-case>
+      <test-case id="2">test_detect_sync_signal_handler - @workflow.signal def (sync) detection</test-case>
+      <test-case id="3">test_detect_explicit_signal_name - @workflow.signal(name="custom") extraction</test-case>
+      <test-case id="4">test_detect_method_name_as_signal_name - @workflow.signal without explicit name</test-case>
+      <test-case id="5">test_detect_multiple_handlers_same_workflow - workflow with 2+ signal handlers</test-case>
+      <test-case id="6">test_bare_decorator_no_parens - @workflow.signal without parentheses</test-case>
+      <test-case id="7">test_decorator_empty_parens - @workflow.signal() with empty parens</test-case>
+      <test-case id="8">test_handlers_property_returns_list - verify return type is list</test-case>
+      <test-case id="9">test_handlers_property_immutable - verify copy returned for immutability</test-case>
+      <test-case id="10">test_workflow_class_context_stored - verify set_workflow_class stores context</test-case>
+      <test-case id="11">test_node_id_format - verify sig_handler_{name}_{line} format</test-case>
+      <test-case id="12">test_node_id_handles_spaces - signal names with spaces normalized</test-case>
+    </test-cases-required>
+
+    <edge-cases>
+      <case>Handler with stacked decorators (@workflow.signal + other decorators)</case>
+      <case>Handler inside workflow class with no @workflow.run method</case>
+      <case>Multiple workflow classes in same file, each with handlers</case>
+      <case>Signal handler with complex type annotations</case>
+    </edge-cases>
+  </testing-context>
+
+  <implementation-notes>
+    <note priority="critical">
+      SignalHandler dataclass is defined in Story 8.2. Either implement 8.1 and 8.2 together, or create a minimal SignalHandler stub in detector.py for initial development.
+    </note>
+
+    <note priority="high">
+      Decorator recognition must handle three patterns:
+      1. @workflow.signal (bare attribute - ast.Attribute)
+      2. @workflow.signal() (call with no args - ast.Call with empty args)
+      3. @workflow.signal(name="custom") (call with keyword arg - ast.Call with keywords)
+    </note>
+
+    <note priority="high">
+      For _is_signal_decorator helper, check:
+      - ast.Attribute where attr=="signal" and value is ast.Name with id=="workflow"
+      - ast.Call where func matches above pattern
+    </note>
+
+    <note priority="medium">
+      For _extract_signal_name helper:
+      - If decorator is ast.Call with name= keyword arg, extract string value
+      - Otherwise return method_name (from node.name)
+    </note>
+
+    <note priority="medium">
+      set_workflow_class(name: str) is called by analyzer before visiting AST to provide context for handler metadata.
+    </note>
+  </implementation-notes>
+
+  <code-templates>
+    <template name="SignalHandlerDetector-structure">
+      <![CDATA[
+class SignalHandlerDetector(ast.NodeVisitor):
+    """Detects @workflow.signal decorated methods in workflow classes.
+
+    Identifies signal handlers that can receive external signals from
+    other workflows. Supports both explicit signal names and method-name
+    based signals.
+    """
+
+    def __init__(self) -> None:
+        """Initialize detector with empty state."""
+        self._handlers: list[SignalHandler] = []
+        self._workflow_class: str = ""
+
+    def set_workflow_class(self, name: str) -> None:
+        """Set workflow class context for handler metadata."""
+        self._workflow_class = name
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Detect @workflow.signal decorated async methods."""
+        self._check_for_signal_handler(node)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Detect @workflow.signal decorated sync methods."""
+        self._check_for_signal_handler(node)
+        self.generic_visit(node)
+
+    def _check_for_signal_handler(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        """Check if function definition has @workflow.signal decorator."""
+        for decorator in node.decorator_list:
+            if self._is_signal_decorator(decorator):
+                signal_name = self._extract_signal_name(decorator, node.name)
+                handler = SignalHandler(
+                    signal_name=signal_name,
+                    method_name=node.name,
+                    workflow_class=self._workflow_class,
+                    source_line=node.lineno,
+                    node_id=self._generate_node_id(signal_name, node.lineno),
+                )
+                self._handlers.append(handler)
+
+    def _is_signal_decorator(self, decorator: ast.expr) -> bool:
+        """Check if decorator is @workflow.signal or @workflow.signal(...)."""
+        # Handle bare decorator: @workflow.signal
+        if isinstance(decorator, ast.Attribute):
+            return (
+                decorator.attr == "signal"
+                and isinstance(decorator.value, ast.Name)
+                and decorator.value.id == "workflow"
+            )
+        # Handle call decorator: @workflow.signal() or @workflow.signal(name="...")
+        if isinstance(decorator, ast.Call):
+            return self._is_signal_decorator(decorator.func)
+        return False
+
+    def _extract_signal_name(self, decorator: ast.expr, method_name: str) -> str:
+        """Extract signal name from decorator or fall back to method name."""
+        if isinstance(decorator, ast.Call):
+            for keyword in decorator.keywords:
+                if keyword.arg == "name":
+                    if isinstance(keyword.value, ast.Constant):
+                        return str(keyword.value.value)
+        return method_name
+
+    def _generate_node_id(self, signal_name: str, line: int) -> str:
+        """Generate deterministic node ID for signal handler."""
+        safe_name = signal_name.replace(" ", "_").lower()
+        return f"sig_handler_{safe_name}_{line}"
+
+    @property
+    def handlers(self) -> list[SignalHandler]:
+        """Get detected signal handlers (copy for immutability)."""
+        return list(self._handlers)
+      ]]>
+    </template>
+
+    <template name="SignalHandler-stub">
+      <![CDATA[
+# Temporary stub until Story 8.2 creates full dataclass in graph_models.py
+@dataclass(frozen=True)
+class SignalHandler:
+    """Represents a @workflow.signal decorated method."""
+    signal_name: str
+    method_name: str
+    workflow_class: str
+    source_line: int
+    node_id: str
+      ]]>
+    </template>
+  </code-templates>
+
+  <validation-checklist>
+    <item id="1" status="pending">SignalHandlerDetector class exists in detector.py after ExternalSignalDetector</item>
+    <item id="2" status="pending">Extends ast.NodeVisitor</item>
+    <item id="3" status="pending">Implements visit_AsyncFunctionDef for async handlers</item>
+    <item id="4" status="pending">Implements visit_FunctionDef for sync handlers</item>
+    <item id="5" status="pending">_is_signal_decorator handles bare, empty parens, and name= patterns</item>
+    <item id="6" status="pending">_extract_signal_name extracts explicit name or falls back to method name</item>
+    <item id="7" status="pending">set_workflow_class method for context</item>
+    <item id="8" status="pending">handlers property returns list copy</item>
+    <item id="9" status="pending">Node ID format: sig_handler_{signal_name}_{line}</item>
+    <item id="10" status="pending">100% test coverage for SignalHandlerDetector</item>
+    <item id="11" status="pending">mypy strict mode passes</item>
+    <item id="12" status="pending">ruff check passes</item>
+    <item id="13" status="pending">All existing tests still pass (no regressions)</item>
+  </validation-checklist>
+
+  <next-steps>
+    <step order="1">Story 8.2: Create SignalHandler dataclass in graph_models.py</step>
+    <step order="2">Story 8.3: Create SignalNameResolver for target workflow resolution</step>
+  </next-steps>
+</story-context>

@@ -31,6 +31,7 @@ from temporalio_graphs._internal.graph_models import (
     ChildWorkflowCall,
     DecisionPoint,
     ExternalSignalCall,
+    SignalHandler,
     SignalPoint,
 )
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
@@ -1014,3 +1015,175 @@ class ExternalSignalDetector(ast.NodeVisitor):
         """
         # Return copy for immutability
         return list(self._external_signals)
+
+
+class SignalHandlerDetector(ast.NodeVisitor):
+    """Detects @workflow.signal decorated methods in workflow classes.
+
+    This detector identifies signal handlers that can receive external signals from
+    other workflows. It supports both explicit signal names (via name= argument)
+    and method-name-based signals (when no explicit name is provided).
+
+    The detector handles various decorator patterns:
+    - Bare decorator: @workflow.signal
+    - Empty parentheses: @workflow.signal()
+    - Explicit name: @workflow.signal(name="custom_name")
+
+    Both async and sync methods are supported, though async is the typical pattern
+    for signal handlers in Temporal workflows.
+
+    Attributes:
+        _handlers: List of detected SignalHandler objects.
+        _workflow_class: Name of the containing workflow class.
+
+    Example:
+        >>> source = '''
+        ... from temporalio import workflow
+        ... @workflow.defn
+        ... class ShippingWorkflow:
+        ...     @workflow.signal
+        ...     async def ship_order(self, order_id: str) -> None:
+        ...         self.should_ship = True
+        ... '''
+        >>> tree = ast.parse(source)
+        >>> detector = SignalHandlerDetector()
+        >>> detector.set_workflow_class("ShippingWorkflow")
+        >>> detector.visit(tree)
+        >>> handlers = detector.handlers
+        >>> len(handlers)
+        1
+        >>> handlers[0].signal_name
+        'ship_order'
+    """
+
+    def __init__(self) -> None:
+        """Initialize detector with empty state."""
+        self._handlers: list[SignalHandler] = []
+        self._workflow_class: str = ""
+
+    def set_workflow_class(self, name: str) -> None:
+        """Set workflow class context for handler metadata.
+
+        Args:
+            name: Name of the workflow class containing signal handlers.
+        """
+        self._workflow_class = name
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Detect @workflow.signal decorated async methods.
+
+        Args:
+            node: AST node representing an async function definition.
+        """
+        self._check_for_signal_handler(node)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Detect @workflow.signal decorated sync methods.
+
+        Args:
+            node: AST node representing a sync function definition.
+        """
+        self._check_for_signal_handler(node)
+        self.generic_visit(node)
+
+    def _check_for_signal_handler(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        """Check if function definition has @workflow.signal decorator.
+
+        Iterates through the method's decorator list and checks if any decorator
+        is a @workflow.signal decorator. If found, extracts the signal name and
+        creates a SignalHandler instance.
+
+        Args:
+            node: AST function definition node (async or sync).
+        """
+        for decorator in node.decorator_list:
+            if self._is_signal_decorator(decorator):
+                signal_name = self._extract_signal_name(decorator, node.name)
+                handler = SignalHandler(
+                    signal_name=signal_name,
+                    method_name=node.name,
+                    workflow_class=self._workflow_class,
+                    source_line=node.lineno,
+                    node_id=self._generate_node_id(signal_name, node.lineno),
+                )
+                self._handlers.append(handler)
+                logger.debug(
+                    f"Detected signal handler '{signal_name}' (method: {node.name}) "
+                    f"at line {node.lineno} in workflow '{self._workflow_class}'"
+                )
+
+    def _is_signal_decorator(self, decorator: ast.expr) -> bool:
+        """Check if decorator is @workflow.signal or @workflow.signal(...).
+
+        Handles three decorator patterns:
+        1. Bare decorator: @workflow.signal (ast.Attribute)
+        2. Empty call: @workflow.signal() (ast.Call with empty args)
+        3. With arguments: @workflow.signal(name="x") (ast.Call with keywords)
+
+        Args:
+            decorator: AST expression node representing a decorator.
+
+        Returns:
+            True if this is a @workflow.signal decorator, False otherwise.
+        """
+        # Handle bare decorator: @workflow.signal
+        if isinstance(decorator, ast.Attribute):
+            return (
+                decorator.attr == "signal"
+                and isinstance(decorator.value, ast.Name)
+                and decorator.value.id == "workflow"
+            )
+        # Handle call decorator: @workflow.signal() or @workflow.signal(name="...")
+        if isinstance(decorator, ast.Call):
+            return self._is_signal_decorator(decorator.func)
+        return False
+
+    def _extract_signal_name(self, decorator: ast.expr, method_name: str) -> str:
+        """Extract signal name from decorator or fall back to method name.
+
+        If the decorator is a Call with a name= keyword argument, extracts and
+        returns that value. Otherwise returns the method name as the signal name.
+
+        Args:
+            decorator: AST expression node representing the decorator.
+            method_name: Name of the method being decorated.
+
+        Returns:
+            Signal name (either explicit from decorator or method name).
+        """
+        if isinstance(decorator, ast.Call):
+            for keyword in decorator.keywords:
+                if keyword.arg == "name":
+                    if isinstance(keyword.value, ast.Constant):
+                        return str(keyword.value.value)
+        return method_name
+
+    def _generate_node_id(self, signal_name: str, line: int) -> str:
+        """Generate deterministic node ID for signal handler.
+
+        Creates a unique identifier using signal name and source line number.
+        This ensures deterministic IDs for regression testing.
+
+        Args:
+            signal_name: Signal name from handler.
+            line: Source line number where handler is defined.
+
+        Returns:
+            Deterministic node ID in format: sig_handler_{signal_name}_{line}
+        """
+        # Normalize: spaces to underscores, lowercase
+        safe_name = signal_name.replace(" ", "_").lower()
+        return f"sig_handler_{safe_name}_{line}"
+
+    @property
+    def handlers(self) -> list[SignalHandler]:
+        """Get detected signal handlers (copy for immutability).
+
+        Returns:
+            List of SignalHandler objects detected during AST traversal.
+            Returns a copy to prevent external mutation.
+        """
+        return list(self._handlers)

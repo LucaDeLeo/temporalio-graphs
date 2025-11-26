@@ -24,6 +24,7 @@ from temporalio_graphs._internal.graph_models import (
     ChildWorkflowCall,
     DecisionPoint,
     ExternalSignalCall,
+    SignalHandler,
     SignalPoint,
 )
 from temporalio_graphs.detector import (
@@ -31,6 +32,7 @@ from temporalio_graphs.detector import (
     DecisionDetector,
     ExternalSignalDetector,
     SignalDetector,
+    SignalHandlerDetector,
 )
 from temporalio_graphs.exceptions import InvalidSignalError, WorkflowParseError
 
@@ -1777,3 +1779,620 @@ await other_var.signal("test", data)
 
         signals = detector.external_signals
         assert len(signals) == 0
+
+
+# =====================================================================
+# Signal Handler Detector Tests (Epic 8, Story 8.1)
+# =====================================================================
+
+
+class TestSignalHandlerDetectorBasic:
+    """Basic signal handler detection tests."""
+
+    def test_detect_async_signal_handler(self) -> None:
+        """Test detection of @workflow.signal decorated async method."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        self.should_ship = True
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("ShippingWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "ship_order"
+        assert handlers[0].method_name == "ship_order"
+        assert handlers[0].workflow_class == "ShippingWorkflow"
+        assert handlers[0].source_line == 7
+
+    def test_detect_sync_signal_handler(self) -> None:
+        """Test detection of @workflow.signal decorated sync method."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    @workflow.signal
+    def ship_order(self, order_id: str) -> None:
+        self.should_ship = True
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("ShippingWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "ship_order"
+        assert handlers[0].method_name == "ship_order"
+
+    def test_detect_multiple_handlers_same_workflow(self) -> None:
+        """Test workflow with multiple signal handlers."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class OrderWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        self.ship = True
+
+    @workflow.signal
+    async def cancel_order(self, reason: str) -> None:
+        self.cancelled = True
+
+    @workflow.signal
+    def update_status(self, status: str) -> None:
+        self.status = status
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("OrderWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 3
+        assert handlers[0].signal_name == "ship_order"
+        assert handlers[1].signal_name == "cancel_order"
+        assert handlers[2].signal_name == "update_status"
+
+    def test_ignore_non_signal_decorated_methods(self) -> None:
+        """Test that non-signal decorated methods are ignored."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class MyWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        return "done"
+
+    @workflow.query
+    def get_status(self) -> str:
+        return self.status
+
+    async def helper_method(self) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("MyWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 0
+
+
+class TestSignalHandlerNameExtraction:
+    """Tests for signal name extraction from decorators."""
+
+    def test_detect_explicit_signal_name(self) -> None:
+        """Test extraction of signal name from @workflow.signal(name="custom")."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    @workflow.signal(name="custom_signal")
+    async def handler(self, data: str) -> None:
+        self.data = data
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("ShippingWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "custom_signal"
+        assert handlers[0].method_name == "handler"
+
+    def test_detect_method_name_as_signal_name(self) -> None:
+        """Test method name used as signal name when no explicit name provided."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        self.should_ship = True
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("ShippingWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "ship_order"
+        assert handlers[0].method_name == "ship_order"
+
+    def test_bare_decorator_no_parens(self) -> None:
+        """Test @workflow.signal without parentheses."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def receive_data(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "receive_data"
+
+    def test_decorator_empty_parens(self) -> None:
+        """Test @workflow.signal() with empty parentheses."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal()
+    async def receive_data(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "receive_data"
+
+    def test_explicit_and_method_name_mixed(self) -> None:
+        """Test workflow with both explicit signal name and method name fallback."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal(name="custom_signal")
+    async def handler1(self, data: str) -> None:
+        pass
+
+    @workflow.signal
+    async def handler2(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 2
+        assert handlers[0].signal_name == "custom_signal"
+        assert handlers[0].method_name == "handler1"
+        assert handlers[1].signal_name == "handler2"
+        assert handlers[1].method_name == "handler2"
+
+
+class TestSignalHandlerMetadata:
+    """Tests for signal handler metadata."""
+
+    def test_workflow_class_context_stored(self) -> None:
+        """Test that workflow class context is stored in handler metadata."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class MyWorkflow:
+    @workflow.signal
+    async def receive_data(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("MyWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].workflow_class == "MyWorkflow"
+
+    def test_source_line_recorded(self) -> None:
+        """Test that source line number is recorded correctly."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].source_line == 7
+
+    def test_node_id_format(self) -> None:
+        """Test node ID format: sig_handler_{signal_name}_{line}."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].node_id == f"sig_handler_ship_order_{handlers[0].source_line}"
+
+    def test_node_id_handles_spaces(self) -> None:
+        """Test node ID normalizes spaces to underscores."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal(name="Ship Order")
+    async def handler(self, order_id: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert "ship_order" in handlers[0].node_id
+        assert handlers[0].node_id.startswith("sig_handler_ship_order_")
+
+    def test_node_id_lowercase(self) -> None:
+        """Test node ID is lowercase."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal(name="ShipOrder")
+    async def handler(self, order_id: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert "shiporder" in handlers[0].node_id.lower()
+
+    def test_signal_handler_dataclass_fields(self) -> None:
+        """Test that SignalHandler has all required fields."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        handler = handlers[0]
+
+        # Verify all fields exist and have correct types
+        assert isinstance(handler.signal_name, str)
+        assert isinstance(handler.method_name, str)
+        assert isinstance(handler.workflow_class, str)
+        assert isinstance(handler.source_line, int)
+        assert isinstance(handler.node_id, str)
+
+        # Verify field values are populated
+        assert handler.signal_name == "ship_order"
+        assert handler.method_name == "ship_order"
+        assert handler.workflow_class == "TestWorkflow"
+        assert handler.source_line > 0
+        assert len(handler.node_id) > 0
+
+
+class TestSignalHandlerProperty:
+    """Tests for SignalHandlerDetector handlers property."""
+
+    def test_handlers_property_returns_list(self) -> None:
+        """Test that handlers property returns list."""
+        detector = SignalHandlerDetector()
+        assert isinstance(detector.handlers, list)
+        assert len(detector.handlers) == 0
+
+    def test_handlers_property_immutable(self) -> None:
+        """Test modifying returned list doesn't affect internal state."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers1 = detector.handlers
+        handlers1.clear()  # Modify returned list
+        handlers2 = detector.handlers
+        assert len(handlers2) == 1  # Internal state unchanged
+
+    def test_handlers_property_read_only(self) -> None:
+        """Test that handlers property cannot be reassigned."""
+        detector = SignalHandlerDetector()
+        with pytest.raises(AttributeError):
+            detector.handlers = []  # type: ignore
+
+
+class TestSignalHandlerEdgeCases:
+    """Edge case tests for signal handler detection."""
+
+    def test_signal_handler_with_stacked_decorators(self) -> None:
+        """Test signal handler with multiple decorators."""
+        source = """
+from temporalio import workflow
+from functools import wraps
+
+def custom_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+@workflow.defn
+class TestWorkflow:
+    @custom_decorator
+    @workflow.signal
+    async def handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "handler"
+
+    def test_signal_handler_in_nested_class(self) -> None:
+        """Test signal handler inside a workflow class."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class OuterWorkflow:
+    @workflow.signal
+    async def outer_handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("OuterWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "outer_handler"
+
+    def test_handler_with_complex_type_annotations(self) -> None:
+        """Test signal handler with complex type annotations."""
+        source = """
+from temporalio import workflow
+from typing import Optional, Dict, List
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def handler(
+        self,
+        data: Dict[str, List[Optional[int]]],
+        metadata: Optional[str] = None
+    ) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("TestWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "handler"
+
+    def test_detector_reuse_creates_fresh_state(self) -> None:
+        """Test that each detector instance has independent state."""
+        source1 = """
+from temporalio import workflow
+
+@workflow.defn
+class Workflow1:
+    @workflow.signal
+    async def handler1(self, data: str) -> None:
+        pass
+"""
+        source2 = """
+from temporalio import workflow
+
+@workflow.defn
+class Workflow2:
+    @workflow.signal
+    async def handler2(self, data: str) -> None:
+        pass
+"""
+        tree1 = ast.parse(source1)
+        tree2 = ast.parse(source2)
+
+        detector1 = SignalHandlerDetector()
+        detector1.set_workflow_class("Workflow1")
+        detector1.visit(tree1)
+        assert len(detector1.handlers) == 1
+        assert detector1.handlers[0].signal_name == "handler1"
+
+        # Create new detector for independent state
+        detector2 = SignalHandlerDetector()
+        detector2.set_workflow_class("Workflow2")
+        detector2.visit(tree2)
+        assert len(detector2.handlers) == 1
+        assert detector2.handlers[0].signal_name == "handler2"
+
+        # Original detector unchanged
+        assert len(detector1.handlers) == 1
+        assert detector1.handlers[0].signal_name == "handler1"
+
+    def test_signal_handler_immutability(self) -> None:
+        """Test that SignalHandler is frozen (immutable)."""
+        handler = SignalHandler(
+            signal_name="test_signal",
+            method_name="handler",
+            workflow_class="TestWorkflow",
+            source_line=10,
+            node_id="sig_handler_test_signal_10",
+        )
+
+        # Attempting to modify should raise error
+        with pytest.raises(AttributeError):
+            handler.signal_name = "modified"  # type: ignore
+
+    def test_set_workflow_class_updates_context(self) -> None:
+        """Test that set_workflow_class updates workflow context."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("FirstWorkflow")
+        detector.visit(tree)
+
+        assert detector.handlers[0].workflow_class == "FirstWorkflow"
+
+    def test_empty_workflow_class_context(self) -> None:
+        """Test detection works with empty workflow class context."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class TestWorkflow:
+    @workflow.signal
+    async def handler(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+
+        detector = SignalHandlerDetector()
+        # Not calling set_workflow_class
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].workflow_class == ""
+
+    def test_signal_decorator_on_module_level_function(self) -> None:
+        """Test that module-level functions with @workflow.signal are detected."""
+        source = """
+from temporalio import workflow
+
+@workflow.signal
+async def standalone_handler(data: str) -> None:
+    pass
+"""
+        tree = ast.parse(source)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("")
+        detector.visit(tree)
+
+        # Module-level signal handler should be detected
+        handlers = detector.handlers
+        assert len(handlers) == 1
+        assert handlers[0].signal_name == "standalone_handler"
+
+    def test_multiple_workflows_in_same_file(self) -> None:
+        """Test detection across multiple workflow classes in same file."""
+        source = """
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowA:
+    @workflow.signal
+    async def handler_a(self, data: str) -> None:
+        pass
+
+@workflow.defn
+class WorkflowB:
+    @workflow.signal
+    async def handler_b(self, data: str) -> None:
+        pass
+"""
+        tree = ast.parse(source)
+
+        # Single detector finds all handlers (workflow class context set externally)
+        detector = SignalHandlerDetector()
+        detector.set_workflow_class("AnyWorkflow")
+        detector.visit(tree)
+
+        handlers = detector.handlers
+        assert len(handlers) == 2
+        assert handlers[0].signal_name == "handler_a"
+        assert handlers[1].signal_name == "handler_b"
