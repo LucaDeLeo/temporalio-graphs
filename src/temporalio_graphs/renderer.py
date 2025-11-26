@@ -583,8 +583,10 @@ class MermaidRenderer:
         if graph.connections:
             lines.append("    %% Cross-workflow signal connections")
             for conn in graph.connections:
+                # Use fully-qualified node IDs to match subgraph definitions
+                sender_id = f"{conn.sender_node_id}_{conn.sender_workflow}"
                 lines.append(
-                    f"    {conn.sender_node_id} -.{conn.signal_name}.-> {conn.receiver_node_id}"
+                    f"    {sender_id} -.{conn.signal_name}.-> {conn.receiver_node_id}"
                 )
             lines.append("")
 
@@ -593,9 +595,11 @@ class MermaidRenderer:
         if graph.unresolved_signals:
             lines.append("    %% Unresolved signals (no handler found)")
             for unresolved in graph.unresolved_signals:
+                # Use fully-qualified sender node ID to match subgraph definition
+                sender_id = f"{unresolved.node_id}_{unresolved.source_workflow}"
                 unknown_id = f"unknown_{unresolved.signal_name}_{unresolved.source_line}"
                 lines.append(
-                    f"    {unresolved.node_id} -.{unresolved.signal_name}.-> {unknown_id}[/?/]"
+                    f"    {sender_id} -.{unresolved.signal_name}.-> {unknown_id}[/?/]"
                 )
                 unresolved_node_ids.append(unknown_id)
             lines.append("")

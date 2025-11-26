@@ -1734,12 +1734,12 @@ def test_render_cross_subgraph_edge(
     result = renderer.render_signal_graph(graph)
 
     # Verify cross-subgraph edge with dashed syntax
-    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+    assert "ext_sig_ship_order_56_OrderWorkflow -.ship_order.-> sig_handler_ship_order_67" in result, \
         "Cross-subgraph edge should use dashed syntax with signal name as label"
 
     # Verify edge appears after subgraph blocks
     subgraph_end_pos = result.rfind("    end")
-    edge_pos = result.find("ext_sig_ship_order_56 -.ship_order.->")
+    edge_pos = result.find("ext_sig_ship_order_56_OrderWorkflow -.ship_order.->")
     assert edge_pos > subgraph_end_pos, \
         "Cross-subgraph edge should appear AFTER all subgraph blocks"
 
@@ -1852,14 +1852,14 @@ def test_render_multiple_cross_subgraph_edges(
     result = renderer.render_signal_graph(graph)
 
     # Verify both connections render
-    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+    assert "ext_sig_ship_order_56_OrderWorkflow -.ship_order.-> sig_handler_ship_order_67" in result, \
         "First connection should render"
-    assert "ext_sig_notify_customer_60 -.notify_customer.-> sig_handler_notify_customer_42" in result, \
+    assert "ext_sig_notify_customer_60_OrderWorkflow -.notify_customer.-> sig_handler_notify_customer_42" in result, \
         "Second connection should render"
 
     # Verify no duplicate edges (count each edge)
-    count1 = result.count("ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67")
-    count2 = result.count("ext_sig_notify_customer_60 -.notify_customer.-> sig_handler_notify_customer_42")
+    count1 = result.count("ext_sig_ship_order_56_OrderWorkflow -.ship_order.-> sig_handler_ship_order_67")
+    count2 = result.count("ext_sig_notify_customer_60_OrderWorkflow -.notify_customer.-> sig_handler_notify_customer_42")
     assert count1 == 1, "Each connection should appear exactly once"
     assert count2 == 1, "Each connection should appear exactly once"
 
@@ -1912,7 +1912,7 @@ def test_render_unresolved_signal_node(
     result = renderer.render_signal_graph(graph)
 
     # Verify unresolved signal edge with dead-end node
-    assert "ext_sig_unknown_signal_42 -.unknown_signal.-> unknown_unknown_signal_42[/?/]" in result, \
+    assert "ext_sig_unknown_signal_42_OrderWorkflow -.unknown_signal.-> unknown_unknown_signal_42[/?/]" in result, \
         "Unresolved signal should render edge to dead-end node with [/?/]"
 
     # Verify unresolved comment
@@ -2017,10 +2017,10 @@ def test_render_signal_graph_complete(
     assert "subgraph ShippingWorkflow" in result
 
     # Verify cross-subgraph connection
-    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result
+    assert "ext_sig_ship_order_56_OrderWorkflow -.ship_order.-> sig_handler_ship_order_67" in result
 
     # Verify unresolved signal with dead-end
-    assert "ext_sig_unknown_signal_85 -.unknown_signal.-> unknown_unknown_signal_85[/?/]" in result
+    assert "ext_sig_unknown_signal_85_OrderWorkflow -.unknown_signal.-> unknown_unknown_signal_85[/?/]" in result
 
     # Verify handler styling (blue)
     assert "style sig_handler_ship_order_67 fill:#e6f3ff,stroke:#0066cc" in result
@@ -2130,5 +2130,5 @@ def test_render_signal_graph_no_unresolved(
         "No amber styling section should appear when no unresolved signals"
 
     # Connection should still render
-    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+    assert "ext_sig_ship_order_56_OrderWorkflow -.ship_order.-> sig_handler_ship_order_67" in result, \
         "Connection should still render even without unresolved signals"
