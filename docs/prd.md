@@ -334,9 +334,31 @@ This is a developer tool - specifically a Python library distributed via PyPI. T
 **FR73:** Library can generate end-to-end execution paths that span parent and child workflows
 **FR74:** Library includes working parent-child workflow example demonstrating cross-workflow visualization
 
+### Peer-to-Peer Signal Visualization (Epic 7)
+
+**FR75:** Library can detect `workflow.get_external_workflow_handle()` calls in workflow source code
+**FR76:** Library can detect `.signal()` method calls on external workflow handles
+**FR77:** Library can extract signal names from `.signal(signal_name, payload)` arguments
+**FR78:** Library can extract target workflow patterns from handle creation (string literals, format strings, dynamic)
+**FR79:** External signal nodes render as trapezoid shapes in Mermaid: `[/SignalName\]`
+**FR80:** External signal edges render as dashed lines: `-.signal.->`
+**FR81:** Library includes working Order --> Shipping peer signal workflow example
+
+### Cross-Workflow Signal Visualization (Epic 8)
+
+**FR82:** Library can detect `@workflow.signal` decorated methods in workflow classes (signal handlers)
+**FR83:** Library can extract signal name from decorator (explicit name or method name as default)
+**FR84:** Library can resolve external signals to target workflows by matching signal names to handlers
+**FR85:** Library can scan configurable search paths for workflow files to build signal handler index
+**FR86:** Library can build cross-workflow signal graph from entry point with recursive discovery
+**FR87:** Library handles circular signal dependencies (detect, record connection, don't re-analyze)
+**FR88:** Cross-workflow diagrams render as Mermaid subgraphs with signal handlers as hexagon nodes
+**FR89:** Signal connections render as dashed edges between subgraphs
+**FR90:** Library provides `analyze_signal_flow()` function for cross-workflow signal visualization
+
 ---
 
-**Total Functional Requirements:** 73
+**Total Functional Requirements:** 90
 
 These FRs ensure feature parity with the .NET version while accounting for Python-specific architecture (static analysis vs runtime interceptors).
 

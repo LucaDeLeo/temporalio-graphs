@@ -1830,7 +1830,110 @@ class GraphBuildingContext:
 
 ---
 
+### ADR-013: Cross-Workflow Signal Visualization Strategy
+
+**Context:**
+Epic 7 implemented detection and visualization of external signals (outgoing signals from a workflow to another workflow via `get_external_workflow_handle().signal()`). However, it only visualizes the **sender side** - the signal appears as a trapezoid node that "goes nowhere" in the diagram. Epic 8 extends this to provide full cross-workflow signal visualization, showing both sender and receiver workflows connected together.
+
+**Decision:**
+Implement **cross-workflow signal graph analysis** with subgraph-based Mermaid rendering:
+
+1. **Signal Handler Detection:** Detect `@workflow.signal` decorated methods in workflow classes as signal receivers
+2. **Signal Name Resolution:** Match external signals to handlers by signal name (default strategy)
+3. **Cross-Workflow Graph Building:** Recursively discover connected workflows from entry point
+4. **Subgraph Visualization:** Render each workflow as a Mermaid subgraph with signal connections as dashed edges between subgraphs
+
+**Rationale:**
+
+**Why Signal Name Matching:**
+1. **Deterministic:** Signal names are explicit in code (`@workflow.signal` and `.signal("name")`)
+2. **Static Analysis Compatible:** Can be extracted from AST without execution
+3. **Common Pattern:** Most workflows use consistent signal names between sender and receiver
+4. **Intuitive:** Users expect signals with same name to be connected
+
+**Why Subgraph Visualization (Default):**
+1. **Clear Boundaries:** Each workflow's internal logic stays grouped
+2. **Scalable:** Works well for 2-20 connected workflows
+3. **Mermaid Native:** Leverages Mermaid's subgraph feature for clean rendering
+4. **Contextual:** Shows both workflow internals and cross-workflow signal flow
+
+**Why Hexagon Shape for Signal Handlers:**
+1. **Consistency:** Matches Epic 4's internal signal nodes (wait_condition)
+2. **Visual Distinction:** Different from activities (rectangles), decisions (diamonds), external signals (trapezoids)
+3. **Semantic Meaning:** Hexagon = "signal handling point" throughout library
+
+**Key Design Decisions:**
+1. **Multiple handlers same signal:** Show ALL matches + warning (user decides intent)
+2. **Default search path:** Same directory as entry workflow (intuitive)
+3. **Handler detection in analyze_workflow():** YES - always populate signal_handlers in metadata
+4. **Unresolved signals:** Render as dead-end with "?" node, add to unresolved list
+
+**Implementation Components:**
+- `SignalHandlerDetector` (detector.py): Detect @workflow.signal methods via AST
+- `SignalNameResolver` (resolver.py): Match signals to handlers by name
+- `PeerSignalGraphAnalyzer` (signal_graph_analyzer.py): Build cross-workflow graph
+- `MermaidRenderer.render_signal_graph()`: Subgraph-based rendering
+- `analyze_signal_flow()` (__init__.py): Public API for cross-workflow analysis
+
+**Configuration Options:**
+```python
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    # ... existing fields ...
+    resolve_signal_targets: bool = False
+    signal_target_search_paths: tuple[Path, ...] = ()
+    signal_resolution_strategy: Literal["by_name", "explicit", "hybrid"] = "by_name"
+    signal_visualization_mode: Literal["subgraph", "unified"] = "subgraph"
+    signal_max_discovery_depth: int = 10
+    warn_unresolved_signals: bool = True
+```
+
+**Example Output:**
+```mermaid
+flowchart TB
+    subgraph OrderWorkflow
+        s1((Start)) --> process_order --> ext_sig_ship_order[/ship_order/] --> complete_order --> e1((End))
+    end
+    subgraph ShippingWorkflow
+        s2((Start)) --> sig_handler_ship_order{{ship_order}} --> ship_package --> e2((End))
+    end
+    ext_sig_ship_order -.ship_order.-> sig_handler_ship_order
+    style ext_sig_ship_order fill:#fff4e6,stroke:#ffa500
+    style sig_handler_ship_order fill:#e6f3ff,stroke:#0066cc
+```
+
+**Consequences:**
+- ✅ Full signal flow visualization (sender + receiver)
+- ✅ Clear workflow boundaries via subgraphs
+- ✅ Consistent styling with Epic 4/7 signal nodes
+- ✅ Graceful handling of unresolved signals
+- ✅ Backward compatible (new function, existing API unchanged)
+- ⚠️ Search path scanning adds startup time (mitigated by lazy indexing)
+- ⚠️ Large workflow graphs may need filtering (user controls search_paths)
+
+**Alternatives Considered:**
+
+1. **Inline Expansion Mode:** Expand receiver workflow content into sender's paths
+   - **Deferred:** Path explosion concern (sender paths × receiver paths)
+   - **Future:** Option for shallow hierarchies (2-3 workflows)
+
+2. **Unified Flat Diagram:** Single diagram with no subgraphs
+   - **Deferred:** Loses workflow boundary clarity
+   - **Future:** May add as option for simple flows
+
+3. **Sequence Diagram Output:** Mermaid sequence diagram syntax
+   - **Deferred:** Different use case (temporal ordering vs flow structure)
+   - **Future:** May add as separate output_format option
+
+4. **Target Pattern Matching:** Match external signal target pattern to workflow file name
+   - **Not Implemented:** Less reliable than signal name matching
+   - **Reason:** Target patterns often dynamic (`f"shipping-{id}"`)
+
+**Status:** Accepted ✅
+
+---
+
 _Generated by BMAD Decision Architecture Workflow v1.0_
 _Date: 2025-11-18_
-_Updated: 2025-11-20 (ADR-011, ADR-012 added)_
+_Updated: 2025-11-26 (ADR-011, ADR-012, ADR-013 added)_
 _For: Luca_

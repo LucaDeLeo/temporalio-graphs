@@ -1,7 +1,6 @@
 ---
 name: bmm-story-reviewer
 description: Performs senior developer code review on completed stories. use PROACTIVELY when reviewing story implementations
-model: sonnet
 color: blue
 ---
 

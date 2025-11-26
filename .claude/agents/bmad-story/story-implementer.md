@@ -1,7 +1,6 @@
 ---
 name: bmm-story-implementer
 description: Implements user stories with tests and validation. use PROACTIVELY when executing story development
-model: sonnet
 color: orange
 ---
 

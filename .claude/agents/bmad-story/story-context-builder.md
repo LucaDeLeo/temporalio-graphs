@@ -1,7 +1,6 @@
 ---
 name: bmm-story-context-builder
 description: Generates Story Context XML with relevant docs, code, and interfaces. use PROACTIVELY when preparing story context for development
-model: sonnet
 color: green
 ---
 
