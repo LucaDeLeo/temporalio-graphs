@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8-3: Signal Name Resolver
+  Generated: 2025-11-26
+  Epic: 8 - Cross-Workflow Signal Visualization
+  Status: Ready for Implementation
+-->
+<story-context>
+  <metadata>
+    <story-key>8-3-signal-name-resolver</story-key>
+    <story-title>Signal Name Resolver</story-title>
+    <epic-id>8</epic-id>
+    <status>drafted</status>
+    <generated-date>2025-11-26</generated-date>
+  </metadata>
+
+  <story-reference>
+    <file-path>docs/sprint-artifacts/stories/8-3-signal-name-resolver.md</file-path>
+    <description>
+      Creates SignalNameResolver class for resolving external signals to their target
+      workflows by matching signal names to signal handlers. This enables cross-workflow
+      signal connections for visualization.
+    </description>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec-path>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec-path>
+    <epic-goal>
+      Complete cross-workflow signal visualization showing both sender and receiver
+      workflows connected together with signal flow clearly visible between them.
+    </epic-goal>
+    <story-dependencies>
+      <dependency story="8-1">SignalHandlerDetector (status: done) - Detects @workflow.signal handlers</dependency>
+      <dependency story="8-2">Signal Handler Data Model (status: done) - SignalHandler dataclass in WorkflowMetadata</dependency>
+    </story-dependencies>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact type="architecture">
+      <path>docs/architecture.md</path>
+      <relevance>
+        ADR-001 (Static Analysis), ADR-006 (mypy strict), ADR-013 (Cross-Workflow Signal Visualization)
+        define architectural constraints for the resolver implementation.
+      </relevance>
+      <key-sections>
+        - ADR-001: Static analysis only, no workflow execution
+        - ADR-006: Complete type hints for mypy strict mode
+        - ADR-013: Signal name matching strategy, graceful degradation, caching
+      </key-sections>
+    </artifact>
+    <artifact type="tech-spec">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <relevance>
+        SignalNameResolver API specification (lines 374-442), acceptance criteria AC7-AC10 (lines 959-982).
+      </relevance>
+      <key-sections>
+        - SignalNameResolver class structure (lines 374-442)
+        - NFR-PERF-2: Index building &lt;100ms for 100 files, &lt;5ms per resolution
+        - NFR-REL-2: Graceful file handling - skip invalid files with warning
+        - AC7: Single handler resolution
+        - AC8: Multiple handlers resolution (return ALL)
+        - AC9: No handler found (return empty list)
+        - AC10: Search path scanning with build_index()
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface type="input-dataclass">
+      <name>ExternalSignalCall</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>382-422</lines>
+      <description>
+        Frozen dataclass representing peer-to-peer signal sent to external workflow.
+        Input to SignalNameResolver.resolve() method.
+      </description>
+      <fields>
+        - signal_name: str - Name of signal being sent (used for matching)
+        - target_workflow_pattern: str - Pattern describing target workflow ID
+        - source_line: int - Line number in source code
+        - node_id: str - Format: ext_sig_{signal_name}_{line_number}
+        - source_workflow: str - Name of workflow class sending the signal
+      </fields>
+      <usage>
+        resolve() method takes ExternalSignalCall and returns matching handlers by signal_name.
+      </usage>
+    </interface>
+
+    <interface type="output-dataclass">
+      <name>SignalHandler</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>424-463</lines>
+      <description>
+        Frozen dataclass representing @workflow.signal decorated method. Output of resolve().
+      </description>
+      <fields>
+        - signal_name: str - Name of signal this handler receives
+        - method_name: str - Actual Python method name
+        - workflow_class: str - Name of workflow class containing handler
+        - source_line: int - Line number where method is defined
+        - node_id: str - Format: sig_handler_{signal_name}_{line_number}
+      </fields>
+      <usage>
+        resolve() returns list[tuple[Path, SignalHandler]] with matching handlers.
+      </usage>
+    </interface>
+
+    <interface type="data-model">
+      <name>WorkflowMetadata</name>
+      <file-path>src/temporalio_graphs/_internal/graph_models.py</file-path>
+      <lines>466-587</lines>
+      <description>
+        Metadata describing workflow structure. Contains signal_handlers tuple field
+        (added in Story 8-2) that resolver will use to build index.
+      </description>
+      <relevant-fields>
+        - signal_handlers: tuple[SignalHandler, ...] = () - Handlers in this workflow
+        - workflow_class: str - Name of workflow class
+        - source_file: Path - Path to workflow source file
+      </relevant-fields>
+      <usage>
+        Resolver caches WorkflowMetadata for each file. Uses metadata.signal_handlers
+        to build handler index.
+      </usage>
+    </interface>
+
+    <interface type="analyzer">
+      <name>WorkflowAnalyzer</name>
+      <file-path>src/temporalio_graphs/analyzer.py</file-path>
+      <lines>44-524</lines>
+      <description>
+        AST-based workflow analyzer. analyze() method returns WorkflowMetadata
+        including signal_handlers field. Resolver uses this for file analysis.
+      </description>
+      <key-method>
+        analyze(workflow_file: Path | str, context: GraphBuildingContext | None = None) -> WorkflowMetadata
+      </key-method>
+      <usage>
+        Resolver._analyze_file() should use WorkflowAnalyzer to extract metadata:
+        ```python
+        def _analyze_file(self, file_path: Path) -> WorkflowMetadata | None:
+            analyzer = WorkflowAnalyzer()
+            return analyzer.analyze(file_path)
+        ```
+      </usage>
+      <integration-notes>
+        - WorkflowAnalyzer automatically integrates SignalHandlerDetector
+        - Returns WorkflowMetadata with signal_handlers populated
+        - Raises WorkflowParseError for invalid files
+      </integration-notes>
+    </interface>
+
+    <interface type="detector">
+      <name>SignalHandlerDetector</name>
+      <file-path>src/temporalio_graphs/detector.py</file-path>
+      <lines>1020-1190</lines>
+      <description>
+        AST visitor that detects @workflow.signal decorated methods. Already integrated
+        into WorkflowAnalyzer - resolver doesn't need to use directly.
+      </description>
+      <usage>
+        WorkflowAnalyzer internally uses SignalHandlerDetector. Resolver uses
+        WorkflowAnalyzer.analyze() which returns metadata with signal_handlers.
+      </usage>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint type="new-module">
+      <description>Create new file src/temporalio_graphs/resolver.py</description>
+      <naming>SignalNameResolver class with methods: __init__, build_index, resolve, _analyze_file</naming>
+    </constraint>
+    <constraint type="type-safety">
+      <description>ADR-006: Complete type hints for mypy strict mode compliance</description>
+      <types>
+        - __init__(self, search_paths: list[Path]) -> None
+        - build_index(self) -> None
+        - resolve(self, signal: ExternalSignalCall) -> list[tuple[Path, SignalHandler]]
+        - _analyze_file(self, file_path: Path) -> WorkflowMetadata | None
+      </types>
+    </constraint>
+    <constraint type="performance">
+      <description>NFR-PERF-2: Index building &lt;100ms for 100 files, &lt;5ms per resolution</description>
+      <implementation>
+        - Use dict[str, list[tuple[Path, SignalHandler]]] for O(1) lookup
+        - Cache WorkflowMetadata in dict[Path, WorkflowMetadata]
+        - Build index once, reuse for all resolutions
+      </implementation>
+    </constraint>
+    <constraint type="error-handling">
+      <description>NFR-REL-2: Skip invalid files with warning, continue with remaining</description>
+      <implementation>
+        - Wrap _analyze_file in try/except
+        - Log warning for failed files: "Skipping file {path}: {error}"
+        - Continue processing remaining files
+        - Handle: SyntaxError, FileNotFoundError, PermissionError, WorkflowParseError
+      </implementation>
+    </constraint>
+    <constraint type="lazy-initialization">
+      <description>AC8: Lazy index building on first resolve() call</description>
+      <implementation>
+        - Track _index_built: bool = False
+        - In resolve(): if not self._index_built: self.build_index()
+        - Enables deferred initialization
+      </implementation>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <internal-module name="graph_models">
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <imports>
+        from temporalio_graphs._internal.graph_models import (
+            ExternalSignalCall,
+            SignalHandler,
+            WorkflowMetadata,
+        )
+      </imports>
+    </internal-module>
+    <internal-module name="analyzer">
+      <path>src/temporalio_graphs/analyzer.py</path>
+      <imports>
+        from temporalio_graphs.analyzer import WorkflowAnalyzer
+      </imports>
+    </internal-module>
+    <stdlib>
+      <import>import ast</import>
+      <import>import logging</import>
+      <import>from pathlib import Path</import>
+    </stdlib>
+  </dependencies>
+
+  <testing-context>
+    <test-file>tests/test_resolver.py (NEW)</test-file>
+    <test-patterns>
+      <pattern type="fixture">
+        Use pytest tmp_path fixture to create temporary directories with sample workflows:
+        ```python
+        @pytest.fixture
+        def resolver_test_dir(tmp_path: Path) -> Path:
+            shipping = tmp_path / "shipping_workflow.py"
+            shipping.write_text('''
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        pass
+
+    @workflow.run
+    async def run(self) -> None:
+        pass
+''')
+            return tmp_path
+
+        @pytest.fixture
+        def resolver(resolver_test_dir: Path) -> SignalNameResolver:
+            return SignalNameResolver([resolver_test_dir])
+        ```
+      </pattern>
+      <pattern type="test-class-organization">
+        - TestSignalNameResolverInit: Constructor tests
+        - TestBuildIndex: Index building tests
+        - TestResolve: Resolution tests (single/multiple/no handler)
+        - TestEdgeCases: Nested dirs, symlinks, multiple paths, rebuild
+      </pattern>
+      <pattern type="assertion-style">
+        ```python
+        def test_resolve_single_handler(resolver, resolver_test_dir):
+            signal = ExternalSignalCall(
+                signal_name="ship_order",
+                target_workflow_pattern="shipping-123",
+                source_line=10,
+                node_id="ext_sig_ship_order_10",
+                source_workflow="OrderWorkflow"
+            )
+            handlers = resolver.resolve(signal)
+            assert len(handlers) == 1
+            path, handler = handlers[0]
+            assert handler.signal_name == "ship_order"
+            assert handler.workflow_class == "ShippingWorkflow"
+        ```
+      </pattern>
+    </test-patterns>
+    <expected-test-count>15-20 tests</expected-test-count>
+    <coverage-target>100% for SignalNameResolver class</coverage-target>
+    <test-categories>
+      <category name="build_index">5 tests - scan paths, find handlers, skip invalid, empty paths, caching</category>
+      <category name="resolve">5 tests - single, multiple, no handler, auto-build, tuple structure</category>
+      <category name="edge_cases">5 tests - nested dirs, symlinks, multiple paths, rebuild, concurrent</category>
+    </test-categories>
+  </testing-context>
+
+  <implementation-notes>
+    <class-structure>
+      ```python
+      class SignalNameResolver:
+          """Resolves external signals to target workflows by signal name.
+
+          Searches for workflows that have a @workflow.signal handler
+          with a name matching the external signal's signal_name.
+          """
+
+          def __init__(self, search_paths: list[Path]) -> None:
+              """Initialize resolver with search paths."""
+              self._search_paths = search_paths
+              self._workflow_cache: dict[Path, WorkflowMetadata] = {}
+              self._handler_index: dict[str, list[tuple[Path, SignalHandler]]] = {}
+              self._index_built = False
+
+          def build_index(self) -> None:
+              """Scan search paths and index all signal handlers."""
+              ...
+
+          def resolve(
+              self, signal: ExternalSignalCall
+          ) -> list[tuple[Path, SignalHandler]]:
+              """Find workflows that handle the given signal."""
+              if not self._index_built:
+                  self.build_index()
+              return self._handler_index.get(signal.signal_name, [])
+
+          def _analyze_file(self, file_path: Path) -> WorkflowMetadata | None:
+              """Analyze single file for workflow metadata."""
+              ...
+      ```
+    </class-structure>
+    <handler-index-structure>
+      ```python
+      # Maps signal_name to list of (file_path, handler) tuples
+      _handler_index: dict[str, list[tuple[Path, SignalHandler]]] = {
+          "ship_order": [
+              (Path("shipping_workflow.py"), SignalHandler(...)),
+          ],
+          "notify_shipped": [
+              (Path("notification_workflow.py"), SignalHandler(...)),
+          ],
+          "process_payment": [
+              (Path("payment_v1.py"), SignalHandler(...)),
+              (Path("payment_v2.py"), SignalHandler(...)),  # Multiple handlers
+          ],
+      }
+      ```
+    </handler-index-structure>
+    <build-index-algorithm>
+      1. For each path in self._search_paths:
+         a. Use Path.glob("**/*.py") to find all Python files recursively
+         b. For each file, call _analyze_file(file_path) in try/except block
+         c. Skip files that raise exceptions (log warning)
+         d. For successfully analyzed files with signal_handlers:
+            - Add to _workflow_cache[file_path] = metadata
+            - For each handler in metadata.signal_handlers:
+              - Add to _handler_index[handler.signal_name].append((file_path, handler))
+      2. Set _index_built = True
+    </build-index-algorithm>
+    <logging-guidelines>
+      - DEBUG: "Building signal handler index from {n} search paths"
+      - DEBUG: "Found @workflow.signal handler '{name}' in {file}"
+      - WARNING: "Skipping file {path}: {error}"
+      - INFO: "Signal handler index built: {n} handlers from {m} files"
+    </logging-guidelines>
+  </implementation-notes>
+
+  <learnings-from-previous-stories>
+    <learning story="8-1">
+      SignalHandler dataclass is frozen and located in graph_models.py (lines 424-463).
+      Has fields: signal_name, method_name, workflow_class, source_line, node_id.
+    </learning>
+    <learning story="8-2">
+      WorkflowAnalyzer.analyze() now returns WorkflowMetadata with signal_handlers populated.
+      Integration pattern: just call analyzer.analyze() - detector is automatic.
+    </learning>
+    <learning from="epic-7">
+      Graceful file handling pattern: wrap in try/except, log warning, continue.
+      Don't let one bad file break entire analysis.
+    </learning>
+  </learnings-from-previous-stories>
+
+  <acceptance-criteria-mapping>
+    <criterion ac="1" fr="FR84">SignalNameResolver class exists in resolver.py</criterion>
+    <criterion ac="2" fr="FR84">Constructor accepts list[Path] search_paths</criterion>
+    <criterion ac="3" fr="FR84,FR85">build_index() scans paths and builds handler index</criterion>
+    <criterion ac="4" fr="FR84">resolve() returns matching handlers by signal_name</criterion>
+    <criterion ac="5" fr="FR84" spec-line="959-961">Single handler resolution returns single-element list</criterion>
+    <criterion ac="6" fr="FR84" spec-line="963-967">Multiple handlers resolution returns ALL matching handlers</criterion>
+    <criterion ac="7" fr="FR84" spec-line="969-974">No handler found returns empty list</criterion>
+    <criterion ac="8" fr="FR84">Lazy index building on first resolve() call</criterion>
+    <criterion ac="9" nfr="NFR-PERF-2">Workflow metadata caching for performance</criterion>
+    <criterion ac="10" nfr="NFR-REL-2">Graceful error handling for invalid files</criterion>
+    <criterion ac="11" adr="ADR-006">Complete type hints for mypy strict mode</criterion>
+    <criterion ac="12">100% test coverage for SignalNameResolver</criterion>
+    <criterion ac="13">No regressions - all existing tests pass</criterion>
+  </acceptance-criteria-mapping>
+
+  <references>
+    <reference type="tech-spec">
+      docs/sprint-artifacts/tech-spec-epic-8.md (lines 374-442, 959-982)
+    </reference>
+    <reference type="architecture">
+      docs/architecture.md (ADR-001, ADR-006, ADR-013)
+    </reference>
+    <reference type="story-8-1">
+      docs/sprint-artifacts/stories/8-1-signal-handler-detector.md (status: done)
+    </reference>
+    <reference type="story-8-2">
+      docs/sprint-artifacts/stories/8-2-signal-handler-data-model.md (status: done)
+    </reference>
+  </references>
+</story-context>

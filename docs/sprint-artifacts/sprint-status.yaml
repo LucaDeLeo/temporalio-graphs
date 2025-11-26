@@ -100,8 +100,8 @@ development_status:
   # Epic 8: Cross-Workflow Signal Visualization (v0.4.0 Extension)
   epic-8: contexted  # Tech spec at docs/sprint-artifacts/tech-spec-epic-8.md
   8-1-signal-handler-detector: done  # APPROVED - Senior Developer Review Complete 2025-11-26
-  8-2-signal-handler-data-model: ready-for-dev
-  8-3-signal-name-resolver: backlog
+  8-2-signal-handler-data-model: done  # APPROVED - Senior Developer Review Complete 2025-11-26
+  8-3-signal-name-resolver: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-4-search-path-scanning: backlog
   8-5-signal-connection-model: backlog
   8-6-peer-signal-graph-analyzer: backlog
