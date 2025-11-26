@@ -102,7 +102,7 @@ development_status:
   8-1-signal-handler-detector: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-2-signal-handler-data-model: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-3-signal-name-resolver: done  # APPROVED - Senior Developer Review Complete 2025-11-26
-  8-4-search-path-scanning: backlog
+  8-4-search-path-scanning: done  # Already implemented in Story 8-3 (build_index() scanning)
   8-5-signal-connection-model: backlog
   8-6-peer-signal-graph-analyzer: backlog
   8-7-subgraph-rendering: backlog
