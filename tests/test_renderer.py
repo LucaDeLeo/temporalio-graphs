@@ -1227,3 +1227,420 @@ def test_external_signal_multiple_paths(
     # Should appear exactly once (deduplicated)
     assert node_count == 1, \
         f"External signal node should be deduplicated, found {node_count} definitions"
+
+
+# ============================================================================
+# Epic 8: Subgraph Rendering Tests (Story 8-7)
+# ============================================================================
+
+
+@pytest.fixture
+def simple_workflow_metadata() -> "WorkflowMetadata":
+    """Create a simple WorkflowMetadata for testing."""
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        WorkflowMetadata,
+    )
+    return WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10), Activity("complete_order", 20)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+        child_workflow_calls=[],
+        external_signals=(),
+        signal_handlers=(),
+    )
+
+
+@pytest.fixture
+def workflow_with_handler() -> "WorkflowMetadata":
+    """Create WorkflowMetadata with signal handler."""
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+    return WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        child_workflow_calls=[],
+        external_signals=(),
+        signal_handlers=(
+            SignalHandler(
+                signal_name="ship_order",
+                method_name="ship_order",
+                workflow_class="ShippingWorkflow",
+                source_line=67,
+                node_id="sig_handler_ship_order_67",
+            ),
+        ),
+    )
+
+
+@pytest.fixture
+def peer_signal_graph_single(
+    simple_workflow_metadata: "WorkflowMetadata",
+) -> "PeerSignalGraph":
+    """Create PeerSignalGraph with single workflow."""
+    from temporalio_graphs._internal.graph_models import PeerSignalGraph
+    return PeerSignalGraph(
+        root_workflow=simple_workflow_metadata,
+        workflows={"OrderWorkflow": simple_workflow_metadata},
+        signal_handlers={},
+        connections=[],
+        unresolved_signals=[],
+    )
+
+
+@pytest.fixture
+def peer_signal_graph_multiple(
+    simple_workflow_metadata: "WorkflowMetadata",
+    workflow_with_handler: "WorkflowMetadata",
+) -> "PeerSignalGraph":
+    """Create PeerSignalGraph with multiple workflows."""
+    from temporalio_graphs._internal.graph_models import PeerSignalGraph, SignalHandler
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+    return PeerSignalGraph(
+        root_workflow=simple_workflow_metadata,
+        workflows={
+            "OrderWorkflow": simple_workflow_metadata,
+            "ShippingWorkflow": workflow_with_handler,
+        },
+        signal_handlers={"ship_order": [handler]},
+        connections=[],
+        unresolved_signals=[],
+    )
+
+
+def test_render_signal_graph_single_workflow(
+    renderer: MermaidRenderer,
+    peer_signal_graph_single: "PeerSignalGraph",
+) -> None:
+    """Test AC17: Single workflow renders as subgraph with internal nodes.
+
+    Validates that:
+    - Output contains "subgraph WorkflowName"
+    - Output contains "end" closing subgraph
+    - Uses flowchart TB direction (top-to-bottom)
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_single)
+
+    # Verify fenced code block
+    assert result.startswith("```mermaid"), \
+        "Output should start with mermaid fence"
+    assert result.endswith("```"), \
+        "Output should end with closing fence"
+
+    # Verify flowchart direction is TB (top-to-bottom)
+    assert "flowchart TB" in result, \
+        "Subgraph rendering should use flowchart TB direction"
+
+    # Verify subgraph structure
+    assert "subgraph OrderWorkflow" in result, \
+        "Output should contain subgraph for OrderWorkflow"
+    assert "    end" in result, \
+        "Output should contain 'end' to close subgraph"
+
+    # Verify internal nodes are present
+    assert "s_OrderWorkflow((Start))" in result, \
+        "Start node should have workflow-unique ID"
+    assert "e_OrderWorkflow((End))" in result, \
+        "End node should have workflow-unique ID"
+
+
+def test_render_signal_graph_multiple_workflows(
+    renderer: MermaidRenderer,
+    peer_signal_graph_multiple: "PeerSignalGraph",
+) -> None:
+    """Test AC17: Multiple workflows each render as separate subgraphs.
+
+    Validates that:
+    - Each workflow has its own "subgraph" block
+    - Each subgraph has matching "end" statement
+    - Blank line between subgraphs for readability
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_multiple)
+
+    # Verify both subgraphs present
+    assert "subgraph OrderWorkflow" in result, \
+        "Output should contain subgraph for OrderWorkflow"
+    assert "subgraph ShippingWorkflow" in result, \
+        "Output should contain subgraph for ShippingWorkflow"
+
+    # Count "end" statements - should match number of subgraphs
+    end_count = result.count("    end")
+    assert end_count == 2, \
+        f"Should have 2 'end' statements (one per subgraph), found {end_count}"
+
+    # Verify unique Start/End nodes per workflow
+    assert "s_OrderWorkflow((Start))" in result, \
+        "OrderWorkflow should have unique start node"
+    assert "s_ShippingWorkflow((Start))" in result, \
+        "ShippingWorkflow should have unique start node"
+    assert "e_OrderWorkflow((End))" in result, \
+        "OrderWorkflow should have unique end node"
+    assert "e_ShippingWorkflow((End))" in result, \
+        "ShippingWorkflow should have unique end node"
+
+
+def test_render_signal_handler_hexagon_shape(
+    renderer: MermaidRenderer,
+    peer_signal_graph_multiple: "PeerSignalGraph",
+) -> None:
+    """Test AC18: Signal handlers render as hexagon with double curly braces.
+
+    Validates that:
+    - Handler node uses {{signal_name}} syntax (Mermaid hexagon)
+    - Node ID format is sig_handler_{name}_{line}
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_multiple)
+
+    # Verify hexagon syntax appears (double curly braces)
+    assert "sig_handler_ship_order_67{{ship_order}}" in result, \
+        "Signal handler should render with hexagon syntax {{signal_name}}"
+
+    # Verify node ID format
+    assert "sig_handler_ship_order_67" in result, \
+        "Signal handler node ID should follow sig_handler_{name}_{line} format"
+
+
+def test_render_signal_handler_styling(
+    renderer: MermaidRenderer,
+    peer_signal_graph_multiple: "PeerSignalGraph",
+) -> None:
+    """Test AC20: Signal handlers have blue color styling.
+
+    Validates that:
+    - Style directive includes fill:#e6f3ff,stroke:#0066cc
+    - Each handler node has corresponding style directive
+    - Style comment is present
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_multiple)
+
+    # Verify styling comment
+    assert "%% Signal handler styling (hexagons - blue)" in result, \
+        "Output should include styling comment"
+
+    # Verify style directive
+    assert "style sig_handler_ship_order_67 fill:#e6f3ff,stroke:#0066cc" in result, \
+        "Signal handler should have blue color styling"
+
+
+def test_render_workflow_internal(
+    renderer: MermaidRenderer,
+    simple_workflow_metadata: "WorkflowMetadata",
+    default_context: GraphBuildingContext,
+) -> None:
+    """Test _render_workflow_internal returns list of node/edge definitions.
+
+    Validates that:
+    - Returns list of strings (not full diagram)
+    - Does not include subgraph wrapper
+    - Contains node definitions and edges
+    """
+    lines = renderer._render_workflow_internal(simple_workflow_metadata, default_context)
+
+    # Should return list of strings
+    assert isinstance(lines, list), \
+        "_render_workflow_internal should return list"
+    assert all(isinstance(line, str) for line in lines), \
+        "All elements should be strings"
+
+    # Should NOT include subgraph wrapper or fences
+    joined = "\n".join(lines)
+    assert "subgraph" not in joined, \
+        "_render_workflow_internal should not include subgraph wrapper"
+    assert "```mermaid" not in joined, \
+        "_render_workflow_internal should not include mermaid fence"
+
+    # Should include workflow-unique node IDs
+    assert "s_OrderWorkflow((Start))" in joined, \
+        "Should include workflow-unique start node"
+    assert "e_OrderWorkflow((End))" in joined, \
+        "Should include workflow-unique end node"
+
+    # Should include activity nodes
+    assert "process_order_OrderWorkflow" in joined, \
+        "Activity nodes should have workflow-unique IDs"
+
+
+def test_render_signal_graph_with_context(
+    renderer: MermaidRenderer,
+    peer_signal_graph_single: "PeerSignalGraph",
+) -> None:
+    """Test render_signal_graph accepts custom context.
+
+    Validates that custom start/end labels are respected.
+    """
+    custom_context = GraphBuildingContext(
+        start_node_label="BEGIN",
+        end_node_label="FINISH",
+    )
+
+    result = renderer.render_signal_graph(peer_signal_graph_single, custom_context)
+
+    assert "BEGIN" in result, \
+        "Custom start label should be used"
+    assert "FINISH" in result, \
+        "Custom end label should be used"
+
+
+def test_render_signal_graph_empty_handlers(
+    renderer: MermaidRenderer,
+    peer_signal_graph_single: "PeerSignalGraph",
+) -> None:
+    """Test render_signal_graph with workflow without signal handlers.
+
+    Validates that workflows without handlers render correctly without
+    any handler nodes or styling.
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_single)
+
+    # Should NOT have handler styling section when no handlers
+    assert "%% Signal handler styling" not in result, \
+        "No styling section when no handlers present"
+
+    # Should still have valid subgraph structure
+    assert "subgraph OrderWorkflow" in result
+    assert "    end" in result
+
+
+def test_render_signal_graph_multiple_handlers_same_workflow(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test workflow with multiple signal handlers.
+
+    Validates that multiple handlers in same workflow all render correctly.
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        PeerSignalGraph,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+
+    # Create workflow with multiple handlers
+    handler1 = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+    handler2 = SignalHandler(
+        signal_name="cancel_order",
+        method_name="cancel_order",
+        workflow_class="ShippingWorkflow",
+        source_line=80,
+        node_id="sig_handler_cancel_order_80",
+    )
+
+    metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        child_workflow_calls=[],
+        external_signals=(),
+        signal_handlers=(handler1, handler2),
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=metadata,
+        workflows={"ShippingWorkflow": metadata},
+        signal_handlers={
+            "ship_order": [handler1],
+            "cancel_order": [handler2],
+        },
+        connections=[],
+        unresolved_signals=[],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Both handlers should render as hexagons
+    assert "sig_handler_ship_order_67{{ship_order}}" in result, \
+        "First handler should render as hexagon"
+    assert "sig_handler_cancel_order_80{{cancel_order}}" in result, \
+        "Second handler should render as hexagon"
+
+    # Both should have styling
+    assert "style sig_handler_ship_order_67 fill:#e6f3ff,stroke:#0066cc" in result
+    assert "style sig_handler_cancel_order_80 fill:#e6f3ff,stroke:#0066cc" in result
+
+
+def test_render_signal_graph_node_id_uniqueness(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test that same activity name in multiple workflows gets unique IDs.
+
+    Validates AC6: Node IDs within subgraphs avoid collisions.
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        PeerSignalGraph,
+        WorkflowMetadata,
+    )
+
+    # Create two workflows with same activity name
+    metadata1 = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+    )
+
+    metadata2 = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process", 20)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=metadata1,
+        workflows={
+            "OrderWorkflow": metadata1,
+            "ShippingWorkflow": metadata2,
+        },
+        signal_handlers={},
+        connections=[],
+        unresolved_signals=[],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Activity nodes should have workflow-unique IDs
+    assert "process_OrderWorkflow" in result, \
+        "Activity in OrderWorkflow should have workflow-unique ID"
+    assert "process_ShippingWorkflow" in result, \
+        "Activity in ShippingWorkflow should have workflow-unique ID"
+
+    # Start/End nodes should be unique
+    assert "s_OrderWorkflow" in result
+    assert "s_ShippingWorkflow" in result
+    assert "e_OrderWorkflow" in result
+    assert "e_ShippingWorkflow" in result

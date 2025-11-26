@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8.7: Subgraph Rendering
+  Generated: 2025-11-26
+  Epic: 8 - Cross-Workflow Signal Visualization
+
+  This context file provides all necessary information for implementing
+  render_signal_graph() method in MermaidRenderer class.
+-->
+<story-context version="1.0">
+  <story-reference>
+    <story-id>8-7</story-id>
+    <story-name>Subgraph Rendering</story-name>
+    <story-file>docs/sprint-artifacts/stories/8-7-subgraph-rendering.md</story-file>
+    <status>drafted</status>
+    <epic-id>8</epic-id>
+    <epic-name>Cross-Workflow Signal Visualization</epic-name>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec>
+    <architecture>docs/architecture.md</architecture>
+    <dependencies>
+      <story>8-6 (PeerSignalGraphAnalyzer - provides PeerSignalGraph)</story>
+      <story>8-5 (SignalConnection and PeerSignalGraph data models)</story>
+      <story>8-2 (SignalHandler data model)</story>
+    </dependencies>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact>
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Complete technical specification for Epic 8, including AC17-AC20 for subgraph rendering, MermaidRenderer extension API design, and render_signal_graph() method specification</description>
+      <relevant-sections>
+        <section name="APIs and Interfaces" lines="640-711">MermaidRenderer extension with render_signal_graph() method signature and implementation outline</section>
+        <section name="AC17: Subgraph Rendering" lines="1023-1029">Acceptance criteria for subgraph output structure</section>
+        <section name="AC18: Signal Handler Hexagon Shape" lines="1031-1034">Hexagon syntax for signal handlers</section>
+        <section name="AC20: Signal Handler Styling" lines="1041-1044">Blue color styling for handlers</section>
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/architecture.md</path>
+      <description>Architecture decisions including ADR-006 (mypy strict mode), ADR-013 (Cross-Workflow Signal Visualization strategy)</description>
+      <relevant-sections>
+        <section name="ADR-006 mypy strict mode" lines="1489-1510">Type safety requirements for new methods</section>
+        <section name="ADR-013 Cross-Workflow Signal Visualization" lines="1836-1933">Subgraph visualization design decisions</section>
+        <section name="Data Architecture" lines="535-670">Core data models including WorkflowMetadata, NodeType</section>
+      </relevant-sections>
+    </artifact>
+    <artifact>
+      <path>docs/epic-8-cross-workflow-signals-notes.md</path>
+      <description>Design notes with example implementation code for render_signal_graph() method</description>
+      <relevant-sections>
+        <section name="render_signal_graph example" lines="470-520">Complete example implementation with subgraph rendering</section>
+      </relevant-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface>
+      <file>src/temporalio_graphs/renderer.py</file>
+      <description>MermaidRenderer class that needs to be extended with render_signal_graph() method</description>
+      <class-name>MermaidRenderer</class-name>
+      <existing-methods>
+        <method name="to_mermaid" signature="(paths: list[GraphPath], context: GraphBuildingContext) -> str">
+          Main rendering method for single-workflow diagrams. Returns Mermaid flowchart with fenced code blocks.
+        </method>
+      </existing-methods>
+      <imports-needed>
+        <import>from temporalio_graphs._internal.graph_models import PeerSignalGraph, SignalHandler</import>
+      </imports-needed>
+      <key-patterns>
+        <pattern>Two-pass rendering: collect nodes/edges, then output in order</pattern>
+        <pattern>Node deduplication via dict[str, str] for node_id -> definition</pattern>
+        <pattern>Edge deduplication via set[tuple[str, str, str]] for (from, to, label)</pattern>
+        <pattern>Style directives added at end of output for external signal nodes</pattern>
+        <pattern>Output wrapped in triple-backtick mermaid fence</pattern>
+      </key-patterns>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <description>Data models for cross-workflow signal graph</description>
+      <classes>
+        <class name="PeerSignalGraph" frozen="true" lines="732-765">
+          <fields>
+            <field name="root_workflow" type="WorkflowMetadata">Entry point workflow</field>
+            <field name="workflows" type="dict[str, WorkflowMetadata]">All discovered workflows by class name</field>
+            <field name="signal_handlers" type="dict[str, list[SignalHandler]]">Handlers indexed by signal name</field>
+            <field name="connections" type="list[SignalConnection]">Signal connections between workflows</field>
+            <field name="unresolved_signals" type="list[ExternalSignalCall]">Signals with no handler found</field>
+          </fields>
+        </class>
+        <class name="SignalHandler" frozen="true" lines="461-500">
+          <fields>
+            <field name="signal_name" type="str">Name of signal this handler receives</field>
+            <field name="method_name" type="str">Python method name</field>
+            <field name="workflow_class" type="str">Containing workflow class name</field>
+            <field name="source_line" type="int">Line number where handler is defined</field>
+            <field name="node_id" type="str">Format: sig_handler_{signal_name}_{line_number}</field>
+          </fields>
+        </class>
+        <class name="SignalConnection" frozen="true" lines="424-458">
+          <fields>
+            <field name="sender_workflow" type="str">Name of sending workflow</field>
+            <field name="receiver_workflow" type="str">Name of receiving workflow</field>
+            <field name="signal_name" type="str">Signal being sent/received</field>
+            <field name="sender_line" type="int">Line number of signal() call</field>
+            <field name="receiver_line" type="int">Line number of @workflow.signal</field>
+            <field name="sender_node_id" type="str">Node ID of external signal node</field>
+            <field name="receiver_node_id" type="str">Node ID of signal handler node</field>
+          </fields>
+        </class>
+        <class name="WorkflowMetadata" lines="503-624">
+          <fields>
+            <field name="workflow_class" type="str">Workflow class name</field>
+            <field name="workflow_run_method" type="str">Run method name</field>
+            <field name="activities" type="list[Activity]">Detected activities</field>
+            <field name="decision_points" type="list[DecisionPoint]">Decision points</field>
+            <field name="signal_points" type="list[SignalPoint]">Signal/wait points</field>
+            <field name="source_file" type="Path">Source file path</field>
+            <field name="total_paths" type="int">Total execution paths</field>
+            <field name="child_workflow_calls" type="list[ChildWorkflowCall]">Child workflow calls</field>
+            <field name="external_signals" type="tuple[ExternalSignalCall, ...]">External signals sent</field>
+            <field name="signal_handlers" type="tuple[SignalHandler, ...]">Signal handlers in workflow</field>
+          </fields>
+        </class>
+        <class name="NodeType" lines="13-35">
+          <values>
+            <value name="START">start - circular node</value>
+            <value name="END">end - circular node</value>
+            <value name="ACTIVITY">activity - rectangular node</value>
+            <value name="DECISION">decision - diamond node</value>
+            <value name="SIGNAL">signal - hexagon node</value>
+            <value name="CHILD_WORKFLOW">child_workflow - subroutine node</value>
+            <value name="EXTERNAL_SIGNAL">external_signal - trapezoid node</value>
+          </values>
+        </class>
+        <class name="GraphNode" lines="38-123">
+          <method name="to_mermaid" return="str">Generates Mermaid syntax for node based on node_type</method>
+        </class>
+      </classes>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/generator.py</file>
+      <description>PathPermutationGenerator for generating execution paths</description>
+      <class-name>PathPermutationGenerator</class-name>
+      <method name="generate_paths" signature="(metadata: WorkflowMetadata, context: GraphBuildingContext) -> list[GraphPath]">
+        Generates 2^n execution paths for workflow with n decision/signal points.
+        Used by _render_workflow_internal helper to generate paths for each subgraph.
+      </method>
+    </interface>
+
+    <interface>
+      <file>src/temporalio_graphs/context.py</file>
+      <description>GraphBuildingContext configuration dataclass</description>
+      <relevant-fields>
+        <field name="start_node_label" default="Start">Start node display label</field>
+        <field name="end_node_label" default="End">End node display label</field>
+        <field name="split_names_by_words" default="True">Convert PascalCase to spaced words</field>
+        <field name="decision_true_label" default="yes">True branch label</field>
+        <field name="decision_false_label" default="no">False branch label</field>
+        <field name="signal_success_label" default="Signaled">Signal success label</field>
+        <field name="signal_timeout_label" default="Timeout">Signal timeout label</field>
+      </relevant-fields>
+    </interface>
+
+    <interface>
+      <file>tests/test_renderer.py</file>
+      <description>Existing renderer tests - follow patterns for new tests</description>
+      <test-patterns>
+        <pattern>@pytest.fixture for renderer and context instances</pattern>
+        <pattern>Test class/method existence with isinstance checks</pattern>
+        <pattern>Test output format with string contains assertions</pattern>
+        <pattern>Test fenced code block structure with startswith/endswith</pattern>
+        <pattern>Test node shapes with specific Mermaid syntax patterns</pattern>
+      </test-patterns>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint source="ADR-006">
+      <name>mypy Strict Mode</name>
+      <description>All new methods must have complete type hints for mypy strict mode compliance</description>
+      <example><![CDATA[def render_signal_graph(self, graph: PeerSignalGraph) -> str:]]></example>
+    </constraint>
+    <constraint source="ADR-010">
+      <name>Test Coverage</name>
+      <description>Maintain >=80% test coverage. New code must have unit tests.</description>
+    </constraint>
+    <constraint source="architecture">
+      <name>Immutable Data</name>
+      <description>All dataclasses used (PeerSignalGraph, SignalHandler, etc.) are frozen=True</description>
+    </constraint>
+    <constraint source="existing-code">
+      <name>Stateless Renderer</name>
+      <description>MermaidRenderer is stateless - create PathPermutationGenerator inside methods as needed</description>
+    </constraint>
+    <constraint source="mermaid-syntax">
+      <name>Hexagon Escape</name>
+      <description>Python hexagon syntax requires 4 open + 4 close braces: f"{{{{{name}}}}}"</description>
+      <example><![CDATA[f"{handler.node_id}{{{{{handler.signal_name}}}}}"  # produces: node_id{{signal_name}}]]></example>
+    </constraint>
+    <constraint source="story-requirements">
+      <name>Flowchart Direction</name>
+      <description>Use flowchart TB (top-to-bottom) for subgraph layouts, not flowchart LR</description>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <internal-module>
+      <name>temporalio_graphs._internal.graph_models</name>
+      <imports>PeerSignalGraph, SignalHandler, WorkflowMetadata, SignalConnection, ExternalSignalCall, GraphNode, NodeType</imports>
+    </internal-module>
+    <internal-module>
+      <name>temporalio_graphs.generator</name>
+      <imports>PathPermutationGenerator</imports>
+    </internal-module>
+    <internal-module>
+      <name>temporalio_graphs.context</name>
+      <imports>GraphBuildingContext</imports>
+    </internal-module>
+    <internal-module>
+      <name>temporalio_graphs.path</name>
+      <imports>GraphPath</imports>
+    </internal-module>
+  </dependencies>
+
+  <testing-context>
+    <test-file>tests/test_renderer.py</test-file>
+    <test-framework>pytest</test-framework>
+    <required-tests>
+      <test name="test_render_signal_graph_single_workflow">
+        <description>Verify single workflow renders as subgraph with internal nodes</description>
+        <assertions>
+          <assertion>Output contains "subgraph WorkflowName"</assertion>
+          <assertion>Output contains "end" closing subgraph</assertion>
+          <assertion>Internal nodes are indented with 4 spaces</assertion>
+        </assertions>
+      </test>
+      <test name="test_render_signal_graph_multiple_workflows">
+        <description>Verify multiple workflows each render as separate subgraphs</description>
+        <assertions>
+          <assertion>Each workflow has its own "subgraph" block</assertion>
+          <assertion>Each subgraph has matching "end" statement</assertion>
+          <assertion>Blank line between subgraphs for readability</assertion>
+        </assertions>
+      </test>
+      <test name="test_render_signal_handler_hexagon_shape">
+        <description>Verify signal handlers render as hexagon with double curly braces</description>
+        <assertions>
+          <assertion>Handler node uses {{signal_name}} syntax</assertion>
+          <assertion>Node ID format is sig_handler_{name}_{line}</assertion>
+        </assertions>
+      </test>
+      <test name="test_render_signal_handler_styling">
+        <description>Verify signal handlers have blue color styling</description>
+        <assertions>
+          <assertion>Style directive includes fill:#e6f3ff,stroke:#0066cc</assertion>
+          <assertion>Each handler node has corresponding style directive</assertion>
+        </assertions>
+      </test>
+      <test name="test_render_workflow_internal_helper">
+        <description>Verify _render_workflow_internal returns list of node/edge definitions</description>
+        <assertions>
+          <assertion>Returns list of strings (not full diagram)</assertion>
+          <assertion>Does not include subgraph wrapper</assertion>
+          <assertion>Uses PathPermutationGenerator for path generation</assertion>
+        </assertions>
+      </test>
+    </required-tests>
+    <coverage-target>>=80%</coverage-target>
+    <run-command>pytest tests/test_renderer.py -v</run-command>
+    <full-suite-command>pytest -v</full-suite-command>
+    <type-check-command>mypy src/temporalio_graphs/</type-check-command>
+    <lint-command>ruff check src/temporalio_graphs/</lint-command>
+  </testing-context>
+
+  <implementation-notes>
+    <note category="method-signature">
+      <title>render_signal_graph Method</title>
+      <content><![CDATA[
+def render_signal_graph(self, graph: PeerSignalGraph) -> str:
+    """Render cross-workflow signal graph as Mermaid with subgraphs.
+
+    Args:
+        graph: PeerSignalGraph containing all connected workflows.
+
+    Returns:
+        Mermaid flowchart string with subgraphs and cross-subgraph edges.
+    """
+      ]]></content>
+    </note>
+
+    <note category="mermaid-syntax">
+      <title>Subgraph Structure</title>
+      <content><![CDATA[
+```mermaid
+flowchart TB
+    subgraph OrderWorkflow
+        s1((Start)) --> process_order[Process Order] --> e1((End))
+    end
+    subgraph ShippingWorkflow
+        s2((Start)) --> sig_handler_ship_order{{ship_order}} --> ship_package[Ship Package] --> e2((End))
+    end
+```
+      ]]></content>
+    </note>
+
+    <note category="hexagon-syntax">
+      <title>Python String Escaping for Hexagon</title>
+      <content><![CDATA[
+# Mermaid hexagon: node_id{{content}}
+# Python f-string: need 4 open + 4 close braces to get 2 each in output
+handler_line = f"{handler.node_id}{{{{{handler.signal_name}}}}}"
+# Example output: sig_handler_ship_order_67{{ship_order}}
+      ]]></content>
+    </note>
+
+    <note category="styling">
+      <title>Signal Handler Color Styling</title>
+      <content><![CDATA[
+# Blue color for signal handlers (hexagon nodes)
+# Orange for external signals (trapezoid nodes) - already in existing code
+lines.append(f"style {handler.node_id} fill:#e6f3ff,stroke:#0066cc")
+      ]]></content>
+    </note>
+
+    <note category="node-uniqueness">
+      <title>Unique Node IDs in Multi-Workflow Context</title>
+      <content><![CDATA[
+Options for Start/End node uniqueness:
+1. Prefix with workflow name: s_OrderWorkflow, e_OrderWorkflow
+2. Use sequential numbering: s1, e1, s2, e2
+
+Handler node IDs already unique via: sig_handler_{signal_name}_{line_number}
+External signal node IDs already unique via: ext_sig_{signal_name}_{line_number}
+      ]]></content>
+    </note>
+
+    <note category="helper-method">
+      <title>_render_workflow_internal Helper</title>
+      <content><![CDATA[
+def _render_workflow_internal(self, metadata: WorkflowMetadata) -> list[str]:
+    """Render workflow internal nodes (activities, decisions, signals).
+
+    Returns list of Mermaid lines WITHOUT subgraph wrapper.
+    Can reuse existing to_mermaid logic but extract just the node/edge parts.
+    """
+    # Option 1: Create paths and reuse existing rendering logic
+    # Option 2: Build nodes/edges directly from metadata
+    #
+    # Key: Must handle unique node IDs for multi-workflow context
+      ]]></content>
+    </note>
+  </implementation-notes>
+
+  <edge-cases>
+    <case name="Empty workflow">
+      <description>Workflow with only Start -> End (no activities)</description>
+      <handling>Should still render valid subgraph with just start and end nodes</handling>
+    </case>
+    <case name="Workflow with only handlers">
+      <description>Workflow that only has signal handlers, no activities</description>
+      <handling>Render signal handlers but may have minimal flow structure</handling>
+    </case>
+    <case name="Multiple handlers same workflow">
+      <description>Workflow with multiple @workflow.signal handlers</description>
+      <handling>Each handler rendered as hexagon node with unique ID (includes line number)</handling>
+    </case>
+    <case name="Same activity name in multiple workflows">
+      <description>Two workflows both have "ProcessOrder" activity</description>
+      <handling>Activity node IDs need workflow context to avoid collision</handling>
+    </case>
+    <case name="Large number of workflows">
+      <description>PeerSignalGraph with 10+ workflows</description>
+      <handling>Performance consideration - linear iteration over workflows dict</handling>
+    </case>
+  </edge-cases>
+
+  <acceptance-criteria-mapping>
+    <mapping ac="AC17" fr="FR88">
+      <description>Subgraph rendering with "subgraph WorkflowName" and "end" for each</description>
+      <tech-spec-lines>1023-1029</tech-spec-lines>
+    </mapping>
+    <mapping ac="AC18" fr="FR88">
+      <description>Signal handler hexagon shape with {{signal_name}} syntax</description>
+      <tech-spec-lines>1031-1034</tech-spec-lines>
+    </mapping>
+    <mapping ac="AC20" fr="FR88">
+      <description>Signal handler blue styling: fill:#e6f3ff,stroke:#0066cc</description>
+      <tech-spec-lines>1041-1044</tech-spec-lines>
+    </mapping>
+  </acceptance-criteria-mapping>
+
+  <files-to-modify>
+    <file action="modify">
+      <path>src/temporalio_graphs/renderer.py</path>
+      <changes>
+        <change>Add render_signal_graph(graph: PeerSignalGraph) -> str method</change>
+        <change>Add _render_workflow_internal(metadata: WorkflowMetadata) -> list[str] helper</change>
+        <change>Add import for PeerSignalGraph, SignalHandler from graph_models</change>
+      </changes>
+    </file>
+    <file action="modify">
+      <path>tests/test_renderer.py</path>
+      <changes>
+        <change>Add test_render_signal_graph_single_workflow()</change>
+        <change>Add test_render_signal_graph_multiple_workflows()</change>
+        <change>Add test_render_signal_handler_hexagon_shape()</change>
+        <change>Add test_render_signal_handler_styling()</change>
+        <change>Add test_render_workflow_internal()</change>
+        <change>Add fixtures for PeerSignalGraph test data</change>
+      </changes>
+    </file>
+  </files-to-modify>
+
+  <story-blocked-by>
+    <dependency>Story 8-6 must be complete (provides PeerSignalGraph)</dependency>
+  </story-blocked-by>
+
+  <story-blocks>
+    <dependency>Story 8-8 (Cross-Subgraph Edges) depends on this story's render_signal_graph method</dependency>
+  </story-blocks>
+</story-context>

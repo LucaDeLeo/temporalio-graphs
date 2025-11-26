@@ -6,8 +6,15 @@ into valid Mermaid flowchart LR syntax for visualization.
 
 import re
 
-from temporalio_graphs._internal.graph_models import GraphNode, NodeType
+from temporalio_graphs._internal.graph_models import (
+    GraphNode,
+    NodeType,
+    PeerSignalGraph,
+    SignalHandler,
+    WorkflowMetadata,
+)
 from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.generator import PathPermutationGenerator
 from temporalio_graphs.path import GraphPath
 
 
@@ -503,4 +510,290 @@ class MermaidRenderer:
         lines.append("```")
 
         return "\n".join(lines)
+
+    def render_signal_graph(
+        self,
+        graph: PeerSignalGraph,
+        context: GraphBuildingContext | None = None,
+    ) -> str:
+        """Render cross-workflow signal graph as Mermaid with subgraphs.
+
+        Renders a PeerSignalGraph containing multiple workflows as a Mermaid
+        flowchart with each workflow as a subgraph. Signal handlers are
+        rendered as hexagon nodes with blue styling.
+
+        Args:
+            graph: PeerSignalGraph containing all connected workflows.
+                Must have at least one workflow in the workflows dict.
+            context: Optional GraphBuildingContext for configuration.
+                If None, uses default context.
+
+        Returns:
+            Mermaid flowchart string with subgraphs and cross-subgraph edges.
+            Format:
+            ```mermaid
+            flowchart TB
+                subgraph WorkflowName
+                    s_WorkflowName((Start)) --> activity[Activity] --> e_WorkflowName((End))
+                    sig_handler_name{{signal_name}}
+                end
+
+                %% Signal handler styling (hexagons - blue)
+                style sig_handler_name fill:#e6f3ff,stroke:#0066cc
+            ```
+
+        Example:
+            >>> from temporalio_graphs.renderer import MermaidRenderer
+            >>> from temporalio_graphs._internal.graph_models import PeerSignalGraph
+            >>> renderer = MermaidRenderer()
+            >>> graph = PeerSignalGraph(...)  # populated graph
+            >>> output = renderer.render_signal_graph(graph)
+            >>> assert "subgraph" in output
+            >>> assert "flowchart TB" in output
+        """
+        if context is None:
+            context = GraphBuildingContext()
+
+        lines: list[str] = ["```mermaid", "flowchart TB"]
+
+        # Collect all signal handlers for styling at the end
+        all_handlers: list[SignalHandler] = []
+
+        # Render each workflow as a subgraph
+        for workflow_name, metadata in graph.workflows.items():
+            lines.append(f"    subgraph {workflow_name}")
+
+            # Render workflow internal nodes (activities, decisions, etc.)
+            internal_lines = self._render_workflow_internal(metadata, context)
+            for line in internal_lines:
+                lines.append(f"        {line}")
+
+            # Render signal handlers as hexagon nodes
+            for handler in metadata.signal_handlers:
+                # Hexagon syntax: node_id{{signal_name}}
+                # Python requires 4 open + 4 close braces to output 2 each
+                hexagon_line = f"{handler.node_id}{{{{{handler.signal_name}}}}}"
+                lines.append(f"        {hexagon_line}")
+                all_handlers.append(handler)
+
+            lines.append("    end")
+            lines.append("")
+
+        # Signal connections rendered in Story 8.8
+        # Unresolved signals rendered in Story 8.8
+
+        # Styling section
+        if all_handlers:
+            lines.append("    %% Signal handler styling (hexagons - blue)")
+            for handler in all_handlers:
+                lines.append(
+                    f"    style {handler.node_id} fill:#e6f3ff,stroke:#0066cc"
+                )
+
+        lines.append("```")
+        return "\n".join(lines)
+
+    def _render_workflow_internal(
+        self,
+        metadata: WorkflowMetadata,
+        context: GraphBuildingContext,
+    ) -> list[str]:
+        """Render workflow internal nodes (activities, decisions, signals).
+
+        Generates the internal node definitions and edges for a single workflow,
+        suitable for embedding within a subgraph. Does NOT include subgraph
+        wrapper or fenced code blocks.
+
+        Uses unique node IDs prefixed with workflow name to avoid collisions
+        when multiple workflows have same activity names.
+
+        Args:
+            metadata: WorkflowMetadata for the workflow to render.
+            context: GraphBuildingContext for configuration.
+
+        Returns:
+            List of Mermaid node/edge definition strings without subgraph
+            wrapper. Each string is a line of Mermaid syntax.
+
+        Example:
+            >>> renderer = MermaidRenderer()
+            >>> metadata = WorkflowMetadata(...)
+            >>> lines = renderer._render_workflow_internal(metadata, context)
+            >>> # Returns: ["s_WF((Start))", "act[Activity]", "s_WF --> act", ...]
+        """
+        lines: list[str] = []
+        workflow_name = metadata.workflow_class
+
+        # Generate paths for this workflow
+        generator = PathPermutationGenerator()
+        paths = generator.generate_paths(metadata, context)
+
+        # Build node definitions and edges using two-pass approach
+        node_definitions: dict[str, str] = {}
+        edges: list[str] = []
+        seen_edges: set[tuple[str, str, str]] = set()
+
+        # Build signal outcomes mapping for edge labels
+        signal_outcomes: dict[str, dict[str, str]] = {}
+        for path in paths:
+            signal_outcomes[path.path_id] = {}
+            for step in path.steps:
+                if step.node_type == "signal" and step.signal_outcome:
+                    signal_outcomes[path.path_id][step.name] = step.signal_outcome
+
+        # Use workflow-unique Start/End node IDs
+        start_id = f"s_{workflow_name}"
+        end_id = f"e_{workflow_name}"
+
+        if not paths:
+            # Empty workflow: just Start -> End
+            node_definitions[start_id] = f"{start_id}(({context.start_node_label}))"
+            node_definitions[end_id] = f"{end_id}(({context.end_node_label}))"
+            edges.append(f"{start_id} --> {end_id}")
+        else:
+            for path in paths:
+                # Add Start node
+                if start_id not in node_definitions:
+                    node_definitions[start_id] = (
+                        f"{start_id}(({context.start_node_label}))"
+                    )
+
+                prev_node_id = start_id
+
+                for step in path.steps:
+                    if step.name is None or step.name == "":
+                        continue
+
+                    # Determine node ID with workflow prefix for uniqueness
+                    if step.node_type == "decision":
+                        if step.decision_id is None:
+                            continue
+                        node_id = f"{step.decision_id}_{workflow_name}"
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(
+                                r"([a-z])([A-Z])", r"\1 \2", step.name
+                            )
+                        if node_id not in node_definitions:
+                            node_definitions[node_id] = f"{node_id}{{{display_name}}}"
+                    elif step.node_type == "signal":
+                        node_id = f"{step.name}_{workflow_name}"
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(
+                                r"([a-z])([A-Z])", r"\1 \2", step.name
+                            )
+                        if node_id not in node_definitions:
+                            signal_node = GraphNode(
+                                node_id, NodeType.SIGNAL, display_name
+                            )
+                            node_definitions[node_id] = signal_node.to_mermaid()
+                    elif step.node_type == "child_workflow":
+                        if step.line_number is None:
+                            continue
+                        node_id = f"child_{step.name.lower()}_{step.line_number}_{workflow_name}"
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(
+                                r"([a-z])([A-Z])", r"\1 \2", step.name
+                            )
+                        if node_id not in node_definitions:
+                            child_node = GraphNode(
+                                node_id, NodeType.CHILD_WORKFLOW, display_name
+                            )
+                            node_definitions[node_id] = child_node.to_mermaid()
+                    elif step.node_type == "external_signal":
+                        if not context.show_external_signals:
+                            continue
+                        if step.line_number is None:
+                            continue
+                        node_id = f"ext_sig_{step.name}_{step.line_number}_{workflow_name}"
+                        if context.external_signal_label_style == "target-pattern":
+                            target = step.target_workflow_pattern or "<unknown>"
+                            display_name = f"Signal '{step.name}' to {target}"
+                        else:
+                            display_name = f"Signal '{step.name}'"
+                        if node_id not in node_definitions:
+                            ext_node = GraphNode(
+                                node_id, NodeType.EXTERNAL_SIGNAL, display_name
+                            )
+                            node_definitions[node_id] = ext_node.to_mermaid()
+                    else:
+                        # Activity node - use workflow-unique ID
+                        node_id = f"{step.name}_{workflow_name}"
+                        display_name = step.name
+                        if context.split_names_by_words:
+                            display_name = re.sub(
+                                r"([a-z])([A-Z])", r"\1 \2", step.name
+                            )
+                        if node_id not in node_definitions:
+                            node_definitions[node_id] = f"{node_id}[{display_name}]"
+
+                    # Add edge from previous node
+                    edge_label = ""
+                    if step.decision_id and prev_node_id.startswith(step.decision_id):
+                        # Skip - this is a decision node being added
+                        pass
+                    elif prev_node_id.endswith(f"_{workflow_name}"):
+                        # Check if prev was a decision
+                        prev_base = prev_node_id.replace(f"_{workflow_name}", "")
+                        if prev_base in path.decisions:
+                            decision_value = path.decisions[prev_base]
+                            edge_label = (
+                                context.decision_true_label
+                                if decision_value
+                                else context.decision_false_label
+                            )
+                        elif prev_base in signal_outcomes.get(path.path_id, {}):
+                            edge_label = signal_outcomes[path.path_id][prev_base]
+
+                    edge_key = (prev_node_id, node_id, edge_label)
+                    if edge_key not in seen_edges:
+                        if edge_label:
+                            edges.append(f"{prev_node_id} -- {edge_label} --> {node_id}")
+                        else:
+                            edges.append(f"{prev_node_id} --> {node_id}")
+                        seen_edges.add(edge_key)
+
+                    prev_node_id = node_id
+
+                # Add End node
+                if end_id not in node_definitions:
+                    node_definitions[end_id] = f"{end_id}(({context.end_node_label}))"
+
+                # Edge to End
+                edge_label_to_end = ""
+                if prev_node_id.endswith(f"_{workflow_name}"):
+                    prev_base = prev_node_id.replace(f"_{workflow_name}", "")
+                    if prev_base in path.decisions:
+                        decision_value = path.decisions[prev_base]
+                        edge_label_to_end = (
+                            context.decision_true_label
+                            if decision_value
+                            else context.decision_false_label
+                        )
+                    elif prev_base in signal_outcomes.get(path.path_id, {}):
+                        edge_label_to_end = signal_outcomes[path.path_id][prev_base]
+
+                edge_key = (prev_node_id, end_id, edge_label_to_end)
+                if edge_key not in seen_edges:
+                    if edge_label_to_end:
+                        edges.append(f"{prev_node_id} -- {edge_label_to_end} --> {end_id}")
+                    else:
+                        edges.append(f"{prev_node_id} --> {end_id}")
+                    seen_edges.add(edge_key)
+
+        # Output nodes in order: start, other nodes, end
+        lines.append(node_definitions[start_id])
+        for node_id, node_def in node_definitions.items():
+            if node_id != start_id and node_id != end_id:
+                lines.append(node_def)
+        if end_id in node_definitions:
+            lines.append(node_definitions[end_id])
+
+        # Output edges
+        for edge in edges:
+            lines.append(edge)
+
+        return lines
 
