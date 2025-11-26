@@ -1,0 +1,807 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8.6: Peer Signal Graph Analyzer
+  Generated: 2025-11-26
+  Purpose: Single source of truth for PeerSignalGraphAnalyzer implementation
+-->
+<story-context story-key="8-6" story-title="Peer Signal Graph Analyzer">
+
+  <!-- ========================================================================
+       STORY REFERENCE
+       ======================================================================== -->
+  <story-reference>
+    <story-file>docs/sprint-artifacts/stories/8-6-peer-signal-graph-analyzer.md</story-file>
+    <epic-id>8</epic-id>
+    <epic-title>Cross-Workflow Signal Visualization</epic-title>
+    <tech-spec>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec>
+    <status>drafted</status>
+  </story-reference>
+
+  <!-- ========================================================================
+       ACCEPTANCE CRITERIA SUMMARY
+       ======================================================================== -->
+  <acceptance-criteria>
+    <criterion id="AC14" fr="FR87" description="Recursive Discovery - OrderWorkflow signals ShippingWorkflow signals NotificationWorkflow, all three discovered"/>
+    <criterion id="AC15" description="Cycle Detection - WorkflowA -> WorkflowB -> WorkflowA detected, no infinite loop"/>
+    <criterion id="AC16" description="Max Depth Limit - signal_max_discovery_depth limits discovery depth with warning"/>
+    <criterion id="4" description="PeerSignalGraphAnalyzer class with __init__, analyze, _discover_connections, _analyze_workflow, _build_handler_index"/>
+    <criterion id="5" description="Integration with SignalNameResolver from Story 8.3"/>
+    <criterion id="6" description="Unresolved signals tracked in PeerSignalGraph.unresolved_signals"/>
+    <criterion id="7" description="Visited workflow tracking via _visited_workflows set"/>
+    <criterion id="8" description="SignalConnection created for each resolved external signal"/>
+    <criterion id="9" description="Type safety - mypy strict mode compliance (ADR-006)"/>
+    <criterion id="10" description="Debug logging for discovery events"/>
+    <criterion id="11" description="Unit tests in tests/test_signal_graph_analyzer.py"/>
+    <criterion id="12" description="No regressions - all existing tests pass"/>
+  </acceptance-criteria>
+
+  <!-- ========================================================================
+       DOCUMENTATION ARTIFACTS
+       ======================================================================== -->
+  <documentation-artifacts>
+
+    <artifact type="tech-spec" relevance="primary">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Complete technical specification for Epic 8 Cross-Workflow Signal Visualization</description>
+      <key-sections>
+        <section lines="444-565">PeerSignalGraphAnalyzer API specification with class, __init__, analyze, _discover_connections methods</section>
+        <section lines="713-806">Workflows and Sequencing - Cross-workflow signal analysis workflow and data flow</section>
+        <section lines="1003-1021">AC14-AC16 acceptance criteria definitions</section>
+      </key-sections>
+    </artifact>
+
+    <artifact type="architecture" relevance="primary">
+      <path>docs/architecture.md</path>
+      <description>Architecture documentation with ADRs and implementation patterns</description>
+      <key-sections>
+        <section name="ADR-006">mypy strict mode for type safety requirement</section>
+        <section name="ADR-013">Cross-Workflow Signal Visualization Strategy</section>
+        <section name="Implementation Patterns">Naming, structure, format, and communication patterns</section>
+      </key-sections>
+    </artifact>
+
+    <artifact type="story" relevance="primary">
+      <path>docs/sprint-artifacts/stories/8-6-peer-signal-graph-analyzer.md</path>
+      <description>Story file with full requirements, tasks, and dev notes</description>
+    </artifact>
+
+    <artifact type="dependency-story" relevance="high">
+      <path>docs/sprint-artifacts/stories/8-3-signal-name-resolver.md</path>
+      <description>SignalNameResolver implementation story (dependency)</description>
+    </artifact>
+
+    <artifact type="dependency-story" relevance="high">
+      <path>docs/sprint-artifacts/stories/8-5-signal-connection-model.md</path>
+      <description>SignalConnection and PeerSignalGraph data models (dependency)</description>
+    </artifact>
+
+  </documentation-artifacts>
+
+  <!-- ========================================================================
+       EXISTING CODE INTERFACES
+       ======================================================================== -->
+  <existing-code-interfaces>
+
+    <!-- SignalNameResolver - Primary Dependency (Story 8.3) -->
+    <interface name="SignalNameResolver" type="class" relevance="critical">
+      <file>src/temporalio_graphs/resolver.py</file>
+      <description>Resolves external signals to target workflows by signal name matching. Must be used by PeerSignalGraphAnalyzer for signal resolution.</description>
+      <api-signature><![CDATA[
+class SignalNameResolver:
+    """Resolves external signals to target workflows by signal name."""
+
+    def __init__(self, search_paths: list[Path]) -> None:
+        """Initialize resolver with search paths."""
+
+    def build_index(self) -> None:
+        """Scan search paths and index all signal handlers."""
+
+    def resolve(self, signal: ExternalSignalCall) -> list[tuple[Path, SignalHandler]]:
+        """Find workflows that handle the given signal.
+        Returns list of (file_path, SignalHandler) tuples."""
+]]></api-signature>
+      <usage-notes>
+        - Call build_index() before resolve() or let it auto-build lazily
+        - resolve() returns empty list if no handlers found
+        - Returns ALL matching handlers (multiple handlers same signal supported)
+      </usage-notes>
+    </interface>
+
+    <!-- PeerSignalGraph - Data Model (Story 8.5) -->
+    <interface name="PeerSignalGraph" type="dataclass" relevance="critical">
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>733-765</lines>
+      <description>Frozen dataclass containing complete cross-workflow signal graph. The return type of PeerSignalGraphAnalyzer.analyze().</description>
+      <api-signature><![CDATA[
+@dataclass(frozen=True)
+class PeerSignalGraph:
+    """Complete graph of workflows connected by peer-to-peer signals."""
+    root_workflow: WorkflowMetadata
+    workflows: dict[str, WorkflowMetadata]
+    signal_handlers: dict[str, list[SignalHandler]]
+    connections: list[SignalConnection]
+    unresolved_signals: list[ExternalSignalCall]
+]]></api-signature>
+    </interface>
+
+    <!-- SignalConnection - Data Model (Story 8.5) -->
+    <interface name="SignalConnection" type="dataclass" relevance="critical">
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>425-458</lines>
+      <description>Frozen dataclass representing signal flow between two workflows.</description>
+      <api-signature><![CDATA[
+@dataclass(frozen=True)
+class SignalConnection:
+    """Represents a signal flow between two workflows."""
+    sender_workflow: str
+    receiver_workflow: str
+    signal_name: str
+    sender_line: int
+    receiver_line: int
+    sender_node_id: str
+    receiver_node_id: str
+]]></api-signature>
+    </interface>
+
+    <!-- SignalHandler - Data Model (Story 8.2) -->
+    <interface name="SignalHandler" type="dataclass" relevance="high">
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>462-500</lines>
+      <description>Frozen dataclass representing @workflow.signal decorated method.</description>
+      <api-signature><![CDATA[
+@dataclass(frozen=True)
+class SignalHandler:
+    """Represents a @workflow.signal decorated method."""
+    signal_name: str
+    method_name: str
+    workflow_class: str
+    source_line: int
+    node_id: str  # Format: sig_handler_{signal_name}_{line_number}
+]]></api-signature>
+    </interface>
+
+    <!-- ExternalSignalCall - Data Model (Epic 7) -->
+    <interface name="ExternalSignalCall" type="dataclass" relevance="high">
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>382-421</lines>
+      <description>Frozen dataclass representing external signal sent to peer workflow.</description>
+      <api-signature><![CDATA[
+@dataclass(frozen=True)
+class ExternalSignalCall:
+    """Represents a peer-to-peer signal sent to an external workflow."""
+    signal_name: str
+    target_workflow_pattern: str
+    source_line: int
+    node_id: str  # Format: ext_sig_{signal_name}_{line_number}
+    source_workflow: str
+]]></api-signature>
+    </interface>
+
+    <!-- WorkflowMetadata - Data Model -->
+    <interface name="WorkflowMetadata" type="dataclass" relevance="high">
+      <file>src/temporalio_graphs/_internal/graph_models.py</file>
+      <lines>503-624</lines>
+      <description>Metadata describing a workflow including external_signals and signal_handlers.</description>
+      <api-signature><![CDATA[
+@dataclass
+class WorkflowMetadata:
+    """Metadata describing a workflow and its graph characteristics."""
+    workflow_class: str
+    workflow_run_method: str
+    activities: list[Activity]
+    decision_points: list[DecisionPoint]
+    signal_points: list[SignalPoint]
+    source_file: Path
+    total_paths: int
+    child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
+    external_signals: tuple[ExternalSignalCall, ...] = ()  # Epic 7
+    signal_handlers: tuple[SignalHandler, ...] = ()        # Epic 8
+]]></api-signature>
+    </interface>
+
+    <!-- WorkflowAnalyzer - Pattern Reference -->
+    <interface name="WorkflowAnalyzer" type="class" relevance="high">
+      <file>src/temporalio_graphs/analyzer.py</file>
+      <lines>44-200</lines>
+      <description>AST-based analyzer for extracting workflow structure. Use this for analyzing individual workflow files.</description>
+      <api-signature><![CDATA[
+class WorkflowAnalyzer(ast.NodeVisitor):
+    """AST-based analyzer for extracting Temporal workflow structure."""
+
+    def __init__(self) -> None:
+        """Initialize the workflow analyzer with empty state."""
+
+    def analyze(
+        self, workflow_file: Path | str, context: GraphBuildingContext | None = None
+    ) -> WorkflowMetadata:
+        """Analyze a workflow source file and extract workflow metadata."""
+]]></api-signature>
+      <usage-notes>
+        - Creates new instance for each analysis
+        - Returns WorkflowMetadata with signal_handlers populated
+        - Raises WorkflowParseError for invalid workflows
+      </usage-notes>
+    </interface>
+
+    <!-- WorkflowCallGraphAnalyzer - Pattern Reference -->
+    <interface name="WorkflowCallGraphAnalyzer" type="class" relevance="medium">
+      <file>src/temporalio_graphs/call_graph_analyzer.py</file>
+      <lines>37-120</lines>
+      <description>Pattern reference for recursive workflow discovery with cycle detection. PeerSignalGraphAnalyzer should follow similar patterns.</description>
+      <api-signature><![CDATA[
+class WorkflowCallGraphAnalyzer:
+    """Analyzer for building workflow call graphs through recursive analysis."""
+
+    def __init__(self, context: GraphBuildingContext) -> None:
+        self._context = context
+        self._visited_workflows: set[str] = set()
+        self._current_depth: int = 0
+
+    def analyze(
+        self, entry_workflow: Path, search_paths: list[Path] | None = None
+    ) -> WorkflowCallGraph:
+        """Analyze entry workflow and recursively discover all child workflows."""
+]]></api-signature>
+      <usage-notes>
+        - Pattern for _visited_workflows set for cycle detection
+        - Pattern for depth tracking and max_depth enforcement
+        - Pattern for recursive _analyze_children method
+      </usage-notes>
+    </interface>
+
+    <!-- GraphBuildingContext - Configuration -->
+    <interface name="GraphBuildingContext" type="dataclass" relevance="high">
+      <file>src/temporalio_graphs/context.py</file>
+      <description>Immutable configuration context. PeerSignalGraphAnalyzer should accept optional context parameter.</description>
+      <api-signature><![CDATA[
+@dataclass(frozen=True)
+class GraphBuildingContext:
+    """Configuration context for workflow graph generation."""
+    # Relevant fields for signal analysis:
+    max_expansion_depth: int = 2  # Use for signal_max_discovery_depth fallback
+    # Note: signal_max_discovery_depth not yet added - use max_depth parameter
+]]></api-signature>
+    </interface>
+
+    <!-- WorkflowParseError - Exception -->
+    <interface name="WorkflowParseError" type="exception" relevance="medium">
+      <file>src/temporalio_graphs/exceptions.py</file>
+      <lines>26-77</lines>
+      <description>Exception raised when workflow parsing fails. Handle gracefully in _analyze_workflow.</description>
+      <api-signature><![CDATA[
+class WorkflowParseError(TemporalioGraphsError):
+    """Raised when workflow parsing fails."""
+    def __init__(
+        self, file_path: Path, line: int, message: str, suggestion: str
+    ) -> None:
+]]></api-signature>
+    </interface>
+
+  </existing-code-interfaces>
+
+  <!-- ========================================================================
+       DEVELOPMENT CONSTRAINTS
+       ======================================================================== -->
+  <development-constraints>
+
+    <constraint type="architecture" source="ADR-006">
+      <description>mypy strict mode compliance required</description>
+      <details>All new code must have complete type hints. Run mypy src/temporalio_graphs/ to verify.</details>
+    </constraint>
+
+    <constraint type="architecture" source="ADR-001">
+      <description>Static analysis only - no workflow execution</description>
+      <details>PeerSignalGraphAnalyzer must use AST analysis via WorkflowAnalyzer. No runtime execution of workflows.</details>
+    </constraint>
+
+    <constraint type="architecture" source="ADR-013">
+      <description>Signal name matching for resolution</description>
+      <details>External signals are matched to handlers by signal_name field. Multiple handlers for same signal are all returned.</details>
+    </constraint>
+
+    <constraint type="pattern" source="Implementation Patterns">
+      <description>Module structure conventions</description>
+      <details>
+        - One primary class per file
+        - Create new module: src/temporalio_graphs/signal_graph_analyzer.py
+        - Google-style docstrings for class and methods
+        - Logger at module level: logger = logging.getLogger(__name__)
+      </details>
+    </constraint>
+
+    <constraint type="pattern" source="Implementation Patterns">
+      <description>Naming conventions</description>
+      <details>
+        - Class: PeerSignalGraphAnalyzer (PascalCase)
+        - Private methods: _discover_connections, _analyze_workflow, _build_handler_index (leading underscore)
+        - Instance attributes: _visited_workflows, _workflows, _connections, _unresolved
+      </details>
+    </constraint>
+
+    <constraint type="testing" source="ADR-010">
+      <description>Test coverage requirement</description>
+      <details>>=80% coverage required. Target 100% for signal_graph_analyzer.py. Use pytest fixtures with tmp_path for test workflows.</details>
+    </constraint>
+
+    <constraint type="compatibility" source="tech-spec">
+      <description>No regressions to existing functionality</description>
+      <details>All 547+ existing tests must continue passing after implementation.</details>
+    </constraint>
+
+  </development-constraints>
+
+  <!-- ========================================================================
+       DEPENDENCIES
+       ======================================================================== -->
+  <dependencies>
+
+    <internal-module name="temporalio_graphs.resolver" required="true">
+      <import>from temporalio_graphs.resolver import SignalNameResolver</import>
+      <purpose>Signal name resolution via build_index() and resolve()</purpose>
+    </internal-module>
+
+    <internal-module name="temporalio_graphs.analyzer" required="true">
+      <import>from temporalio_graphs.analyzer import WorkflowAnalyzer</import>
+      <purpose>Analyze individual workflow files to extract WorkflowMetadata</purpose>
+    </internal-module>
+
+    <internal-module name="temporalio_graphs._internal.graph_models" required="true">
+      <import>from temporalio_graphs._internal.graph_models import (
+    ExternalSignalCall,
+    PeerSignalGraph,
+    SignalConnection,
+    SignalHandler,
+    WorkflowMetadata,
+)</import>
+      <purpose>Data model classes for signal graph construction</purpose>
+    </internal-module>
+
+    <internal-module name="temporalio_graphs.context" required="true">
+      <import>from temporalio_graphs.context import GraphBuildingContext</import>
+      <purpose>Configuration context for graph building options</purpose>
+    </internal-module>
+
+    <internal-module name="temporalio_graphs.exceptions" required="true">
+      <import>from temporalio_graphs.exceptions import WorkflowParseError</import>
+      <purpose>Exception handling for workflow parse failures</purpose>
+    </internal-module>
+
+    <stdlib-module name="logging" required="true">
+      <import>import logging</import>
+      <purpose>Debug logging for discovery events</purpose>
+    </stdlib-module>
+
+    <stdlib-module name="pathlib" required="true">
+      <import>from pathlib import Path</import>
+      <purpose>File path handling</purpose>
+    </stdlib-module>
+
+  </dependencies>
+
+  <!-- ========================================================================
+       TESTING CONTEXT
+       ======================================================================== -->
+  <testing-context>
+
+    <test-file>tests/test_signal_graph_analyzer.py</test-file>
+    <test-pattern>Follow pattern from tests/test_call_graph_analyzer.py and tests/test_resolver.py</test-pattern>
+
+    <fixture-requirements>
+      <fixture name="workflow_a" purpose="Create workflow A that sends signal_b to workflow B">
+        <code><![CDATA[
+@pytest.fixture
+def workflow_a(tmp_path: Path) -> Path:
+    """Create workflow A that sends signal_b."""
+    code = '''
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowA:
+    @workflow.run
+    async def run(self) -> None:
+        handle = workflow.get_external_workflow_handle("WorkflowB", "wf-b-123")
+        await handle.signal("signal_b", "data")
+'''
+    path = tmp_path / "workflow_a.py"
+    path.write_text(code)
+    return path
+]]></code>
+      </fixture>
+
+      <fixture name="workflow_b" purpose="Create workflow B that handles signal_b and sends signal_c">
+        <code><![CDATA[
+@pytest.fixture
+def workflow_b(tmp_path: Path) -> Path:
+    """Create workflow B that handles signal_b and sends signal_c."""
+    code = '''
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowB:
+    @workflow.signal
+    async def signal_b(self, data: str) -> None:
+        self.data = data
+
+    @workflow.run
+    async def run(self) -> None:
+        handle = workflow.get_external_workflow_handle("WorkflowC", "wf-c-123")
+        await handle.signal("signal_c", "forwarded")
+'''
+    path = tmp_path / "workflow_b.py"
+    path.write_text(code)
+    return path
+]]></code>
+      </fixture>
+
+      <fixture name="workflow_c" purpose="Create workflow C that handles signal_c (end of chain)">
+        <code><![CDATA[
+@pytest.fixture
+def workflow_c(tmp_path: Path) -> Path:
+    """Create workflow C that handles signal_c."""
+    code = '''
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowC:
+    @workflow.signal
+    async def signal_c(self, data: str) -> None:
+        self.data = data
+
+    @workflow.run
+    async def run(self) -> None:
+        pass
+'''
+    path = tmp_path / "workflow_c.py"
+    path.write_text(code)
+    return path
+]]></code>
+      </fixture>
+
+      <fixture name="workflow_cycle_a" purpose="Create workflow for cycle detection (A->B->A)">
+        <code><![CDATA[
+@pytest.fixture
+def workflow_cycle_a(tmp_path: Path) -> Path:
+    """Create workflow A for cycle detection."""
+    code = '''
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowCycleA:
+    @workflow.signal
+    async def signal_from_b(self, data: str) -> None:
+        pass
+
+    @workflow.run
+    async def run(self) -> None:
+        handle = workflow.get_external_workflow_handle("WorkflowCycleB", "wf-cycle-b")
+        await handle.signal("signal_to_b", "data")
+'''
+    path = tmp_path / "workflow_cycle_a.py"
+    path.write_text(code)
+    return path
+]]></code>
+      </fixture>
+
+      <fixture name="workflow_cycle_b" purpose="Create workflow B for cycle detection (signals back to A)">
+        <code><![CDATA[
+@pytest.fixture
+def workflow_cycle_b(tmp_path: Path) -> Path:
+    """Create workflow B that signals back to A (creates cycle)."""
+    code = '''
+from temporalio import workflow
+
+@workflow.defn
+class WorkflowCycleB:
+    @workflow.signal
+    async def signal_to_b(self, data: str) -> None:
+        pass
+
+    @workflow.run
+    async def run(self) -> None:
+        handle = workflow.get_external_workflow_handle("WorkflowCycleA", "wf-cycle-a")
+        await handle.signal("signal_from_b", "response")
+'''
+    path = tmp_path / "workflow_cycle_b.py"
+    path.write_text(code)
+    return path
+]]></code>
+      </fixture>
+    </fixture-requirements>
+
+    <test-cases>
+      <test name="test_analyze_single_workflow" purpose="Workflow with no external signals">
+        <assertions>
+          - graph.workflows contains only entry workflow
+          - graph.connections is empty
+          - graph.unresolved_signals is empty
+        </assertions>
+      </test>
+
+      <test name="test_analyze_two_connected_workflows" purpose="A -> B connection">
+        <assertions>
+          - len(graph.workflows) == 2
+          - "WorkflowA" and "WorkflowB" in graph.workflows
+          - len(graph.connections) == 1
+          - connection has correct sender/receiver/signal_name
+        </assertions>
+      </test>
+
+      <test name="test_analyze_three_workflow_chain" purpose="A -> B -> C chain (AC14)">
+        <assertions>
+          - len(graph.workflows) == 3
+          - len(graph.connections) == 2
+          - All three workflows discovered
+        </assertions>
+      </test>
+
+      <test name="test_cycle_detection" purpose="A -> B -> A cycle (AC15)">
+        <assertions>
+          - No infinite loop occurs
+          - Both workflows discovered
+          - Connections A->B and B->A both recorded
+          - WorkflowA not re-analyzed
+        </assertions>
+      </test>
+
+      <test name="test_max_depth_limit" purpose="Stops at configured depth (AC16)">
+        <assertions>
+          - With max_depth=1, only A and B discovered (not C)
+          - Warning logged about max depth
+        </assertions>
+      </test>
+
+      <test name="test_unresolved_signal" purpose="Signal with no matching handler">
+        <assertions>
+          - Signal added to graph.unresolved_signals
+          - Warning logged
+        </assertions>
+      </test>
+
+      <test name="test_multiple_handlers_same_signal" purpose="Multiple workflows handle same signal">
+        <assertions>
+          - All handlers returned
+          - Connections created to all handlers
+        </assertions>
+      </test>
+    </test-cases>
+
+    <validation-commands>
+      <command>pytest tests/test_signal_graph_analyzer.py -v</command>
+      <command>pytest -v (full suite for regression)</command>
+      <command>mypy src/temporalio_graphs/signal_graph_analyzer.py --strict</command>
+      <command>ruff check src/temporalio_graphs/signal_graph_analyzer.py</command>
+      <command>pytest --cov=src/temporalio_graphs --cov-report=term-missing</command>
+    </validation-commands>
+
+  </testing-context>
+
+  <!-- ========================================================================
+       IMPLEMENTATION NOTES
+       ======================================================================== -->
+  <implementation-notes>
+
+    <note category="algorithm">
+      <title>Recursive Discovery Algorithm</title>
+      <content><![CDATA[
+analyze(entry_workflow):
+    1. Build resolver index via self._resolver.build_index()
+    2. Analyze entry workflow -> metadata via _analyze_workflow()
+    3. Store metadata in _workflows dict
+    4. Mark entry workflow as visited
+    5. _discover_connections(metadata, depth=0)
+    6. Build handler index via _build_handler_index()
+    7. Return PeerSignalGraph with all collected data
+
+_discover_connections(metadata, depth):
+    1. If depth >= max_depth: log warning, return
+    2. For each external_signal in metadata.external_signals:
+       a. targets = self._resolver.resolve(signal)
+       b. If no targets: add to _unresolved, log warning, continue
+       c. For each (path, handler) in targets:
+          i.  target_metadata = _analyze_workflow(path)
+          ii. If workflow_class not in _visited_workflows:
+              - Store in _workflows
+              - Mark visited
+              - Recurse: _discover_connections(target, depth+1)
+          iii. Create SignalConnection (ALWAYS, even for cycles)
+          iv. Add connection to _connections list
+          v.  Log: "Resolved signal '{name}': {sender} --> {receiver}"
+]]></content>
+    </note>
+
+    <note category="cycle-detection">
+      <title>Cycle Detection Pattern</title>
+      <content><![CDATA[
+Key insight: Record connections BEFORE checking visited status.
+This ensures A->B->A records both connections even when cycle detected.
+
+Pattern from WorkflowCallGraphAnalyzer:
+- Use set[str] for _visited_workflows (workflow class names)
+- Check AFTER analyzing target workflow to get metadata
+- Record connection even if already visited
+- Only skip recursion for already visited workflows
+]]></content>
+    </note>
+
+    <note category="logging">
+      <title>Required Debug Logging</title>
+      <content><![CDATA[
+Log discovery events:
+- "Discovered workflow '{name}' at {path}" - on successful analysis
+- "Resolved signal '{name}': {sender} --> {receiver}" - on connection creation
+- "Could not resolve signal '{name}' - no matching handler found" - on unresolved
+- "Max depth {depth} reached, stopping discovery" - on depth limit hit
+]]></content>
+    </note>
+
+    <note category="edge-cases">
+      <title>Edge Cases to Handle</title>
+      <content><![CDATA[
+1. No external signals - Entry workflow has no external_signals, return graph with only root
+2. All signals unresolved - No matching handlers, all signals in unresolved_signals
+3. Empty search paths - No handlers indexed, all signals unresolved
+4. Circular signals - A->B->A, both connections recorded, no infinite loop
+5. Deep chain at max depth - Stops discovery but records partial graph
+6. WorkflowParseError on target - Log warning, skip that target, continue
+]]></content>
+    </note>
+
+  </implementation-notes>
+
+  <!-- ========================================================================
+       FILE STRUCTURE
+       ======================================================================== -->
+  <file-structure>
+    <new-files>
+      <file>src/temporalio_graphs/signal_graph_analyzer.py</file>
+      <file>tests/test_signal_graph_analyzer.py</file>
+    </new-files>
+    <modified-files>
+      <file>src/temporalio_graphs/__init__.py (add PeerSignalGraphAnalyzer export)</file>
+    </modified-files>
+  </file-structure>
+
+  <!-- ========================================================================
+       CLASS SKELETON
+       ======================================================================== -->
+  <class-skeleton>
+    <code><![CDATA[
+"""Peer signal graph analyzer for cross-workflow signal visualization.
+
+This module provides the PeerSignalGraphAnalyzer class which builds cross-workflow
+signal graphs by recursively discovering connected workflows via external signals
+and their handlers.
+
+Example:
+    >>> from pathlib import Path
+    >>> from temporalio_graphs.signal_graph_analyzer import PeerSignalGraphAnalyzer
+    >>> analyzer = PeerSignalGraphAnalyzer(
+    ...     search_paths=[Path("workflows/")],
+    ...     max_depth=10,
+    ... )
+    >>> graph = analyzer.analyze(Path("order_workflow.py"))
+    >>> print(graph.workflows.keys())
+    ['OrderWorkflow', 'ShippingWorkflow', 'NotificationWorkflow']
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from temporalio_graphs._internal.graph_models import (
+    ExternalSignalCall,
+    PeerSignalGraph,
+    SignalConnection,
+    SignalHandler,
+    WorkflowMetadata,
+)
+from temporalio_graphs.analyzer import WorkflowAnalyzer
+from temporalio_graphs.context import GraphBuildingContext
+from temporalio_graphs.exceptions import WorkflowParseError
+from temporalio_graphs.resolver import SignalNameResolver
+
+logger = logging.getLogger(__name__)
+
+
+class PeerSignalGraphAnalyzer:
+    """Analyzes workflows and builds cross-workflow signal graph.
+
+    Starting from an entry workflow, discovers all connected workflows
+    by following external signal --> signal handler connections.
+
+    Attributes:
+        _search_paths: List of directories to search for workflows.
+        _resolver: SignalNameResolver for finding signal handlers.
+        _max_depth: Maximum recursion depth for discovery.
+        _context: GraphBuildingContext for configuration.
+        _visited_workflows: Set of workflow names already analyzed.
+        _workflows: Dictionary of discovered workflow metadata.
+        _connections: List of signal connections found.
+        _unresolved: List of external signals with no handler.
+
+    Example:
+        >>> analyzer = PeerSignalGraphAnalyzer(
+        ...     search_paths=[Path("./workflows/")],
+        ...     max_depth=10,
+        ... )
+        >>> graph = analyzer.analyze(Path("order_workflow.py"))
+        >>> print(graph.workflows.keys())
+        ['OrderWorkflow', 'ShippingWorkflow', 'NotificationWorkflow']
+    """
+
+    def __init__(
+        self,
+        search_paths: list[Path],
+        resolver: SignalNameResolver | None = None,
+        max_depth: int = 10,
+        context: GraphBuildingContext | None = None,
+    ) -> None:
+        """Initialize the peer signal graph analyzer.
+
+        Args:
+            search_paths: Directories to search for target workflows.
+            resolver: Custom resolver instance. If None, creates SignalNameResolver.
+            max_depth: Maximum recursion depth for discovery (default: 10).
+            context: Graph building configuration (default: GraphBuildingContext()).
+        """
+        # TODO: Implement __init__
+        pass
+
+    def analyze(self, entry_workflow: Path) -> PeerSignalGraph:
+        """Analyze entry workflow and discover all connected workflows.
+
+        Args:
+            entry_workflow: Path to the entry point workflow file.
+
+        Returns:
+            PeerSignalGraph containing all discovered workflows,
+            their signal handlers, and connections between them.
+
+        Raises:
+            WorkflowParseError: If entry_workflow cannot be parsed.
+        """
+        # TODO: Implement analyze
+        pass
+
+    def _discover_connections(
+        self,
+        metadata: WorkflowMetadata,
+        depth: int,
+    ) -> None:
+        """Recursively discover workflows connected by signals.
+
+        Args:
+            metadata: WorkflowMetadata of current workflow to process.
+            depth: Current recursion depth (0 = entry workflow).
+        """
+        # TODO: Implement _discover_connections
+        pass
+
+    def _analyze_workflow(self, file_path: Path) -> WorkflowMetadata:
+        """Analyze single workflow file and return metadata.
+
+        Args:
+            file_path: Path to workflow file to analyze.
+
+        Returns:
+            WorkflowMetadata for the workflow.
+
+        Raises:
+            WorkflowParseError: If file cannot be parsed.
+        """
+        # TODO: Implement _analyze_workflow
+        pass
+
+    def _build_handler_index(self) -> dict[str, list[SignalHandler]]:
+        """Build signal handler index from discovered workflows.
+
+        Returns:
+            Dictionary mapping signal names to lists of handlers.
+        """
+        # TODO: Implement _build_handler_index
+        pass
+]]></code>
+  </class-skeleton>
+
+</story-context>

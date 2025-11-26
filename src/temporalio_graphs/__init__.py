@@ -32,6 +32,7 @@ from temporalio_graphs.generator import PathPermutationGenerator
 from temporalio_graphs.helpers import to_decision, wait_condition
 from temporalio_graphs.path import GraphPath
 from temporalio_graphs.renderer import MermaidRenderer
+from temporalio_graphs.signal_graph_analyzer import PeerSignalGraphAnalyzer
 from temporalio_graphs.validator import ValidationReport, ValidationWarning, validate_workflow
 
 __version__ = "0.1.0"
@@ -51,6 +52,7 @@ __all__ = [
     "InvalidDecisionError",
     "MultiWorkflowPath",
     "PeerSignalGraph",
+    "PeerSignalGraphAnalyzer",
     "SignalConnection",
 ]
 
