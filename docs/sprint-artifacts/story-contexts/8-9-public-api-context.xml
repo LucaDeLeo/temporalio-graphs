@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8-9: Public API
+  Generated: 2025-11-26
+  Purpose: Implementation context for analyze_signal_graph() public API
+-->
+<story-context>
+  <!-- Story Reference -->
+  <story-reference>
+    <story-id>8-9</story-id>
+    <name>Public API</name>
+    <file>docs/sprint-artifacts/stories/8-9-public-api.md</file>
+    <status>drafted</status>
+    <epic-id>8</epic-id>
+    <epic-name>Cross-Workflow Signal Visualization</epic-name>
+  </story-reference>
+
+  <!-- Documentation Artifacts -->
+  <documentation-artifacts>
+    <artifact type="tech-spec" relevance="high">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Technical specification for Epic 8 cross-workflow signal visualization</description>
+      <key-sections>
+        <section lines="567-638">Public API analyze_signal_flow() function specification</section>
+        <section lines="252-280">GraphBuildingContext extension with signal options</section>
+        <section lines="1051-1066">AC22 and AC23 acceptance criteria for public API</section>
+        <section lines="716-786">Workflow sequencing and data flow</section>
+      </key-sections>
+    </artifact>
+
+    <artifact type="architecture" relevance="high">
+      <path>docs/architecture.md</path>
+      <description>System architecture and ADRs including mypy strict mode requirements</description>
+      <key-sections>
+        <section title="ADR-006">mypy strict mode for type safety - all public APIs require complete type hints</section>
+        <section title="ADR-013">Cross-workflow signal visualization strategy</section>
+        <section title="Implementation Patterns">Naming conventions, docstring format (Google style)</section>
+        <section title="API Contracts">analyze_workflow() and analyze_workflow_graph() patterns</section>
+      </key-sections>
+    </artifact>
+
+    <artifact type="story" relevance="high">
+      <path>docs/sprint-artifacts/stories/8-9-public-api.md</path>
+      <description>Story requirements with 10 acceptance criteria and detailed task breakdown</description>
+      <key-sections>
+        <section>AC22: analyze_signal_graph function signature and behavior</section>
+        <section>AC23: GraphBuildingContext signal options extension</section>
+        <section>AC11: Default search path to entry_workflow.parent</section>
+        <section>Function template with complete implementation pattern</section>
+      </key-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <!-- Existing Code Interfaces -->
+  <existing-code-interfaces>
+    <interface type="public-api-pattern" relevance="critical">
+      <path>src/temporalio_graphs/__init__.py</path>
+      <description>Existing public API module with analyze_workflow() and analyze_workflow_graph() patterns to follow</description>
+      <key-elements>
+        <element line="93-239">analyze_workflow() - pattern for input validation, context handling, error raising</element>
+        <element line="242-418">analyze_workflow_graph() - pattern for multi-workflow analysis with search paths</element>
+        <element line="40-57">__all__ list - exports to update with analyze_signal_graph</element>
+        <element line="60-91">_validate_context() - context validation helper</element>
+        <element line="12-36">imports - modules to import for new function</element>
+      </key-elements>
+      <implementation-notes>
+        <note>New function follows same validation pattern as analyze_workflow</note>
+        <note>Path|str input flexibility matching existing patterns</note>
+        <note>Optional context with default GraphBuildingContext()</note>
+        <note>FileNotFoundError for missing files, WorkflowParseError for invalid workflows</note>
+      </implementation-notes>
+    </interface>
+
+    <interface type="context-extension" relevance="critical">
+      <path>src/temporalio_graphs/context.py</path>
+      <description>GraphBuildingContext dataclass to extend with signal options</description>
+      <key-elements>
+        <element line="12-133">GraphBuildingContext frozen dataclass with existing fields</element>
+        <element line="130-132">Epic 7 external signal fields (show_external_signals, external_signal_label_style)</element>
+      </key-elements>
+      <fields-to-add>
+        <field>resolve_signal_targets: bool = False</field>
+        <field>signal_target_search_paths: tuple[Path, ...] = ()</field>
+        <field>signal_resolution_strategy: Literal["by_name", "explicit", "hybrid"] = "by_name"</field>
+        <field>signal_visualization_mode: Literal["subgraph", "unified"] = "subgraph"</field>
+        <field>signal_max_discovery_depth: int = 10</field>
+        <field>warn_unresolved_signals: bool = True</field>
+      </fields-to-add>
+    </interface>
+
+    <interface type="resolver" relevance="high">
+      <path>src/temporalio_graphs/resolver.py</path>
+      <description>SignalNameResolver for finding target workflows by signal name</description>
+      <key-elements>
+        <element line="43-68">SignalNameResolver class docstring and attributes</element>
+        <element line="69-80">__init__ with search_paths parameter</element>
+        <element line="82-152">build_index() method for scanning directories</element>
+        <element line="154-192">resolve() method returning list of (Path, SignalHandler)</element>
+      </key-elements>
+      <implementation-notes>
+        <note>Create with resolved search_paths list</note>
+        <note>Pass to PeerSignalGraphAnalyzer constructor</note>
+      </implementation-notes>
+    </interface>
+
+    <interface type="analyzer" relevance="high">
+      <path>src/temporalio_graphs/signal_graph_analyzer.py</path>
+      <description>PeerSignalGraphAnalyzer for building cross-workflow signal graphs</description>
+      <key-elements>
+        <element line="43-73">PeerSignalGraphAnalyzer class with constructor parameters</element>
+        <element line="75-99">__init__ signature: search_paths, resolver, max_depth, context</element>
+        <element line="101-160">analyze() method returning PeerSignalGraph</element>
+      </key-elements>
+      <implementation-notes>
+        <note>Pass search_paths, resolver, context.signal_max_discovery_depth, context</note>
+        <note>Call analyzer.analyze(entry_path) to get PeerSignalGraph</note>
+      </implementation-notes>
+    </interface>
+
+    <interface type="renderer" relevance="high">
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>MermaidRenderer with render_signal_graph() method for subgraph output</description>
+      <key-elements>
+        <element line="514-620">render_signal_graph() method - takes PeerSignalGraph, returns Mermaid string</element>
+        <element line="21-44">MermaidRenderer class - stateless renderer</element>
+      </key-elements>
+      <implementation-notes>
+        <note>Create MermaidRenderer(context) instance</note>
+        <note>Call renderer.render_signal_graph(graph) for final output</note>
+      </implementation-notes>
+    </interface>
+
+    <interface type="data-models" relevance="medium">
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>PeerSignalGraph and SignalConnection data models</description>
+      <key-elements>
+        <element line="732-764">PeerSignalGraph dataclass with workflows, connections, unresolved_signals</element>
+        <element line="424-458">SignalConnection dataclass</element>
+        <element line="461-500">SignalHandler dataclass</element>
+      </key-elements>
+    </interface>
+
+    <interface type="test-patterns" relevance="high">
+      <path>tests/test_public_api.py</path>
+      <description>Existing test patterns for analyze_workflow() and analyze_workflow_graph()</description>
+      <key-elements>
+        <element line="17-58">TestAnalyzeWorkflowMinimalUsage - basic usage patterns</element>
+        <element line="60-95">TestAnalyzeWorkflowWithCustomContext - context handling</element>
+        <element line="171-216">TestAnalyzeWorkflowErrorHandling - error scenarios</element>
+        <element line="327-381">TestAnalyzeWorkflowSignature - export and __all__ verification</element>
+        <element line="383-429">TestAnalyzeWorkflowDocstring - docstring completeness tests</element>
+      </key-elements>
+      <implementation-notes>
+        <note>Follow same test class organization pattern</note>
+        <note>Test exports in __all__ list</note>
+        <note>Test docstring sections: Args, Returns, Raises, Example</note>
+        <note>Test type hints via __annotations__</note>
+      </implementation-notes>
+    </interface>
+  </existing-code-interfaces>
+
+  <!-- Development Constraints -->
+  <development-constraints>
+    <constraint type="type-safety" source="ADR-006">
+      <description>mypy strict mode compliance required for all public APIs</description>
+      <requirements>
+        <requirement>Complete type hints for all function parameters and return types</requirement>
+        <requirement>Use Path | str union type for file path parameters</requirement>
+        <requirement>Use Literal types for strategy/mode parameters</requirement>
+        <requirement>Optional parameters typed as T | None</requirement>
+      </requirements>
+    </constraint>
+
+    <constraint type="docstring-format" source="ADR-009">
+      <description>Google-style docstrings required for all public functions</description>
+      <requirements>
+        <requirement>Description paragraph explaining function purpose</requirement>
+        <requirement>Args: section documenting all parameters</requirement>
+        <requirement>Returns: section describing return value</requirement>
+        <requirement>Raises: section listing all possible exceptions</requirement>
+        <requirement>Example: section with usage example</requirement>
+      </requirements>
+    </constraint>
+
+    <constraint type="test-coverage" source="ADR-010">
+      <description>Minimum 80% test coverage required</description>
+      <requirements>
+        <requirement>Unit tests for analyze_signal_graph() function</requirement>
+        <requirement>Test default search path behavior</requirement>
+        <requirement>Test error conditions (FileNotFoundError, WorkflowParseError)</requirement>
+        <requirement>Test context field defaults</requirement>
+      </requirements>
+    </constraint>
+
+    <constraint type="backward-compatibility" source="AC10">
+      <description>No regressions to existing Epic 1-8.8 tests</description>
+      <requirements>
+        <requirement>Existing analyze_workflow() unchanged</requirement>
+        <requirement>Existing GraphBuildingContext fields unchanged</requirement>
+        <requirement>All 689+ existing tests must pass</requirement>
+      </requirements>
+    </constraint>
+
+    <constraint type="naming-convention" source="architecture">
+      <description>Python naming conventions per PEP 8</description>
+      <requirements>
+        <requirement>Function name: analyze_signal_graph (snake_case)</requirement>
+        <requirement>Parameters: snake_case</requirement>
+        <requirement>Type aliases: PascalCase if needed</requirement>
+      </requirements>
+    </constraint>
+  </development-constraints>
+
+  <!-- Dependencies -->
+  <dependencies>
+    <internal-dependencies>
+      <dependency module="temporalio_graphs.resolver" class="SignalNameResolver">
+        <description>Signal name resolver for finding handler workflows</description>
+        <usage>Create with search_paths list</usage>
+      </dependency>
+      <dependency module="temporalio_graphs.signal_graph_analyzer" class="PeerSignalGraphAnalyzer">
+        <description>Cross-workflow graph analyzer</description>
+        <usage>Create with search_paths, resolver, max_depth, context</usage>
+      </dependency>
+      <dependency module="temporalio_graphs.renderer" class="MermaidRenderer">
+        <description>Mermaid diagram renderer</description>
+        <usage>Create with context, call render_signal_graph()</usage>
+      </dependency>
+      <dependency module="temporalio_graphs.context" class="GraphBuildingContext">
+        <description>Configuration dataclass to extend</description>
+        <usage>Add 6 new signal-related fields</usage>
+      </dependency>
+      <dependency module="temporalio_graphs.exceptions" class="WorkflowParseError">
+        <description>Exception for invalid workflow files</description>
+        <usage>Raised by PeerSignalGraphAnalyzer for invalid workflows</usage>
+      </dependency>
+    </internal-dependencies>
+
+    <stdlib-dependencies>
+      <dependency module="pathlib" class="Path">
+        <description>Path handling for file paths</description>
+        <usage>Convert str to Path, check exists(), get parent</usage>
+      </dependency>
+      <dependency module="typing" items="Literal">
+        <description>Type hints for literal values</description>
+        <usage>For strategy and mode parameters in context</usage>
+      </dependency>
+    </stdlib-dependencies>
+  </dependencies>
+
+  <!-- Testing Context -->
+  <testing-context>
+    <test-file>tests/test_api.py</test-file>
+    <test-file-note>File does not exist yet - create new or add to tests/test_public_api.py</test-file-note>
+
+    <required-tests>
+      <test name="test_analyze_signal_graph_basic">
+        <description>Basic usage with entry workflow, returns Mermaid string</description>
+        <pattern>Create fixture workflow, call function, verify returns string with mermaid</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_with_search_paths">
+        <description>Explicit search paths are used for resolution</description>
+        <pattern>Pass explicit search_paths list, verify used</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_default_search_path">
+        <description>Defaults to entry_workflow.parent when search_paths=None</description>
+        <pattern>Call without search_paths, verify parent directory used</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_file_not_found">
+        <description>Raises FileNotFoundError for missing entry_workflow</description>
+        <pattern>Pass non-existent path, expect FileNotFoundError</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_invalid_workflow">
+        <description>Raises WorkflowParseError for non-workflow Python file</description>
+        <pattern>Pass Python file without @workflow.defn, expect WorkflowParseError</pattern>
+      </test>
+      <test name="test_context_signal_options">
+        <description>Verify new GraphBuildingContext fields exist with defaults</description>
+        <pattern>Create context, check all 6 new fields have correct defaults</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_with_context">
+        <description>Custom context passed through pipeline</description>
+        <pattern>Pass custom context, verify it affects output</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_exported">
+        <description>Function exported in __all__</description>
+        <pattern>Import from package, verify in __all__</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_docstring">
+        <description>Comprehensive Google-style docstring</description>
+        <pattern>Check __doc__ for Args, Returns, Raises, Example sections</pattern>
+      </test>
+      <test name="test_analyze_signal_graph_type_hints">
+        <description>Complete type hints for mypy strict</description>
+        <pattern>Check __annotations__ for all params and return</pattern>
+      </test>
+    </required-tests>
+
+    <test-fixtures-needed>
+      <fixture>Simple workflow file with @workflow.defn and @workflow.signal handler</fixture>
+      <fixture>Connected workflows in same directory for search path test</fixture>
+      <fixture>Invalid Python file (syntax error) for parse error test</fixture>
+      <fixture>Python file without @workflow.defn for non-workflow test</fixture>
+    </test-fixtures-needed>
+
+    <regression-command>pytest -v</regression-command>
+    <mypy-command>mypy src/temporalio_graphs/</mypy-command>
+    <lint-command>ruff check src/temporalio_graphs/</lint-command>
+  </testing-context>
+
+  <!-- Implementation Notes -->
+  <implementation-notes>
+    <note type="function-signature">
+      <content>
+def analyze_signal_graph(
+    entry_workflow: Path | str,
+    search_paths: list[Path | str] | None = None,
+    context: GraphBuildingContext | None = None,
+) -> str:
+      </content>
+    </note>
+
+    <note type="integration-flow">
+      <content>
+1. Validate entry_workflow exists (FileNotFoundError if not)
+2. Convert to Path if string
+3. Default search_paths to [entry_path.parent] if None
+4. Create default context if None
+5. Create SignalNameResolver(resolved_paths)
+6. Create PeerSignalGraphAnalyzer(search_paths, resolver, max_depth, context)
+7. Call analyzer.analyze(entry_path) -> PeerSignalGraph
+8. Create MermaidRenderer(context)
+9. Call renderer.render_signal_graph(graph) -> str
+10. Return Mermaid string
+      </content>
+    </note>
+
+    <note type="context-fields">
+      <content>
+Six new fields to add to GraphBuildingContext:
+- resolve_signal_targets: bool = False
+- signal_target_search_paths: tuple[Path, ...] = ()
+- signal_resolution_strategy: Literal["by_name", "explicit", "hybrid"] = "by_name"
+- signal_visualization_mode: Literal["subgraph", "unified"] = "subgraph"
+- signal_max_discovery_depth: int = 10
+- warn_unresolved_signals: bool = True
+      </content>
+    </note>
+
+    <note type="exports">
+      <content>
+Add to __all__ list in __init__.py:
+- "analyze_signal_graph"
+      </content>
+    </note>
+  </implementation-notes>
+
+  <!-- Edge Cases -->
+  <edge-cases>
+    <edge-case id="1">
+      <scenario>Entry workflow has no external signals</scenario>
+      <expected-behavior>Returns single subgraph diagram with no signal connections</expected-behavior>
+      <handling>PeerSignalGraphAnalyzer returns graph with empty connections list</handling>
+    </edge-case>
+
+    <edge-case id="2">
+      <scenario>Entry workflow file does not exist</scenario>
+      <expected-behavior>Raises FileNotFoundError with path in message</expected-behavior>
+      <handling>Check entry_path.exists() before analysis, raise with descriptive message</handling>
+    </edge-case>
+
+    <edge-case id="3">
+      <scenario>Entry workflow is invalid Python (syntax error)</scenario>
+      <expected-behavior>Raises WorkflowParseError from analyzer</expected-behavior>
+      <handling>Let PeerSignalGraphAnalyzer propagate the exception</handling>
+    </edge-case>
+
+    <edge-case id="4">
+      <scenario>Entry workflow has no @workflow.defn decorator</scenario>
+      <expected-behavior>Raises WorkflowParseError from analyzer</expected-behavior>
+      <handling>Let PeerSignalGraphAnalyzer propagate the exception</handling>
+    </edge-case>
+
+    <edge-case id="5">
+      <scenario>Empty search_paths list provided</scenario>
+      <expected-behavior>Uses empty list - no signal resolution possible</expected-behavior>
+      <handling>Pass empty list to resolver, signals become unresolved</handling>
+    </edge-case>
+
+    <edge-case id="6">
+      <scenario>None context provided</scenario>
+      <expected-behavior>Creates default GraphBuildingContext()</expected-behavior>
+      <handling>if context is None: context = GraphBuildingContext()</handling>
+    </edge-case>
+
+    <edge-case id="7">
+      <scenario>Search paths contain non-existent directories</scenario>
+      <expected-behavior>Logged warning, graceful degradation</expected-behavior>
+      <handling>SignalNameResolver.build_index() logs warning, skips invalid paths</handling>
+    </edge-case>
+
+    <edge-case id="8">
+      <scenario>String path provided instead of Path object</scenario>
+      <expected-behavior>Converted to Path automatically</expected-behavior>
+      <handling>entry_path = Path(entry_workflow)</handling>
+    </edge-case>
+  </edge-cases>
+
+  <!-- FR Coverage -->
+  <fr-coverage>
+    <mapping ac="AC22" fr="FR90" spec-section="APIs and Interfaces lines 569-638">
+      Public API analyze_signal_graph function
+    </mapping>
+    <mapping ac="AC23" fr="FR90" spec-section="Data Models lines 254-280">
+      GraphBuildingContext signal options extension
+    </mapping>
+    <mapping ac="AC11" fr="FR85" spec-section="APIs and Interfaces lines 623-625">
+      Default search path to entry workflow parent
+    </mapping>
+  </fr-coverage>
+</story-context>

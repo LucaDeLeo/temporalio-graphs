@@ -356,10 +356,12 @@ class TestAnalyzeWorkflowSignature:
         # Updated in Epic 6 to include cross-workflow APIs
         # Updated in Story 8.5 to include cross-workflow signal models
         # Updated in Story 8.6 to include PeerSignalGraphAnalyzer
+        # Updated in Story 8.9 to include analyze_signal_graph
         assert set(exported) == {
             "GraphBuildingContext",
             "analyze_workflow",
             "analyze_workflow_graph",
+            "analyze_signal_graph",
             "to_decision",
             "wait_condition",
             "ValidationWarning",
@@ -425,5 +427,219 @@ class TestAnalyzeWorkflowDocstring:
         assert "context" in hints
         assert "output_format" in hints
         assert "return" in hints
+        # Return type should be str
+        assert hints["return"] == str
+
+
+# =============================================================================
+# Story 8.9: analyze_signal_graph() public API tests
+# =============================================================================
+
+
+class TestAnalyzeSignalGraphBasic:
+    """Test AC22: analyze_signal_graph() basic functionality."""
+
+    def test_analyze_signal_graph_basic(self) -> None:
+        """AC22: Basic signal graph analysis returns Mermaid string."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange - use fixture with external signal
+        fixture_path = Path("tests/fixtures/peer_signal_workflows/order_workflow.py")
+
+        # Act
+        result = analyze_signal_graph(fixture_path)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "```mermaid" in result
+        assert "flowchart TB" in result
+        assert "subgraph OrderWorkflow" in result
+
+    def test_analyze_signal_graph_string_path(self) -> None:
+        """AC22: Accepts string path for entry_workflow."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange
+        fixture_str = "tests/fixtures/peer_signal_workflows/order_workflow.py"
+
+        # Act
+        result = analyze_signal_graph(fixture_str)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "```mermaid" in result
+
+    def test_analyze_signal_graph_with_search_paths(self) -> None:
+        """AC22: Explicit search_paths are used for resolution."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange
+        fixture_path = Path("tests/fixtures/peer_signal_workflows/order_workflow.py")
+        search = [Path("tests/fixtures/peer_signal_workflows")]
+
+        # Act
+        result = analyze_signal_graph(fixture_path, search_paths=search)
+
+        # Assert
+        assert isinstance(result, str)
+        assert "```mermaid" in result
+        # Should find shipping workflow and show connection
+        assert "subgraph ShippingWorkflow" in result
+        assert "ship_order" in result
+
+    def test_analyze_signal_graph_default_search_path(self) -> None:
+        """AC11: When search_paths=None, defaults to entry_workflow.parent."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange - order_workflow.py is in same dir as shipping_workflow.py
+        fixture_path = Path("tests/fixtures/peer_signal_workflows/order_workflow.py")
+
+        # Act - no explicit search_paths, should default to parent dir
+        result = analyze_signal_graph(fixture_path)
+
+        # Assert - should find shipping_workflow in same directory
+        assert "subgraph ShippingWorkflow" in result
+        assert "ship_order" in result
+
+
+class TestAnalyzeSignalGraphErrorHandling:
+    """Test AC22: analyze_signal_graph() error handling."""
+
+    def test_analyze_signal_graph_file_not_found(self) -> None:
+        """AC22: Raises FileNotFoundError for missing file."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange
+        nonexistent = "tests/fixtures/nonexistent_workflow.py"
+
+        # Act & Assert
+        with pytest.raises(FileNotFoundError) as exc_info:
+            analyze_signal_graph(nonexistent)
+
+        assert "Workflow file not found" in str(exc_info.value)
+
+    def test_analyze_signal_graph_invalid_workflow(self) -> None:
+        """AC22: Raises WorkflowParseError for non-workflow file."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange - file without @workflow.defn
+        non_workflow = Path("tests/fixtures/peer_signal_workflows/not_a_workflow.py")
+
+        # Act & Assert
+        with pytest.raises(WorkflowParseError):
+            analyze_signal_graph(non_workflow)
+
+
+class TestAnalyzeSignalGraphContext:
+    """Test AC23: GraphBuildingContext extensions for signal graph."""
+
+    def test_context_signal_options_exist(self) -> None:
+        """AC23: Verify new GraphBuildingContext fields exist with defaults."""
+        from pathlib import Path as PathType
+
+        # Arrange & Act
+        ctx = GraphBuildingContext()
+
+        # Assert - verify all 6 new fields exist with correct defaults
+        assert ctx.resolve_signal_targets is False
+        assert ctx.signal_target_search_paths == ()
+        assert ctx.signal_resolution_strategy == "by_name"
+        assert ctx.signal_visualization_mode == "subgraph"
+        assert ctx.signal_max_discovery_depth == 10
+        assert ctx.warn_unresolved_signals is True
+
+        # Verify types
+        assert isinstance(ctx.signal_target_search_paths, tuple)
+        assert isinstance(ctx.signal_max_discovery_depth, int)
+
+    def test_context_signal_options_custom_values(self) -> None:
+        """AC23: Context fields can be set to custom values."""
+        from pathlib import Path as PathType
+
+        # Arrange & Act
+        ctx = GraphBuildingContext(
+            resolve_signal_targets=True,
+            signal_target_search_paths=(PathType("workflows/"), PathType("services/")),
+            signal_resolution_strategy="hybrid",
+            signal_visualization_mode="unified",
+            signal_max_discovery_depth=5,
+            warn_unresolved_signals=False,
+        )
+
+        # Assert
+        assert ctx.resolve_signal_targets is True
+        assert len(ctx.signal_target_search_paths) == 2
+        assert ctx.signal_resolution_strategy == "hybrid"
+        assert ctx.signal_visualization_mode == "unified"
+        assert ctx.signal_max_discovery_depth == 5
+        assert ctx.warn_unresolved_signals is False
+
+    def test_analyze_signal_graph_with_context(self) -> None:
+        """AC22: Custom context passed through pipeline."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Arrange
+        fixture_path = Path("tests/fixtures/peer_signal_workflows/order_workflow.py")
+        ctx = GraphBuildingContext(signal_max_discovery_depth=1)
+
+        # Act
+        result = analyze_signal_graph(fixture_path, context=ctx)
+
+        # Assert - should work with custom context
+        assert isinstance(result, str)
+        assert "```mermaid" in result
+
+
+class TestAnalyzeSignalGraphExport:
+    """Test AC6: analyze_signal_graph export and documentation."""
+
+    def test_analyze_signal_graph_exported(self) -> None:
+        """AC6: Function is exported in __all__."""
+        import temporalio_graphs
+
+        # Assert
+        assert "analyze_signal_graph" in temporalio_graphs.__all__
+
+        # Verify it's callable
+        from temporalio_graphs import analyze_signal_graph as exported_fn
+
+        assert callable(exported_fn)
+        assert exported_fn.__name__ == "analyze_signal_graph"
+
+    def test_analyze_signal_graph_docstring(self) -> None:
+        """AC8: Comprehensive Google-style docstring."""
+        from temporalio_graphs import analyze_signal_graph
+
+        docstring = analyze_signal_graph.__doc__
+
+        # Assert - required docstring sections
+        assert docstring is not None
+        assert "Args:" in docstring
+        assert "Returns:" in docstring
+        assert "Raises:" in docstring
+        assert "Example:" in docstring
+
+        # Assert - parameters documented
+        assert "entry_workflow" in docstring
+        assert "search_paths" in docstring
+        assert "context" in docstring
+
+        # Assert - exceptions documented
+        assert "FileNotFoundError" in docstring
+        assert "WorkflowParseError" in docstring
+
+    def test_analyze_signal_graph_type_hints(self) -> None:
+        """AC7: Complete type hints for mypy strict mode."""
+        from temporalio_graphs import analyze_signal_graph
+
+        # Act
+        hints = analyze_signal_graph.__annotations__
+
+        # Assert - all parameters have type hints
+        assert "entry_workflow" in hints
+        assert "search_paths" in hints
+        assert "context" in hints
+        assert "return" in hints
+
         # Return type should be str
         assert hints["return"] == str

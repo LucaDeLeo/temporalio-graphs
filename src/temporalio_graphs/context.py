@@ -130,3 +130,44 @@ class GraphBuildingContext:
     child_workflow_expansion: Literal["reference", "inline", "subgraph"] = "reference"
     show_external_signals: bool = True
     external_signal_label_style: Literal["name-only", "target-pattern"] = "name-only"
+
+    # Epic 8: Cross-workflow signal visualization options
+    resolve_signal_targets: bool = False
+    """Enable signal resolution for cross-workflow visualization.
+
+    When True, external signals will be resolved to their target workflows
+    using signal name matching. Default: False.
+    """
+    signal_target_search_paths: tuple[Path, ...] = ()
+    """Additional directories to search for target workflows.
+
+    Used by SignalNameResolver to find workflows containing signal handlers.
+    Default: Empty tuple (uses entry workflow's parent directory).
+    """
+    signal_resolution_strategy: Literal["by_name", "explicit", "hybrid"] = "by_name"
+    """Strategy for resolving signals to target workflows.
+
+    - "by_name": Match signal names to @workflow.signal handlers (default)
+    - "explicit": Only resolve signals with explicit workflow targets
+    - "hybrid": Try explicit first, fall back to by_name matching
+    Default: "by_name".
+    """
+    signal_visualization_mode: Literal["subgraph", "unified"] = "subgraph"
+    """Mode for visualizing cross-workflow signal connections.
+
+    - "subgraph": Each workflow in its own Mermaid subgraph (default)
+    - "unified": All workflows combined into single graph
+    Default: "subgraph".
+    """
+    signal_max_discovery_depth: int = 10
+    """Maximum recursion depth for signal-based workflow discovery.
+
+    Limits how deep the analyzer follows signal chains (A -> B -> C -> ...).
+    Prevents infinite loops in cyclic signal patterns. Default: 10.
+    """
+    warn_unresolved_signals: bool = True
+    """Emit warnings for signals that cannot be resolved to handlers.
+
+    When True, logs warnings for external signals with no matching handler
+    found in search paths. Default: True.
+    """

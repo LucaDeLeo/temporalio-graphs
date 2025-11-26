@@ -32,6 +32,7 @@ from temporalio_graphs.generator import PathPermutationGenerator
 from temporalio_graphs.helpers import to_decision, wait_condition
 from temporalio_graphs.path import GraphPath
 from temporalio_graphs.renderer import MermaidRenderer
+from temporalio_graphs.resolver import SignalNameResolver
 from temporalio_graphs.signal_graph_analyzer import PeerSignalGraphAnalyzer
 from temporalio_graphs.validator import ValidationReport, ValidationWarning, validate_workflow
 
@@ -41,6 +42,7 @@ __all__ = [
     "GraphBuildingContext",
     "analyze_workflow",
     "analyze_workflow_graph",
+    "analyze_signal_graph",
     "to_decision",
     "wait_condition",
     "ValidationWarning",
@@ -237,6 +239,120 @@ def analyze_workflow(
         output_path.write_text(result, encoding="utf-8")
 
     return result
+
+
+def analyze_signal_graph(
+    entry_workflow: Path | str,
+    search_paths: list[Path | str] | None = None,
+    context: GraphBuildingContext | None = None,
+) -> str:
+    """Analyze workflows and visualize cross-workflow signal connections.
+
+    Starting from an entry workflow, discovers all connected workflows by
+    following external signal sends to their signal handlers. Renders the
+    complete signal flow graph as a Mermaid diagram with subgraphs.
+
+    This function performs static code analysis to map signal relationships
+    between peer workflows (A signals B, B signals C, etc.). It builds a
+    complete graph of all interconnected workflows reachable via signal
+    connections.
+
+    Args:
+        entry_workflow: Path to the entry point workflow file (.py).
+            Can be absolute or relative path, as string or Path object.
+            Must contain a valid @workflow.defn decorated class.
+        search_paths: Directories to search for target workflows containing
+            signal handlers. If None, defaults to the directory containing
+            entry_workflow. Multiple paths can be specified to search across
+            different directories.
+        context: Configuration options for graph generation. If None,
+            uses GraphBuildingContext() defaults. Key options:
+            - signal_max_discovery_depth: Max recursion depth (default: 10)
+            - warn_unresolved_signals: Log warnings for unresolved signals
+
+    Returns:
+        Mermaid diagram string showing all connected workflows with signal
+        flow edges between them. Each workflow appears as a subgraph
+        containing its activities and signal handlers. Signal connections
+        are shown as dashed edges crossing subgraph boundaries.
+
+    Example:
+        Basic usage:
+
+        >>> from temporalio_graphs import analyze_signal_graph
+        >>> result = analyze_signal_graph("workflows/order_workflow.py")
+        >>> print(result)
+        ```mermaid
+        flowchart TB
+            subgraph OrderWorkflow
+                s_OrderWorkflow((Start)) --> ProcessOrder[Process Order]
+                ProcessOrder --> ext_sig_ship_45[/Signal 'ship_order'/]
+                ext_sig_ship_45 --> e_OrderWorkflow((End))
+            end
+
+            subgraph ShippingWorkflow
+                sig_handler_ship_order_23{{ship_order}}
+            end
+
+            ext_sig_ship_45 -.ship_order.-> sig_handler_ship_order_23
+        ```
+
+    Example:
+        With custom search paths:
+
+        >>> result = analyze_signal_graph(
+        ...     "order_workflow.py",
+        ...     search_paths=["workflows/", "services/"],
+        ... )
+
+    Raises:
+        FileNotFoundError: If entry_workflow does not exist.
+        WorkflowParseError: If entry_workflow cannot be parsed or does not
+            contain a valid @workflow.defn decorated class.
+
+    Note:
+        This function was added in Epic 8 for cross-workflow signal
+        visualization. Use analyze_workflow() for single-workflow analysis
+        or analyze_workflow_graph() for parent-child workflow relationships.
+
+        Signal resolution is by name: signals with name "ship_order" are
+        connected to @workflow.signal handlers with the same name.
+    """
+    # Validate inputs
+    if entry_workflow is None:
+        raise ValueError("entry_workflow parameter required, cannot be None")
+
+    entry_path = Path(entry_workflow)
+
+    # Check file exists
+    if not entry_path.exists():
+        raise FileNotFoundError(f"Workflow file not found: {entry_path}")
+
+    # Default search paths to entry workflow's directory
+    if search_paths is None:
+        resolved_paths = [entry_path.parent]
+    else:
+        resolved_paths = [Path(p) for p in search_paths]
+
+    # Create default context if not provided
+    if context is None:
+        context = GraphBuildingContext()
+
+    # Create resolver and analyzer
+    resolver = SignalNameResolver(resolved_paths)
+    analyzer = PeerSignalGraphAnalyzer(
+        search_paths=resolved_paths,
+        resolver=resolver,
+        max_depth=context.signal_max_discovery_depth,
+        context=context,
+    )
+
+    # Analyze entry workflow and build signal graph
+    graph = analyzer.analyze(entry_path)
+
+    # Render to Mermaid
+    renderer = MermaidRenderer()
+    return renderer.render_signal_graph(graph, context)
 
 
 def analyze_workflow_graph(
