@@ -13,28 +13,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Status
 
-**Production-Ready ✅ - Real-World Validated** - Core features complete, tested on real repositories.
+**Production-Ready - Cross-Workflow Signal Visualization Complete** - Epics 1-8 complete, full signal chain visualization supported.
 
-**Completed Epics (1-5):**
-- Epic 1: Foundation & Project Setup ✅
-- Epic 2: Basic Graph Generation (Linear Workflows) ✅
-- Epic 3: Decision Node Support (Branching Workflows) ✅
-- Epic 4: Signal & Wait Condition Support ✅
-- Epic 5: Production Hardening & Quality ✅
+**Completed Epics (1-8):**
+- Epic 1: Foundation & Project Setup
+- Epic 2: Basic Graph Generation (Linear Workflows)
+- Epic 3: Decision Node Support (Branching Workflows)
+- Epic 4: Signal & Wait Condition Support
+- Epic 5: Production Hardening & Quality
+- Epic 6: Cross-Workflow Visualization (Parent-Child)
+- Epic 7: Peer-to-Peer Workflow Signaling (External Signals)
+- Epic 8: Cross-Workflow Signal Visualization (Connected Subgraphs)
 
 **Real-World Testing (2025-11-19):**
-- ✅ Tested on Official Temporal Python samples (20+ workflows)
-- ✅ Tested on Production AI agent workflow
-- ✅ 3 critical bugs found and fixed (execute_activity_method, ChildWorkflow.run, wait_condition)
-- ✅ 100% success rate on real-world workflows (after fixes)
-- 📄 See REAL_WORLD_TESTING_REPORT.md for details
+- Tested on Official Temporal Python samples (20+ workflows)
+- Tested on Production AI agent workflow
+- 3 critical bugs found and fixed (execute_activity_method, ChildWorkflow.run, wait_condition)
+- 100% success rate on real-world workflows (after fixes)
+- See REAL_WORLD_TESTING_REPORT.md for details
 
 **Quality Metrics:**
-- 547 tests passing, 91% coverage
-- <1.5s test execution time
-- Mypy strict mode: ✅ passing
-- Ruff linting: ✅ passing
-- Real-world validation: ✅ passed
+- 716 tests passing, 88% coverage
+- <2s test execution time
+- Mypy strict mode: passing
+- Ruff linting: passing
+- Real-world validation: passed
 
 See `/spike/EXECUTIVE_SUMMARY.md` for architectural decision rationale.
 
@@ -75,7 +78,12 @@ temporalio-graphs analyze workflow.py --output diagram.md
 5. **MermaidRenderer** (`renderer.py`) - Converts execution paths to Mermaid flowchart syntax
 6. **Validator** (`validator.py`) - Detects workflow quality issues (unreachable activities)
 7. **Error Handler** (`exceptions.py`) - Comprehensive exception hierarchy with actionable messages
-8. **Public API** (`__init__.py`) - analyze_workflow() function with GraphBuildingContext configuration
+8. **Public API** (`__init__.py`) - analyze_workflow(), analyze_workflow_graph(), analyze_signal_graph()
+9. **WorkflowCallGraphAnalyzer** (`call_graph_analyzer.py`) - Multi-workflow analysis for parent-child relationships (Epic 6)
+10. **ExternalSignalDetector** (`external_signal_detector.py`) - Detects peer-to-peer signal sends (Epic 7)
+11. **SignalHandlerDetector** (`signal_handler_detector.py`) - Detects @workflow.signal handlers (Epic 8)
+12. **SignalNameResolver** (`resolver.py`) - Resolves signals to target workflow handlers (Epic 8)
+13. **PeerSignalGraphAnalyzer** (`signal_graph_analyzer.py`) - Builds cross-workflow signal graphs (Epic 8)
 
 ### Key Design Patterns
 
@@ -160,18 +168,19 @@ class GraphGenerationError(TemporalioGraphsError): ...
   └── _internal/
       └── graph_models.py        # WorkflowMetadata, DecisionPoint, SignalPoint
 
-/tests/                          # Test suite (406 tests, 95% coverage)
+/tests/                          # Test suite (716 tests, 88% coverage)
   ├── test_*.py                  # Unit tests
   ├── integration/               # Integration tests
   │   ├── test_signal_workflow.py
   │   └── test_validation_warnings.py
   └── fixtures/                  # Test fixtures
 
-/examples/                       # Working examples (Epic 2-4)
+/examples/                       # Working examples (Epic 2-8)
   ├── simple_linear/             # 3 sequential activities
   ├── money_transfer/            # 2 decisions, 4 paths
   ├── signal_workflow/           # Signal/wait condition example
-  └── order_processing/          # Real-world order workflow (2 decisions, signals, 8 paths)
+  ├── order_processing/          # Real-world order workflow (2 decisions, signals, 8 paths)
+  └── signal_flow/               # Cross-workflow signal chain (Order -> Shipping -> Notification)
 
 /docs/                           # Documentation & sprint artifacts
   ├── sprint-artifacts/

@@ -65,6 +65,30 @@ context = GraphBuildingContext(
 ```
 Key defaults: start/end labels `"Start"`/`"End"`, decision edge labels `"yes"`/`"no"`, signal edges `"Signaled"`/`"Timeout"`.
 
+### Signal Visualization Options (Epic 8)
+For `analyze_signal_graph()`, additional context options control signal discovery:
+```python
+context = GraphBuildingContext(
+    # Maximum recursion depth for signal-based workflow discovery (default: 10)
+    signal_max_discovery_depth=10,
+    # Emit warnings for signals that cannot be resolved to handlers (default: True)
+    warn_unresolved_signals=True,
+    # Strategy: "by_name" (default), "explicit", or "hybrid"
+    signal_resolution_strategy="by_name",
+    # Visualization mode: "subgraph" (default) or "unified"
+    signal_visualization_mode="subgraph",
+)
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `resolve_signal_targets` | `bool` | `False` | Enable signal resolution for cross-workflow visualization |
+| `signal_target_search_paths` | `tuple[Path, ...]` | `()` | Additional directories to search for target workflows |
+| `signal_resolution_strategy` | `Literal` | `"by_name"` | Strategy: `"by_name"`, `"explicit"`, `"hybrid"` |
+| `signal_visualization_mode` | `Literal` | `"subgraph"` | Mode: `"subgraph"` or `"unified"` |
+| `signal_max_discovery_depth` | `int` | `10` | Maximum recursion depth for signal chain discovery |
+| `warn_unresolved_signals` | `bool` | `True` | Emit warnings for unresolved signals |
+
 ## Multi-workflow graphs
 Use `analyze_workflow_graph()` when a parent workflow spawns children via `execute_child_workflow()`.
 ```python
@@ -82,21 +106,85 @@ diagram = analyze_workflow_graph(
 - `inline`: full end-to-end paths across parent and children.
 - `subgraph`: separate Mermaid subgraphs for each workflow.
 
+## Cross-Workflow Signal Visualization
+Use `analyze_signal_graph()` when workflows communicate via peer-to-peer signals (external workflow handles).
+```python
+from temporalio_graphs import analyze_signal_graph
+
+# Analyze workflows connected by signals (Order -> Shipping -> Notification)
+diagram = analyze_signal_graph(
+    "workflows/order_workflow.py",
+    search_paths=["workflows/"],
+)
+print(diagram)  # Mermaid diagram with connected subgraphs
+```
+
+Example output showing three workflows connected by signals:
+```mermaid
+flowchart TB
+    subgraph OrderWorkflow
+        s_Order((Start)) --> ProcessOrder[Process Order]
+        ProcessOrder --> ext_sig_ship[/Signal 'ship_order'\]
+        ext_sig_ship --> e_Order((End))
+    end
+
+    subgraph ShippingWorkflow
+        sig_handler_ship{{ship_order}}
+        s_Ship((Start)) --> ShipPackage[Ship Package]
+        ShipPackage --> ext_sig_notify[/Signal 'notify_shipped'\]
+    end
+
+    subgraph NotificationWorkflow
+        sig_handler_notify{{notify_shipped}}
+    end
+
+    %% Cross-workflow signal connections
+    ext_sig_ship -.ship_order.-> sig_handler_ship
+    ext_sig_notify -.notify_shipped.-> sig_handler_notify
+
+    %% Signal handler styling
+    style sig_handler_ship fill:#e6f3ff,stroke:#0066cc
+    style sig_handler_notify fill:#e6f3ff,stroke:#0066cc
+```
+
+### Signal Visualization Syntax
+| Element | Mermaid Syntax | Purpose |
+|---------|---------------|---------|
+| Subgraph wrapper | `subgraph Name ... end` | Groups workflow nodes |
+| Signal handler | `{{signal_name}}` | Hexagon for signal reception |
+| External signal | `[/Signal 'name'\]` | Trapezoid for signal send |
+| Cross-workflow edge | `-.signal_name.->` | Dashed edge between workflows |
+| Handler styling | `fill:#e6f3ff,stroke:#0066cc` | Blue color for hexagons |
+| Unresolved signal | `[/?/]` | Warning node when handler not found |
+
+### Signal Types Comparison
+| Signal Type | Function | Shape |
+|-------------|----------|-------|
+| Internal (Epic 4) | `wait_condition()` | Hexagon `{{name}}` |
+| Parent-Child (Epic 6) | `execute_child_workflow()` | Subroutine `[[name]]` |
+| Peer-to-Peer (Epic 7-8) | `get_external_workflow_handle().signal()` | Trapezoid + Hexagon |
+
 ## Examples
-Run the curated examples (linear, branching, signals, multi-decision):
+Run the curated examples (linear, branching, signals, multi-decision, cross-workflow signals):
 ```bash
 make run-examples
 # or individually
-python examples/simple_linear/run.py
-python examples/money_transfer/run.py
-python examples/signal_workflow/run.py
-python examples/multi_decision/run.py
+python examples/simple_linear/run.py        # Linear workflow (Epic 2)
+python examples/money_transfer/run.py       # Decision branches (Epic 3)
+python examples/signal_workflow/run.py      # Wait conditions (Epic 4)
+python examples/multi_decision/run.py       # Multiple decisions
+python examples/signal_flow/run.py          # Cross-workflow signals (Epic 8)
 ```
 
+The `examples/signal_flow/` directory demonstrates peer-to-peer workflow signaling with three connected workflows (Order -> Shipping -> Notification). See `expected_output.md` for the expected Mermaid diagram.
+
 ## Troubleshooting
-- Too many branches: raise `max_decision_points` / `max_paths` in `GraphBuildingContext` or simplify the workflow; errors include the calculated path count.
-- Names missing: decision/signal names must be string literals; variables and f-strings are ignored by static analysis.
-- Unsupported flow: loops or dynamic activity names are not graphed; refactor to explicit steps or decisions.
+- **Too many branches**: Raise `max_decision_points` / `max_paths` in `GraphBuildingContext` or simplify the workflow; errors include the calculated path count.
+- **Names missing**: Decision/signal names must be string literals; variables and f-strings are ignored by static analysis.
+- **Unsupported flow**: Loops or dynamic activity names are not graphed; refactor to explicit steps or decisions.
+- **Signals not resolved**: Ensure `search_paths` includes directories containing target workflow files with `@workflow.signal` handlers.
+- **Unresolved signal `[/?/]` node**: Target workflow not found in search paths or no matching `@workflow.signal` handler exists. Check that signal name matches handler method name.
+- **Multiple handlers warning**: Multiple workflows handle the same signal name. This may be intentional (e.g., broadcast signals) or indicate naming conflicts. Review handler implementations.
 
 ## Development
 ```bash

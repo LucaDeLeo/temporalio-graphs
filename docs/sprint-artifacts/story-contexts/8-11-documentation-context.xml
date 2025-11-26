@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML: 8-11-documentation
+  Generated: 2025-11-26
+  Purpose: Comprehensive context for implementing Story 8-11 (Documentation)
+
+  This is a DOCUMENTATION-ONLY story. No code changes are required.
+  The context focuses on existing files to update with new Epic 8 documentation.
+-->
+<story-context version="1.0">
+
+  <!-- ==================== STORY REFERENCE ==================== -->
+  <story-reference>
+    <story-id>8-11</story-id>
+    <story-key>8-11-documentation</story-key>
+    <name>Documentation</name>
+    <status>drafted</status>
+    <story-file>docs/sprint-artifacts/stories/8-11-documentation.md</story-file>
+    <epic>
+      <epic-id>8</epic-id>
+      <epic-name>Cross-Workflow Signal Visualization</epic-name>
+      <tech-spec>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec>
+      <version>v0.4.0</version>
+    </epic>
+    <description>
+      Documentation story for Epic 8 Cross-Workflow Signal Visualization feature.
+      Updates README.md with new analyze_signal_graph() function documentation,
+      GraphBuildingContext signal options, troubleshooting section, and updates
+      CLAUDE.md to reflect Epic 8 completion status.
+    </description>
+  </story-reference>
+
+  <!-- ==================== DOCUMENTATION ARTIFACTS ==================== -->
+  <documentation-artifacts>
+
+    <artifact type="primary-update">
+      <path>README.md</path>
+      <purpose>Main user-facing documentation - add Cross-Workflow Signal Visualization section</purpose>
+      <current-sections>
+        <section>What it does</section>
+        <section>Install</section>
+        <section>Quick start</section>
+        <section>Configuration (GraphBuildingContext)</section>
+        <section>Multi-workflow graphs</section>
+        <section>Examples</section>
+        <section>Troubleshooting</section>
+        <section>Development</section>
+        <section>Reference</section>
+      </current-sections>
+      <updates-required>
+        <update location="After 'Multi-workflow graphs' section">
+          Add new "Cross-Workflow Signal Visualization" section with:
+          - analyze_signal_graph() function documentation
+          - Quick example with Order -> Shipping signal flow
+          - Subgraph rendering mode explanation
+          - Signal visualization syntax reference
+        </update>
+        <update location="Configuration section">
+          Add 6 new GraphBuildingContext signal options documentation
+        </update>
+        <update location="Examples section">
+          Add reference to examples/signal_flow/
+        </update>
+        <update location="Troubleshooting section">
+          Add signal-related troubleshooting entries
+        </update>
+      </updates-required>
+    </artifact>
+
+    <artifact type="primary-update">
+      <path>CLAUDE.md</path>
+      <purpose>AI coding assistant guidance - update Epic completion status</purpose>
+      <current-completed-epics>
+        <epic>Epic 1: Foundation and Project Setup</epic>
+        <epic>Epic 2: Basic Graph Generation (Linear Workflows)</epic>
+        <epic>Epic 3: Decision Node Support (Branching Workflows)</epic>
+        <epic>Epic 4: Signal and Wait Condition Support</epic>
+        <epic>Epic 5: Production Hardening and Quality</epic>
+      </current-completed-epics>
+      <updates-required>
+        <update location="Current Status section">
+          Update to show Completed Epics (1-8)
+        </update>
+        <update location="Completed Epics list">
+          Add Epic 6, Epic 7, Epic 8 with descriptions
+        </update>
+        <update location="Quality Metrics">
+          Update test count to reflect current 716+ tests
+        </update>
+      </updates-required>
+    </artifact>
+
+  </documentation-artifacts>
+
+  <!-- ==================== REFERENCE MATERIALS ==================== -->
+  <reference-materials>
+
+    <reference type="example-usage">
+      <path>examples/signal_flow/run.py</path>
+      <purpose>Working example demonstrating analyze_signal_graph() usage</purpose>
+      <key-content>
+        - Import pattern: from temporalio_graphs import GraphBuildingContext, analyze_signal_graph
+        - Entry workflow path setup
+        - search_paths configuration
+        - analyze_signal_graph() function call
+        - Output explanation comments
+      </key-content>
+    </reference>
+
+    <reference type="expected-output">
+      <path>examples/signal_flow/expected_output.md</path>
+      <purpose>Golden reference for Mermaid output syntax and styling</purpose>
+      <key-content>
+        - Three-workflow signal chain diagram structure
+        - Subgraph syntax: subgraph WorkflowName ... end
+        - Signal handler hexagons: {{signal_name}}
+        - External signal trapezoids: [/Signal 'name' to target\]
+        - Cross-subgraph dashed edges: -.signal_name.->
+        - Handler styling: fill:#e6f3ff,stroke:#0066cc
+        - Unresolved signal rendering: [/?/]
+        - Syntax reference table
+      </key-content>
+    </reference>
+
+    <reference type="api-docstring">
+      <path>src/temporalio_graphs/__init__.py</path>
+      <purpose>Source of truth for analyze_signal_graph() docstring</purpose>
+      <function-signature>
+        def analyze_signal_graph(
+            entry_workflow: Path | str,
+            search_paths: list[Path | str] | None = None,
+            context: GraphBuildingContext | None = None,
+        ) -> str
+      </function-signature>
+      <key-parameters>
+        <param name="entry_workflow">Path to entry point workflow file (.py)</param>
+        <param name="search_paths">Directories to search for target workflows with signal handlers</param>
+        <param name="context">Configuration options including signal_max_discovery_depth, warn_unresolved_signals</param>
+      </key-parameters>
+      <return-value>Mermaid diagram string with subgraphs and signal connections</return-value>
+    </reference>
+
+    <reference type="context-options">
+      <path>src/temporalio_graphs/context.py</path>
+      <purpose>Source of truth for new GraphBuildingContext signal fields</purpose>
+      <new-fields>
+        <field name="resolve_signal_targets" type="bool" default="False">
+          Enable signal resolution for cross-workflow visualization
+        </field>
+        <field name="signal_target_search_paths" type="tuple[Path, ...]" default="()">
+          Additional directories to search for target workflows
+        </field>
+        <field name="signal_resolution_strategy" type="Literal['by_name', 'explicit', 'hybrid']" default="by_name">
+          Strategy for resolving signals to target workflows
+        </field>
+        <field name="signal_visualization_mode" type="Literal['subgraph', 'unified']" default="subgraph">
+          Mode for visualizing cross-workflow signal connections
+        </field>
+        <field name="signal_max_discovery_depth" type="int" default="10">
+          Maximum recursion depth for signal-based workflow discovery
+        </field>
+        <field name="warn_unresolved_signals" type="bool" default="True">
+          Emit warnings for signals that cannot be resolved to handlers
+        </field>
+      </new-fields>
+    </reference>
+
+    <reference type="tech-spec">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <purpose>Complete technical specification for Epic 8</purpose>
+      <relevant-sections>
+        <section>Overview - Before/After diagrams</section>
+        <section>Examples and Documentation scope (lines 86-91)</section>
+        <section>Data Models - SignalHandler, SignalConnection, PeerSignalGraph</section>
+        <section>API - analyze_signal_flow() (now analyze_signal_graph())</section>
+        <section>Mermaid Visualization syntax</section>
+        <section>Acceptance Criteria AC24 - Example Workflows</section>
+      </relevant-sections>
+    </reference>
+
+    <reference type="architecture">
+      <path>docs/architecture.md</path>
+      <purpose>Architecture decisions for signal visualization (ADR-012, ADR-013)</purpose>
+      <relevant-adrs>
+        <adr id="ADR-012">Peer-to-Peer Signal Detection</adr>
+        <adr id="ADR-013">Cross-Workflow Signal Visualization Strategy</adr>
+      </relevant-adrs>
+    </reference>
+
+  </reference-materials>
+
+  <!-- ==================== DEVELOPMENT CONSTRAINTS ==================== -->
+  <development-constraints>
+
+    <constraint type="documentation-only">
+      <description>This story involves NO code changes</description>
+      <allowed-modifications>
+        - README.md (documentation updates)
+        - CLAUDE.md (status updates)
+      </allowed-modifications>
+      <prohibited-modifications>
+        - src/**/*.py (no source code changes)
+        - tests/**/*.py (no test changes)
+        - pyproject.toml (no dependency changes)
+      </prohibited-modifications>
+    </constraint>
+
+    <constraint type="existing-patterns">
+      <description>Follow existing documentation patterns in README.md</description>
+      <patterns>
+        - Code examples use triple-backtick python blocks
+        - Configuration sections show GraphBuildingContext usage
+        - Troubleshooting entries follow format: Problem - Solution
+        - Examples section lists directories with brief descriptions
+      </patterns>
+    </constraint>
+
+    <constraint type="content-accuracy">
+      <description>Documentation must match actual implementation</description>
+      <requirements>
+        - Function signatures must match src/temporalio_graphs/__init__.py
+        - Context field names must match src/temporalio_graphs/context.py
+        - Mermaid syntax must match examples/signal_flow/expected_output.md
+        - Default values must match actual code defaults
+      </requirements>
+    </constraint>
+
+    <constraint type="verification">
+      <description>Run tests to ensure no regressions from doc changes</description>
+      <commands>
+        <command>pytest -v</command>
+        <command>mypy src/temporalio_graphs/</command>
+        <command>ruff check src/temporalio_graphs/</command>
+      </commands>
+    </constraint>
+
+  </development-constraints>
+
+  <!-- ==================== IMPLEMENTATION NOTES ==================== -->
+  <implementation-notes>
+
+    <note category="readme-section-structure">
+      <title>Cross-Workflow Signal Visualization Section</title>
+      <content>
+        New section should follow this structure:
+
+        ## Cross-Workflow Signal Visualization
+
+        Use `analyze_signal_graph()` when workflows communicate via signals
+        (peer-to-peer workflow communication).
+
+        ```python
+        from temporalio_graphs import analyze_signal_graph, GraphBuildingContext
+
+        # Analyze workflows connected by signals
+        diagram = analyze_signal_graph(
+            "workflows/order_workflow.py",
+            search_paths=["workflows/"],
+        )
+        print(diagram)  # Mermaid diagram with connected subgraphs
+        ```
+
+        ### Signal Flow Example
+        - Describe Order -> Shipping -> Notification chain
+        - Reference examples/signal_flow/
+
+        ### Visualization Syntax
+        - Subgraph syntax: `subgraph WorkflowName ... end`
+        - Signal handlers (hexagons): `{{signal_name}}`
+        - External signals (trapezoids): `[/Signal 'name' to target\]`
+        - Cross-workflow edges (dashed): `-.signal_name.->`
+        - Handler styling: `fill:#e6f3ff,stroke:#0066cc`
+      </content>
+    </note>
+
+    <note category="context-options-documentation">
+      <title>GraphBuildingContext Signal Options</title>
+      <content>
+        Add to Configuration section:
+
+        ### Signal Visualization Options (Epic 8)
+
+        ```python
+        context = GraphBuildingContext(
+            # Signal discovery depth (default: 10)
+            signal_max_discovery_depth=10,
+
+            # Warn when signal has no handler (default: True)
+            warn_unresolved_signals=True,
+
+            # Resolution strategy: "by_name", "explicit", "hybrid"
+            signal_resolution_strategy="by_name",
+
+            # Visualization mode: "subgraph" or "unified"
+            signal_visualization_mode="subgraph",
+        )
+        ```
+      </content>
+    </note>
+
+    <note category="troubleshooting-entries">
+      <title>Signal Troubleshooting Entries</title>
+      <content>
+        Add these entries to Troubleshooting section:
+
+        - **Signals not resolved**: Ensure `search_paths` includes directories
+          containing target workflow files with @workflow.signal handlers.
+
+        - **Unresolved signal [/?/] node**: Target workflow not found in search
+          paths or no matching @workflow.signal handler exists. Check signal
+          name matches handler method name.
+
+        - **Multiple handlers warning**: Multiple workflows handle the same
+          signal name. This may be intentional (e.g., broadcast signals) or
+          indicate naming conflicts. Review handler implementations.
+      </content>
+    </note>
+
+    <note category="claude-md-updates">
+      <title>CLAUDE.md Epic Status Updates</title>
+      <content>
+        Update "Current Status" section:
+
+        **Completed Epics (1-8):**
+        - Epic 1: Foundation and Project Setup
+        - Epic 2: Basic Graph Generation (Linear Workflows)
+        - Epic 3: Decision Node Support (Branching Workflows)
+        - Epic 4: Signal and Wait Condition Support
+        - Epic 5: Production Hardening and Quality
+        - Epic 6: Cross-Workflow Visualization (Parent-Child)
+        - Epic 7: Peer-to-Peer Workflow Signaling (External Signals)
+        - Epic 8: Cross-Workflow Signal Visualization (Connected Subgraphs)
+
+        Update Quality Metrics:
+        - 716+ tests passing (from 547)
+        - ~88% coverage (from 91%)
+      </content>
+    </note>
+
+    <note category="signal-type-comparison">
+      <title>Signal Types Reference for Documentation</title>
+      <content>
+        Include comparison in documentation:
+
+        | Signal Type | Epic | Function | Visualization |
+        |-------------|------|----------|---------------|
+        | Internal | 4 | wait_condition() | Hexagon {{name}} |
+        | Parent-Child | 6 | execute_child_workflow() | Subroutine [[name]] |
+        | Peer-to-Peer | 7-8 | get_external_workflow_handle().signal() | Trapezoid + Hexagon handler |
+      </content>
+    </note>
+
+  </implementation-notes>
+
+  <!-- ==================== ACCEPTANCE CRITERIA MAPPING ==================== -->
+  <acceptance-criteria-mapping>
+
+    <criterion id="AC1" description="README.md Updated">
+      <verification>README.md includes Cross-Workflow Signal Visualization section</verification>
+      <files>README.md</files>
+    </criterion>
+
+    <criterion id="AC2" description="analyze_signal_graph() Documented">
+      <verification>Function documentation with parameters, return value, examples</verification>
+      <files>README.md</files>
+    </criterion>
+
+    <criterion id="AC3" description="GraphBuildingContext Signal Options">
+      <verification>All 6 new context fields documented with descriptions</verification>
+      <files>README.md</files>
+      <fields>
+        resolve_signal_targets, signal_target_search_paths, signal_resolution_strategy,
+        signal_visualization_mode, signal_max_discovery_depth, warn_unresolved_signals
+      </fields>
+    </criterion>
+
+    <criterion id="AC4" description="CLAUDE.md Epic 8 Status Updated">
+      <verification>Current Status reflects Epic 8 completion, updated epic list</verification>
+      <files>CLAUDE.md</files>
+    </criterion>
+
+    <criterion id="AC5" description="examples/signal_flow/ Documented">
+      <verification>Signal flow example referenced in README Examples section</verification>
+      <files>README.md</files>
+    </criterion>
+
+    <criterion id="AC6" description="Signal Visualization Syntax Documented">
+      <verification>Subgraph, hexagon, trapezoid, dashed edge syntax explained</verification>
+      <files>README.md</files>
+    </criterion>
+
+    <criterion id="AC7" description="Troubleshooting Section Updated">
+      <verification>Signal-related troubleshooting entries added</verification>
+      <files>README.md</files>
+    </criterion>
+
+    <criterion id="AC8" description="No Regressions">
+      <verification>All existing tests pass after documentation updates</verification>
+      <command>pytest -v</command>
+    </criterion>
+
+  </acceptance-criteria-mapping>
+
+  <!-- ==================== NEXT STEPS ==================== -->
+  <next-steps>
+    <step order="1">Read current README.md structure and content</step>
+    <step order="2">Add Cross-Workflow Signal Visualization section after Multi-workflow graphs</step>
+    <step order="3">Document analyze_signal_graph() with examples</step>
+    <step order="4">Add GraphBuildingContext signal options to Configuration section</step>
+    <step order="5">Add signal_flow to Examples section</step>
+    <step order="6">Add signal troubleshooting entries</step>
+    <step order="7">Update CLAUDE.md Current Status section</step>
+    <step order="8">Update CLAUDE.md completed epics list (1-8)</step>
+    <step order="9">Run verification: pytest -v, mypy, ruff check</step>
+    <step order="10">Update sprint-status.yaml: 8-11-documentation -> done</step>
+  </next-steps>
+
+</story-context>
