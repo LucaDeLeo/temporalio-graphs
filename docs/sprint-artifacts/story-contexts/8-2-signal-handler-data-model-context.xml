@@ -1,0 +1,505 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-key>8-2-signal-handler-data-model</story-key>
+    <story-title>Signal Handler Data Model</story-title>
+    <epic>Epic 8: Cross-Workflow Signal Visualization</epic>
+    <status>drafted</status>
+    <generated-date>2025-11-26</generated-date>
+    <depends-on>8-1-signal-handler-detector</depends-on>
+  </metadata>
+
+  <story-reference>
+    <path>docs/sprint-artifacts/stories/8-2-signal-handler-data-model.md</path>
+    <description>Story file with acceptance criteria, tasks, and dev notes for extending WorkflowMetadata with signal_handlers field and integrating SignalHandlerDetector into analyzer pipeline</description>
+  </story-reference>
+
+  <epic-context>
+    <tech-spec>
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Epic 8 Technical Specification - Cross-Workflow Signal Visualization</description>
+      <relevant-sections>
+        <section lines="243-250">WorkflowMetadata Extension - signal_handlers: tuple[SignalHandler, ...] = () field</section>
+        <section lines="154-187">SignalHandler Dataclass specification (already implemented in Story 8.1)</section>
+        <section lines="943-955">AC5-AC6: SignalHandler data model and WorkflowMetadata extension acceptance criteria</section>
+        <section lines="119-126">Component alignment: analyzer.py integration with SignalHandlerDetector</section>
+      </relevant-sections>
+    </tech-spec>
+    <architecture>
+      <path>docs/architecture.md</path>
+      <description>Project architecture document with ADRs and implementation patterns</description>
+      <relevant-sections>
+        <section name="ADR-001">Static Analysis vs Runtime Interceptors - detection via AST only</section>
+        <section name="ADR-006">mypy strict mode - complete type hints required</section>
+        <section name="ADR-010">pytest 80% coverage requirement</section>
+        <section name="ADR-013">Cross-Workflow Signal Visualization Strategy</section>
+        <section lines="466-537">WorkflowMetadata dataclass definition with all fields</section>
+      </relevant-sections>
+    </architecture>
+  </epic-context>
+
+  <documentation-artifacts>
+    <artifact type="project-readme">
+      <path>CLAUDE.md</path>
+      <description>Project overview, commands, architecture, and conventions</description>
+      <relevance>Establishes project conventions, testing standards (pytest), code quality tools (mypy, ruff)</relevance>
+    </artifact>
+    <artifact type="predecessor-story">
+      <path>docs/sprint-artifacts/stories/8-1-signal-handler-detector.md</path>
+      <description>Story 8.1 that created SignalHandler dataclass and SignalHandlerDetector</description>
+      <relevance>8.2 depends on SignalHandler class at graph_models.py:424-463 and SignalHandlerDetector at detector.py:1020-1189</relevance>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface type="target-dataclass-location">
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Graph data models including WorkflowMetadata - the primary modification target</description>
+      <relevance>signal_handlers field must be added to WorkflowMetadata dataclass</relevance>
+      <key-patterns>
+        <pattern name="SignalHandler-dataclass" lines="424-463">
+          <![CDATA[
+@dataclass(frozen=True)
+class SignalHandler:
+    """Represents a @workflow.signal decorated method in a workflow class."""
+    signal_name: str
+    method_name: str
+    workflow_class: str
+    source_line: int
+    node_id: str
+          ]]>
+          <description>SignalHandler dataclass from Story 8.1 - already complete</description>
+        </pattern>
+        <pattern name="WorkflowMetadata-current" lines="466-583">
+          <![CDATA[
+@dataclass
+class WorkflowMetadata:
+    """Metadata describing a workflow and its graph characteristics."""
+    workflow_class: str
+    workflow_run_method: str
+    activities: list[Activity]
+    decision_points: list[DecisionPoint]
+    signal_points: list[SignalPoint]
+    source_file: Path
+    total_paths: int
+    child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
+    external_signals: tuple[ExternalSignalCall, ...] = ()
+    # ADD: signal_handlers: tuple[SignalHandler, ...] = () after external_signals
+          ]]>
+          <description>Current WorkflowMetadata - signal_handlers field must be added after external_signals line 536</description>
+        </pattern>
+        <pattern name="external_signals-pattern" lines="536">
+          <description>Pattern to follow: external_signals uses tuple with empty default () for immutability</description>
+          <code>external_signals: tuple[ExternalSignalCall, ...] = ()</code>
+        </pattern>
+      </key-patterns>
+      <modification-location>Line 537 (after external_signals field, before @staticmethod)</modification-location>
+    </interface>
+
+    <interface type="analyzer-integration">
+      <path>src/temporalio_graphs/analyzer.py</path>
+      <description>WorkflowAnalyzer class that coordinates all detectors</description>
+      <relevance>Must integrate SignalHandlerDetector following ExternalSignalDetector pattern</relevance>
+      <key-patterns>
+        <pattern name="detector-imports" lines="29-34">
+          <![CDATA[
+from temporalio_graphs.detector import (
+    ChildWorkflowDetector,
+    DecisionDetector,
+    ExternalSignalDetector,
+    SignalDetector,
+)
+# ADD: SignalHandlerDetector to this import
+          ]]>
+          <description>Import location - add SignalHandlerDetector</description>
+        </pattern>
+        <pattern name="external-signal-detector-integration" lines="219-224">
+          <![CDATA[
+        # Detect external signal calls using ExternalSignalDetector
+        external_signal_detector = ExternalSignalDetector()
+        external_signal_detector.set_source_workflow(self._workflow_class)
+        external_signal_detector.set_file_path(path)
+        external_signal_detector.visit(tree)
+        external_signals = external_signal_detector.external_signals
+          ]]>
+          <description>Pattern to follow for SignalHandlerDetector integration</description>
+        </pattern>
+        <pattern name="metadata-construction" lines="258-268">
+          <![CDATA[
+        return WorkflowMetadata(
+            workflow_class=self._workflow_class,
+            workflow_run_method=self._workflow_run_method,
+            activities=activities,
+            decision_points=decision_points,
+            signal_points=signal_points,
+            child_workflow_calls=child_workflow_calls,
+            external_signals=tuple(external_signals),
+            source_file=path,
+            total_paths=total_paths,
+        )
+# ADD: signal_handlers=signal_handlers parameter after external_signals
+          ]]>
+          <description>WorkflowMetadata construction - add signal_handlers parameter</description>
+        </pattern>
+      </key-patterns>
+      <integration-location>After ExternalSignalDetector block (line 224), add SignalHandlerDetector block</integration-location>
+    </interface>
+
+    <interface type="signal-handler-detector">
+      <path>src/temporalio_graphs/detector.py</path>
+      <description>SignalHandlerDetector class implemented in Story 8.1</description>
+      <relevance>Detector is ready to use - import and integrate in analyzer</relevance>
+      <key-patterns>
+        <pattern name="SignalHandlerDetector-class" lines="1020-1189">
+          <description>Complete SignalHandlerDetector implementation with set_workflow_class(), visit(), handlers property</description>
+        </pattern>
+        <pattern name="set_workflow_class-method" lines="1064-1070">
+          <code>def set_workflow_class(self, name: str) -> None:</code>
+          <description>Context setter to call before visiting AST - sets workflow_class for handler metadata</description>
+        </pattern>
+        <pattern name="handlers-property" lines="1181-1189">
+          <code>@property
+def handlers(self) -> list[SignalHandler]:
+    """Get detected signal handlers (copy for immutability)."""
+    return list(self._handlers)</code>
+          <description>Returns list of SignalHandler objects - convert to tuple for WorkflowMetadata</description>
+        </pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="test-file-target">
+      <path>tests/test_graph_models.py</path>
+      <description>Unit tests for graph models including WorkflowMetadata</description>
+      <relevance>Add tests for signal_handlers field on WorkflowMetadata</relevance>
+      <key-patterns>
+        <pattern name="metadata-instantiation-test" lines="114-133">
+          <![CDATA[
+def test_workflow_metadata_instantiation() -> None:
+    """Create WorkflowMetadata instance and verify all fields."""
+    metadata = WorkflowMetadata(
+        workflow_class="MoneyTransferWorkflow",
+        workflow_run_method="run",
+        activities=["Withdraw", "CurrencyConvert", "Deposit"],
+        decision_points=["NeedToConvert", "IsTFN_Known"],
+        signal_points=[],
+        source_file=Path("workflows.py"),
+        total_paths=4,
+    )
+    # Test relies on default values for child_workflow_calls, external_signals
+    # ADD: verify signal_handlers default to empty tuple
+          ]]>
+          <description>Pattern for testing WorkflowMetadata - verify signal_handlers field</description>
+        </pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="analyzer-test-file">
+      <path>tests/test_analyzer.py</path>
+      <description>Tests for WorkflowAnalyzer</description>
+      <relevance>Add integration test for analyzer signal handler detection</relevance>
+      <key-patterns>
+        <pattern name="analyzer-fixture" lines="16-25">
+          <code>@pytest.fixture
+def analyzer() -> WorkflowAnalyzer:
+    """Create a WorkflowAnalyzer instance for testing."""
+    return WorkflowAnalyzer()
+
+@pytest.fixture
+def fixtures_dir() -> Path:
+    """Path to test fixtures directory."""
+    return Path(__file__).parent / "fixtures" / "sample_workflows"</code>
+          <description>Standard fixtures for analyzer tests</description>
+        </pattern>
+        <pattern name="metadata-assertion-pattern" lines="31-36">
+          <code>def test_analyzer_detects_workflow_defn_decorator(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    metadata = analyzer.analyze(workflow_file)
+    assert metadata.workflow_class == "MyWorkflow"</code>
+          <description>Pattern for testing metadata fields after analysis</description>
+        </pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="detector-tests">
+      <path>tests/test_detector.py</path>
+      <description>Comprehensive detector tests including SignalHandlerDetector tests from Story 8.1</description>
+      <relevance>Reference for SignalHandlerDetector test patterns - tests already exist</relevance>
+      <key-patterns>
+        <pattern name="signal-handler-detector-tests" lines="2025-2340">
+          <description>TestSignalHandlerDetectorBasic, TestSignalHandlerNameExtraction, TestSignalHandlerDataclass, TestSignalHandlerEdgeCases - comprehensive test coverage from Story 8.1</description>
+        </pattern>
+      </key-patterns>
+    </interface>
+
+    <interface type="sample-workflow-fixture">
+      <path>examples/peer_signal_workflow/shipping_workflow.py</path>
+      <description>Example workflow with @workflow.signal handler for integration testing</description>
+      <relevance>Real-world example of signal handler pattern for testing analyzer integration</relevance>
+      <code-sample lines="66-78">
+        <![CDATA[
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        """Receive ship_order signal from Order workflow."""
+        self.should_ship = True
+        self.order_id = order_id
+        ]]>
+      </code-sample>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint type="architecture" source="ADR-001">
+      <description>Static Analysis Only - Signal handler detection via AST traversal</description>
+      <impact>Integration uses existing SignalHandlerDetector which analyzes AST, no workflow execution</impact>
+    </constraint>
+
+    <constraint type="immutability" source="ADR-001 / tech-spec">
+      <description>signal_handlers field uses tuple (immutable) not list</description>
+      <impact>Convert list from detector.handlers to tuple: tuple(signal_handler_detector.handlers)</impact>
+    </constraint>
+
+    <constraint type="type-safety" source="ADR-006">
+      <description>mypy strict mode - Complete type hints required</description>
+      <impact>signal_handlers field type: tuple[SignalHandler, ...] = ()</impact>
+    </constraint>
+
+    <constraint type="backward-compatibility" source="story-ac-8">
+      <description>All existing tests must pass - signal_handlers has default empty tuple</description>
+      <impact>Default value () ensures no breaking changes to existing WorkflowMetadata usage</impact>
+    </constraint>
+
+    <constraint type="test-coverage" source="ADR-010">
+      <description>80%+ coverage, verify no regressions</description>
+      <impact>Add unit tests for new field, run full test suite (617+ tests)</impact>
+    </constraint>
+
+    <constraint type="field-ordering" source="story-dev-notes">
+      <description>signal_handlers field placed after external_signals for logical grouping (Epic 7 -> Epic 8 order)</description>
+      <impact>Insert at line 537 in graph_models.py after external_signals</impact>
+    </constraint>
+
+    <constraint type="detector-integration-pattern" source="analyzer.py">
+      <description>Follow established detector integration pattern from ExternalSignalDetector</description>
+      <impact>1) Create detector instance, 2) Set context (workflow class), 3) Visit tree, 4) Get results as tuple</impact>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <external-dependency>
+      <package>temporalio</package>
+      <version>>=1.7.1</version>
+      <usage>workflow decorators (not used directly in this story)</usage>
+    </external-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs._internal.graph_models.SignalHandler</module>
+      <usage>Dataclass for signal handler metadata (created in Story 8.1)</usage>
+      <status>AVAILABLE - lines 424-463 in graph_models.py</status>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.detector.SignalHandlerDetector</module>
+      <usage>AST detector for @workflow.signal handlers (created in Story 8.1)</usage>
+      <status>AVAILABLE - lines 1020-1189 in detector.py</status>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.analyzer.WorkflowAnalyzer</module>
+      <usage>Target for SignalHandlerDetector integration</usage>
+      <status>MODIFICATION TARGET</status>
+    </internal-dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-framework>pytest</test-framework>
+    <coverage-target>80%+ (verify no regression from 91%)</coverage-target>
+    <existing-tests-count>617+</existing-tests-count>
+    <coverage-command>pytest --cov=src/temporalio_graphs --cov-report=term-missing</coverage-command>
+    <type-check-command>mypy src/temporalio_graphs/</type-check-command>
+    <lint-command>ruff check src/temporalio_graphs/</lint-command>
+
+    <test-files>
+      <test-file path="tests/test_graph_models.py">
+        <description>Unit tests for graph models - add signal_handlers field tests</description>
+        <new-tests-required>
+          <test>test_workflow_metadata_signal_handlers_default() - verify empty tuple default</test>
+          <test>test_workflow_metadata_signal_handlers_populated() - verify tuple contains handlers</test>
+          <test>test_workflow_metadata_signal_handlers_immutable() - verify tuple immutability</test>
+        </new-tests-required>
+      </test-file>
+      <test-file path="tests/test_analyzer.py">
+        <description>Integration tests for WorkflowAnalyzer - add signal handler detection test</description>
+        <new-tests-required>
+          <test>test_analyzer_detects_signal_handlers() - analyze workflow with @workflow.signal handlers</test>
+        </new-tests-required>
+        <fixture-needed>Workflow file with @workflow.signal decorated methods</fixture-needed>
+      </test-file>
+    </test-files>
+
+    <test-fixture-template>
+      <![CDATA[
+# tests/fixtures/sample_workflows/signal_handler_workflow.py
+from temporalio import workflow
+
+@workflow.defn
+class ShippingWorkflow:
+    def __init__(self):
+        self.should_ship = False
+
+    @workflow.run
+    async def run(self, shipping_id: str) -> str:
+        await workflow.wait_condition(lambda: self.should_ship)
+        return "shipped"
+
+    @workflow.signal
+    async def ship_order(self, order_id: str) -> None:
+        self.should_ship = True
+      ]]>
+    </test-fixture-template>
+
+    <regression-verification>
+      <command>pytest -v</command>
+      <expected>All 617+ existing tests pass</expected>
+    </regression-verification>
+  </testing-context>
+
+  <implementation-notes>
+    <note priority="critical">
+      SignalHandler dataclass and SignalHandlerDetector are ALREADY COMPLETE from Story 8.1.
+      This story only adds:
+      1. signal_handlers field to WorkflowMetadata
+      2. SignalHandlerDetector integration in analyzer.py
+      3. Unit/integration tests
+    </note>
+
+    <note priority="high">
+      WorkflowMetadata field addition at graph_models.py line 537:
+      <![CDATA[
+    external_signals: tuple[ExternalSignalCall, ...] = ()
+    signal_handlers: tuple[SignalHandler, ...] = ()  # NEW: Epic 8.2
+      ]]>
+    </note>
+
+    <note priority="high">
+      Analyzer import change at analyzer.py lines 29-34:
+      <![CDATA[
+from temporalio_graphs.detector import (
+    ChildWorkflowDetector,
+    DecisionDetector,
+    ExternalSignalDetector,
+    SignalDetector,
+    SignalHandlerDetector,  # ADD
+)
+      ]]>
+    </note>
+
+    <note priority="high">
+      Analyzer integration after line 224:
+      <![CDATA[
+        # Detect signal handlers using SignalHandlerDetector
+        signal_handler_detector = SignalHandlerDetector()
+        signal_handler_detector.set_workflow_class(self._workflow_class)
+        signal_handler_detector.visit(tree)
+        signal_handlers = tuple(signal_handler_detector.handlers)
+      ]]>
+    </note>
+
+    <note priority="high">
+      WorkflowMetadata construction change at line 265:
+      <![CDATA[
+            external_signals=tuple(external_signals),
+            signal_handlers=signal_handlers,  # ADD after external_signals
+      ]]>
+    </note>
+
+    <note priority="medium">
+      Docstring update for WorkflowMetadata to document signal_handlers field.
+    </note>
+  </implementation-notes>
+
+  <code-changes-summary>
+    <file path="src/temporalio_graphs/_internal/graph_models.py">
+      <change type="add-field" location="line 537">
+        <before>external_signals: tuple[ExternalSignalCall, ...] = ()</before>
+        <after>external_signals: tuple[ExternalSignalCall, ...] = ()
+    signal_handlers: tuple[SignalHandler, ...] = ()</after>
+      </change>
+      <change type="update-docstring" location="lines 467-526">
+        <description>Add signal_handlers field documentation to WorkflowMetadata docstring</description>
+      </change>
+    </file>
+
+    <file path="src/temporalio_graphs/analyzer.py">
+      <change type="add-import" location="line 33">
+        <before>    SignalDetector,
+)</before>
+        <after>    SignalDetector,
+    SignalHandlerDetector,
+)</after>
+      </change>
+      <change type="add-detector-integration" location="after line 224">
+        <code><![CDATA[
+        # Detect signal handlers using SignalHandlerDetector
+        signal_handler_detector = SignalHandlerDetector()
+        signal_handler_detector.set_workflow_class(self._workflow_class)
+        signal_handler_detector.visit(tree)
+        signal_handlers = tuple(signal_handler_detector.handlers)
+        ]]></code>
+      </change>
+      <change type="add-metadata-param" location="line 265">
+        <before>external_signals=tuple(external_signals),</before>
+        <after>external_signals=tuple(external_signals),
+            signal_handlers=signal_handlers,</after>
+      </change>
+    </file>
+
+    <file path="tests/test_graph_models.py">
+      <change type="add-tests">
+        <test>test_workflow_metadata_signal_handlers_default</test>
+        <test>test_workflow_metadata_signal_handlers_populated</test>
+        <test>test_workflow_metadata_signal_handlers_immutable</test>
+      </change>
+      <change type="add-import">
+        <code>from temporalio_graphs._internal.graph_models import SignalHandler</code>
+      </change>
+    </file>
+
+    <file path="tests/test_analyzer.py">
+      <change type="add-test">
+        <test>test_analyzer_detects_signal_handlers</test>
+      </change>
+    </file>
+
+    <file path="tests/fixtures/sample_workflows/signal_handler_workflow.py" type="new">
+      <description>Fixture workflow with @workflow.signal handler for integration testing</description>
+    </file>
+  </code-changes-summary>
+
+  <validation-checklist>
+    <item id="1" status="pending">signal_handlers field added to WorkflowMetadata in graph_models.py</item>
+    <item id="2" status="pending">Field type is tuple[SignalHandler, ...] = () (immutable with default)</item>
+    <item id="3" status="pending">Field placed after external_signals for logical ordering</item>
+    <item id="4" status="pending">WorkflowMetadata docstring updated to document signal_handlers</item>
+    <item id="5" status="pending">SignalHandlerDetector imported in analyzer.py</item>
+    <item id="6" status="pending">SignalHandlerDetector instantiated in analyze() method</item>
+    <item id="7" status="pending">set_workflow_class() called with detected workflow class</item>
+    <item id="8" status="pending">detector.visit(tree) called to analyze AST</item>
+    <item id="9" status="pending">signal_handlers = tuple(detector.handlers) for immutability</item>
+    <item id="10" status="pending">signal_handlers passed to WorkflowMetadata constructor</item>
+    <item id="11" status="pending">Unit test: test_workflow_metadata_signal_handlers_default()</item>
+    <item id="12" status="pending">Unit test: test_workflow_metadata_signal_handlers_populated()</item>
+    <item id="13" status="pending">Unit test: test_workflow_metadata_signal_handlers_immutable()</item>
+    <item id="14" status="pending">Integration test: test_analyzer_detects_signal_handlers()</item>
+    <item id="15" status="pending">Test fixture workflow with @workflow.signal handlers created</item>
+    <item id="16" status="pending">mypy strict mode passes</item>
+    <item id="17" status="pending">ruff check passes</item>
+    <item id="18" status="pending">All 617+ existing tests pass (no regressions)</item>
+    <item id="19" status="pending">Test coverage >= 80%</item>
+  </validation-checklist>
+
+  <next-steps>
+    <step order="1">Story 8.3: Create SignalNameResolver for target workflow resolution</step>
+    <step order="2">Story 8.4: Search path scanning and handler indexing</step>
+  </next-steps>
+</story-context>

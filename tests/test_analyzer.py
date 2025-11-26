@@ -801,3 +801,64 @@ def test_analyzer_backward_compatibility_with_signals(
     assert hasattr(metadata, "signal_points")
     assert isinstance(metadata.signal_points, list)
     assert metadata.signal_points == []  # No signals in linear workflow
+
+
+# ============================================================================
+# Signal Handler Detection Integration Tests (Story 8.2)
+# ============================================================================
+
+
+def test_analyzer_detects_signal_handlers(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that analyzer detects @workflow.signal handlers in workflow.
+
+    This integration test verifies that the SignalHandlerDetector is properly
+    integrated into the analyzer pipeline and that signal_handlers field is
+    populated in WorkflowMetadata.
+    """
+    workflow_file = fixtures_dir / "signal_handler_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # Verify signal handlers detected
+    assert len(metadata.signal_handlers) == 2
+
+    # Verify first handler: ship_order (method name = signal name)
+    handler1 = metadata.signal_handlers[0]
+    assert handler1.signal_name == "ship_order"
+    assert handler1.method_name == "ship_order"
+    assert handler1.workflow_class == "ShippingWorkflow"
+    assert handler1.source_line == 56  # Line where @workflow.signal decorator is
+    assert handler1.node_id == "sig_handler_ship_order_56"
+
+    # Verify second handler: cancel_shipment (explicit name differs from method)
+    handler2 = metadata.signal_handlers[1]
+    assert handler2.signal_name == "cancel_shipment"
+    assert handler2.method_name == "cancel"
+    assert handler2.workflow_class == "ShippingWorkflow"
+    assert handler2.source_line == 66  # Line where method is defined
+    assert handler2.node_id == "sig_handler_cancel_shipment_66"
+
+
+def test_analyzer_signal_handlers_empty_for_workflow_without_handlers(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that signal_handlers is empty tuple for workflows without signal handlers."""
+    workflow_file = fixtures_dir / "valid_linear_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # No signal handlers in this workflow
+    assert metadata.signal_handlers == ()
+    assert isinstance(metadata.signal_handlers, tuple)
+
+
+def test_analyzer_signal_handlers_is_tuple(
+    analyzer: WorkflowAnalyzer, fixtures_dir: Path
+) -> None:
+    """Test that signal_handlers is a tuple (immutable) for data integrity."""
+    workflow_file = fixtures_dir / "signal_handler_workflow.py"
+    metadata = analyzer.analyze(workflow_file)
+
+    # Verify it's a tuple, not a list
+    assert isinstance(metadata.signal_handlers, tuple)
+    assert len(metadata.signal_handlers) == 2

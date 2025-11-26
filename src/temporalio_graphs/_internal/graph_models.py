@@ -494,6 +494,9 @@ class WorkflowMetadata:
         external_signals: Tuple of external signals sent to peer workflows
             (from Epic 7). External signals are sequential nodes that don't
             create branching.
+        signal_handlers: Tuple of signal handlers detected in the workflow
+            (from Epic 8). Signal handlers are @workflow.signal decorated methods
+            that can receive signals from external workflows.
 
     Example:
         >>> from pathlib import Path
@@ -534,6 +537,7 @@ class WorkflowMetadata:
     total_paths: int
     child_workflow_calls: list[ChildWorkflowCall] = field(default_factory=list)
     external_signals: tuple[ExternalSignalCall, ...] = ()
+    signal_handlers: tuple[SignalHandler, ...] = ()
 
     @staticmethod
     def calculate_total_paths(num_decisions: int, num_signals: int) -> int:

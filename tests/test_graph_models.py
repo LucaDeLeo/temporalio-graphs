@@ -6,6 +6,7 @@ from temporalio_graphs._internal.graph_models import (
     GraphEdge,
     GraphNode,
     NodeType,
+    SignalHandler,
     WorkflowMetadata,
 )
 
@@ -130,3 +131,85 @@ def test_workflow_metadata_instantiation() -> None:
     assert len(metadata.signal_points) == 0
     assert metadata.source_file == Path("workflows.py")
     assert metadata.total_paths == 4
+    # Verify default value for signal_handlers
+    assert metadata.signal_handlers == ()
+
+
+def test_workflow_metadata_signal_handlers_default() -> None:
+    """Verify signal_handlers defaults to empty tuple when not provided."""
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("test.py"),
+        total_paths=1,
+    )
+
+    assert metadata.signal_handlers == ()
+    assert isinstance(metadata.signal_handlers, tuple)
+
+
+def test_workflow_metadata_signal_handlers_populated() -> None:
+    """Verify signal_handlers correctly stores SignalHandler tuple."""
+    handler1 = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+    handler2 = SignalHandler(
+        signal_name="cancel_order",
+        method_name="cancel",
+        workflow_class="ShippingWorkflow",
+        source_line=85,
+        node_id="sig_handler_cancel_order_85",
+    )
+
+    metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping.py"),
+        total_paths=1,
+        signal_handlers=(handler1, handler2),
+    )
+
+    assert len(metadata.signal_handlers) == 2
+    assert metadata.signal_handlers[0].signal_name == "ship_order"
+    assert metadata.signal_handlers[1].signal_name == "cancel_order"
+    assert metadata.signal_handlers[0].workflow_class == "ShippingWorkflow"
+
+
+def test_workflow_metadata_signal_handlers_immutable() -> None:
+    """Verify signal_handlers tuple is immutable (cannot be modified)."""
+    handler = SignalHandler(
+        signal_name="process",
+        method_name="process",
+        workflow_class="TestWorkflow",
+        source_line=10,
+        node_id="sig_handler_process_10",
+    )
+
+    metadata = WorkflowMetadata(
+        workflow_class="TestWorkflow",
+        workflow_run_method="run",
+        activities=[],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("test.py"),
+        total_paths=1,
+        signal_handlers=(handler,),
+    )
+
+    # Verify tuple is immutable - attempting assignment raises TypeError
+    import pytest
+    with pytest.raises(TypeError):
+        metadata.signal_handlers[0] = handler  # type: ignore[index]
+
+    # Verify tuple has no append method (unlike list)
+    assert not hasattr(metadata.signal_handlers, "append")

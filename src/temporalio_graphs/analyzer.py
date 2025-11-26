@@ -31,6 +31,7 @@ from temporalio_graphs.detector import (
     DecisionDetector,
     ExternalSignalDetector,
     SignalDetector,
+    SignalHandlerDetector,
 )
 from temporalio_graphs.exceptions import WorkflowParseError
 
@@ -223,6 +224,12 @@ class WorkflowAnalyzer(ast.NodeVisitor):
         external_signal_detector.visit(tree)
         external_signals = external_signal_detector.external_signals
 
+        # Detect signal handlers using SignalHandlerDetector
+        signal_handler_detector = SignalHandlerDetector()
+        signal_handler_detector.set_workflow_class(self._workflow_class)
+        signal_handler_detector.visit(tree)
+        signal_handlers = tuple(signal_handler_detector.handlers)
+
         # Emit validation warnings if not suppressed
         if not context.suppress_validation:
             # Warn about empty workflows (no activity calls)
@@ -263,6 +270,7 @@ class WorkflowAnalyzer(ast.NodeVisitor):
             signal_points=signal_points,  # Populated in Epic 4 (Story 4.1)
             child_workflow_calls=child_workflow_calls,  # Populated in Epic 6 (Story 6.1)
             external_signals=tuple(external_signals),  # Populated in Epic 7 (Story 7.3)
+            signal_handlers=signal_handlers,  # Populated in Epic 8 (Story 8.2)
             source_file=path,
             total_paths=total_paths,
         )
