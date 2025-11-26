@@ -1,0 +1,527 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML: 8-10 Integration Tests
+  Generated: 2025-11-26
+  Purpose: Comprehensive implementation context for Story 8-10
+-->
+<story-context>
+  <metadata>
+    <story-id>8-10</story-id>
+    <story-name>Integration Tests</story-name>
+    <story-file>docs/sprint-artifacts/stories/8-10-integration-tests.md</story-file>
+    <status>drafted</status>
+    <epic-id>8</epic-id>
+    <epic-name>Cross-Workflow Signal Visualization</epic-name>
+    <tech-spec>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec>
+    <generated-by>Story Context Assembly Workflow</generated-by>
+  </metadata>
+
+  <documentation-artifacts>
+    <artifact type="tech-spec" relevance="high">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <description>Epic 8 technical specification defining analyze_signal_graph() API, PeerSignalGraph model, signal handler detection, and cross-workflow rendering</description>
+      <relevant-sections>
+        <section lines="1068-1092">AC24-AC26: Integration test acceptance criteria - example workflows, test structure, no regressions</section>
+        <section lines="1185-1237">Test Strategy Summary - unit tests, integration tests (150 lines), regression tests</section>
+        <section lines="567-638">Public API specification for analyze_signal_graph() function</section>
+        <section lines="640-711">MermaidRenderer.render_signal_graph() API for subgraph rendering</section>
+        <section lines="154-187">SignalHandler dataclass specification</section>
+        <section lines="189-214">SignalConnection dataclass specification</section>
+        <section lines="216-241">PeerSignalGraph dataclass specification</section>
+      </relevant-sections>
+    </artifact>
+
+    <artifact type="architecture" relevance="medium">
+      <path>docs/architecture.md</path>
+      <description>Architecture documentation including ADR-013 for cross-workflow signal visualization strategy</description>
+      <relevant-sections>
+        <section lines="1836-1932">ADR-013: Cross-Workflow Signal Visualization Strategy - subgraph rendering, hexagon handlers, dashed edges</section>
+        <section lines="1699-1829">ADR-012: Peer-to-Peer Signal Detection - detection patterns for external signals</section>
+        <section lines="73-148">Project Structure - examples/, tests/integration/, tests/fixtures/ locations</section>
+      </relevant-sections>
+    </artifact>
+
+    <artifact type="story" relevance="high">
+      <path>docs/sprint-artifacts/stories/8-10-integration-tests.md</path>
+      <description>Story 8-10 definition with acceptance criteria AC24-AC26, tasks, and dev notes</description>
+      <relevant-sections>
+        <section lines="13-18">AC24: Example Workflows - signal_flow directory structure</section>
+        <section lines="20-25">AC25: Integration Test - test_signal_flow.py requirements</section>
+        <section lines="27-35">AC26: No Regression - 700+ tests passing, coverage, mypy, ruff</section>
+        <section lines="34-68">Additional ACs: Multi-workflow chain, unresolved signals, multiple handlers, shapes, edges, syntax</section>
+        <section lines="126-163">Dev Notes: Architecture patterns, example structure, key components</section>
+        <section lines="222-228">Edge Cases: Empty search_paths, workflow not in path, circular signals, same signal name</section>
+      </relevant-sections>
+    </artifact>
+  </documentation-artifacts>
+
+  <existing-code-interfaces>
+    <interface type="public-api" relevance="critical">
+      <path>src/temporalio_graphs/__init__.py</path>
+      <description>Public API exports including analyze_signal_graph() function to test</description>
+      <key-elements>
+        <element name="analyze_signal_graph" lines="244-355">Main function for cross-workflow signal analysis - takes entry_workflow, search_paths, context; returns Mermaid string</element>
+        <element name="GraphBuildingContext" lines="22">Configuration dataclass with signal_max_discovery_depth option</element>
+        <element name="PeerSignalGraph" lines="18">Data model for signal graph results</element>
+        <element name="SignalConnection" lines="18">Data model for signal connections</element>
+        <element name="PeerSignalGraphAnalyzer" lines="36">Analyzer class for building signal graphs</element>
+      </key-elements>
+      <usage-example>
+        <![CDATA[
+from temporalio_graphs import analyze_signal_graph, GraphBuildingContext
+
+# Basic usage
+result = analyze_signal_graph("workflows/order_workflow.py")
+
+# With search paths
+result = analyze_signal_graph(
+    "order_workflow.py",
+    search_paths=["workflows/", "services/"],
+)
+
+# With context
+context = GraphBuildingContext(signal_max_discovery_depth=5)
+result = analyze_signal_graph("order_workflow.py", context=context)
+        ]]>
+      </usage-example>
+    </interface>
+
+    <interface type="integration-test-patterns" relevance="critical">
+      <path>tests/integration/test_peer_signals.py</path>
+      <description>Existing integration test patterns for peer signal workflow examples - reference for test structure</description>
+      <key-elements>
+        <element name="TestPeerSignalWorkflowExamples" lines="22-286">Test class structure with fixtures and assertions</element>
+        <element name="order_workflow_path fixture" lines="25-28">pytest.fixture pattern for workflow paths</element>
+        <element name="test_order_workflow_analysis" lines="35-78">Test pattern for validating Mermaid output structure</element>
+        <element name="test_peer_signal_mermaid_output_structure" lines="110-176">Comprehensive Mermaid syntax validation</element>
+        <element name="test_expected_output_documentation_exists" lines="236-286">Golden file validation pattern</element>
+      </key-elements>
+    </interface>
+
+    <interface type="integration-test-patterns" relevance="high">
+      <path>tests/integration/test_parent_child_workflow.py</path>
+      <description>Integration test patterns for multi-workflow analysis - reference for analyze_workflow_graph() testing</description>
+      <key-elements>
+        <element name="TestAnalyzeWorkflowGraphReferenceMode" lines="306-367">Test class for reference mode validation</element>
+        <element name="TestAnalyzeWorkflowGraphInlineMode" lines="370-452">Test class for inline mode with path count assertions</element>
+        <element name="TestAnalyzeWorkflowGraphGoldenFiles" lines="504-563">Golden file comparison pattern</element>
+        <element name="TestAnalyzeWorkflowGraphErrorHandling" lines="566-584">Error handling test patterns</element>
+      </key-elements>
+    </interface>
+
+    <interface type="example-runner-pattern" relevance="high">
+      <path>examples/peer_signal_workflow/run.py</path>
+      <description>Example runner script pattern - reference for signal_flow run.py</description>
+      <key-elements>
+        <element name="main function" lines="21-73">Runner structure with imports, context creation, analyze calls, print output</element>
+        <element name="Path resolution" lines="24-25">Getting absolute paths to workflow files</element>
+        <element name="Context configuration" lines="39-41">GraphBuildingContext with external_signal_label_style</element>
+      </key-elements>
+    </interface>
+
+    <interface type="expected-output-pattern" relevance="high">
+      <path>examples/peer_signal_workflow/expected_output.md</path>
+      <description>Expected output documentation pattern - reference for signal_flow expected_output.md</description>
+      <key-elements>
+        <element name="Mermaid code blocks" lines="11-18">Fenced Mermaid diagrams with flowchart syntax</element>
+        <element name="Visualization features" lines="22-25">Documentation of trapezoid, dashed edge, color styling</element>
+        <element name="Signal types comparison" lines="56-71">Three signal types documented (internal, parent-child, peer-to-peer)</element>
+      </key-elements>
+    </interface>
+
+    <interface type="signal-graph-analyzer" relevance="high">
+      <path>src/temporalio_graphs/signal_graph_analyzer.py</path>
+      <description>PeerSignalGraphAnalyzer class - builds cross-workflow signal graphs</description>
+      <key-elements>
+        <element name="PeerSignalGraphAnalyzer.__init__" lines="75-99">Constructor with search_paths, resolver, max_depth, context</element>
+        <element name="analyze" lines="101-160">Main entry point - returns PeerSignalGraph</element>
+        <element name="_discover_connections" lines="162-251">Recursive discovery with cycle detection</element>
+        <element name="_build_handler_index" lines="276-293">Build signal handler index from workflows</element>
+      </key-elements>
+    </interface>
+
+    <interface type="renderer" relevance="high">
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>MermaidRenderer class with render_signal_graph() method</description>
+      <key-elements>
+        <element name="render_signal_graph" lines="514-620">Renders PeerSignalGraph as Mermaid with subgraphs</element>
+        <element name="_render_workflow_internal" lines="622-824">Renders internal workflow nodes for subgraph content</element>
+        <element name="Subgraph syntax" lines="563-579">subgraph WorkflowName ... end pattern</element>
+        <element name="Signal handler hexagon" lines="575">Hexagon syntax: {{signal_name}}</element>
+        <element name="Cross-subgraph edges" lines="583-588">Dashed edges: sender_node_id -.signal_name.-> receiver_node_id</element>
+        <element name="Unresolved signals" lines="592-600">Dead-end rendering: [/?/] node with amber styling</element>
+      </key-elements>
+    </interface>
+
+    <interface type="test-fixtures" relevance="high">
+      <path>tests/fixtures/peer_signal_workflows/order_workflow.py</path>
+      <description>Existing order workflow fixture with external signal send</description>
+      <key-elements>
+        <element name="OrderWorkflow class" lines="13-51">@workflow.defn decorated class with external signal</element>
+        <element name="External signal send" lines="45-49">workflow.get_external_workflow_handle() pattern</element>
+        <element name="Activities" lines="31-42">validate_order, process_payment activities</element>
+      </key-elements>
+    </interface>
+
+    <interface type="test-fixtures" relevance="high">
+      <path>tests/fixtures/peer_signal_workflows/shipping_workflow.py</path>
+      <description>Existing shipping workflow fixture with signal handler</description>
+      <key-elements>
+        <element name="ShippingWorkflow class" lines="13-58">@workflow.defn decorated class with signal handler</element>
+        <element name="Signal handler" lines="50-58">@workflow.signal decorated ship_order method</element>
+        <element name="wait_condition" lines="36-39">workflow.wait_condition() for signal waiting</element>
+        <element name="Activity" lines="42-46">ship_package activity</element>
+      </key-elements>
+    </interface>
+
+    <interface type="conftest" relevance="medium">
+      <path>tests/conftest.py</path>
+      <description>Pytest configuration and shared fixtures</description>
+      <key-elements>
+        <element name="sample_workflow_code" lines="6-20">Basic fixture pattern example</element>
+      </key-elements>
+    </interface>
+  </existing-code-interfaces>
+
+  <development-constraints>
+    <constraint category="test-structure">
+      <description>Integration tests follow established patterns from test_peer_signals.py and test_parent_child_workflow.py</description>
+      <rules>
+        <rule>Use pytest fixtures for workflow paths</rule>
+        <rule>Assert file existence before analysis</rule>
+        <rule>Validate Mermaid output structure elements (not exact byte matching)</rule>
+        <rule>Test both happy path and edge cases</rule>
+        <rule>Use descriptive test names following test_*() pattern</rule>
+      </rules>
+    </constraint>
+
+    <constraint category="example-structure">
+      <description>Example workflows follow established patterns from peer_signal_workflow/</description>
+      <rules>
+        <rule>Each workflow in separate .py file</rule>
+        <rule>run.py demonstrates usage with clear comments</rule>
+        <rule>expected_output.md documents expected behavior and golden diagram</rule>
+        <rule>Workflow files use @workflow.defn decorator</rule>
+        <rule>Signal handlers use @workflow.signal decorator</rule>
+      </rules>
+    </constraint>
+
+    <constraint category="no-regressions">
+      <description>AC26 requires all existing tests continue passing</description>
+      <rules>
+        <rule>Run full test suite: pytest -v (700+ tests must pass)</rule>
+        <rule>Test coverage must remain >= 80%</rule>
+        <rule>mypy strict mode must pass</rule>
+        <rule>ruff linting must pass</rule>
+        <rule>No breaking changes to existing APIs</rule>
+      </rules>
+    </constraint>
+
+    <constraint category="mermaid-syntax">
+      <description>Generated Mermaid must be valid and parseable</description>
+      <rules>
+        <rule>Must contain flowchart TB directive</rule>
+        <rule>All subgraphs must have matching subgraph/end keywords</rule>
+        <rule>Node IDs must be valid Mermaid identifiers</rule>
+        <rule>Signal handlers use hexagon syntax: {{signal_name}}</rule>
+        <rule>Cross-subgraph edges use dashed syntax: -.signal_name.-></rule>
+        <rule>External signals use trapezoid syntax: [/signal_name/]</rule>
+        <rule>Unresolved signals show [/?/] dead-end node</rule>
+      </rules>
+    </constraint>
+
+    <constraint category="code-quality">
+      <description>Code must meet project quality standards</description>
+      <rules>
+        <rule>Full type hints (mypy strict compliant)</rule>
+        <rule>Google-style docstrings for test classes and methods</rule>
+        <rule>snake_case for functions/methods, PascalCase for classes</rule>
+        <rule>100-char line length limit</rule>
+        <rule>Imports organized: stdlib, third-party, local</rule>
+      </rules>
+    </constraint>
+  </development-constraints>
+
+  <dependencies>
+    <dependency type="internal" category="modules-to-test">
+      <module>temporalio_graphs.analyze_signal_graph</module>
+      <description>Main public API function for cross-workflow signal analysis</description>
+    </dependency>
+
+    <dependency type="internal" category="modules-to-test">
+      <module>temporalio_graphs.PeerSignalGraphAnalyzer</module>
+      <description>Analyzer class for building signal graphs (exposed via analyze_signal_graph)</description>
+    </dependency>
+
+    <dependency type="internal" category="modules-to-test">
+      <module>temporalio_graphs.MermaidRenderer.render_signal_graph</module>
+      <description>Renderer method for subgraph-based Mermaid output</description>
+    </dependency>
+
+    <dependency type="internal" category="data-models">
+      <module>temporalio_graphs.PeerSignalGraph</module>
+      <description>Result dataclass containing workflows, connections, unresolved_signals</description>
+    </dependency>
+
+    <dependency type="internal" category="data-models">
+      <module>temporalio_graphs.SignalConnection</module>
+      <description>Dataclass for signal flow between workflows</description>
+    </dependency>
+
+    <dependency type="external" category="testing">
+      <package>pytest</package>
+      <version>>=7.4.0</version>
+      <usage>Test framework, fixtures, assertions</usage>
+    </dependency>
+
+    <dependency type="external" category="workflow">
+      <package>temporalio</package>
+      <version>>=1.7.1</version>
+      <usage>Workflow decorators for test fixtures</usage>
+    </dependency>
+  </dependencies>
+
+  <testing-context>
+    <test-file>tests/integration/test_signal_flow.py</test-file>
+    <test-location>tests/integration/</test-location>
+    <fixture-location>tests/fixtures/signal_flow_workflows/</fixture-location>
+    <example-location>examples/signal_flow/</example-location>
+
+    <required-tests>
+      <test-class name="TestSignalFlowExample">
+        <test name="test_analyze_signal_flow_three_workflows">Verify all 3 subgraphs present (OrderWorkflow, ShippingWorkflow, NotificationWorkflow)</test>
+        <test name="test_signal_connections_discovered">Verify 2 SignalConnection entries (Order->Shipping, Shipping->Notification)</test>
+        <test name="test_valid_mermaid_syntax">Validate flowchart TB, subgraph/end matching, valid node IDs</test>
+        <test name="test_example_matches_expected_output">Golden file comparison with expected_output.md structure</test>
+        <test name="test_signal_handler_hexagon_shape">Verify {{signal_name}} syntax for handlers</test>
+        <test name="test_cross_subgraph_edge_styling">Verify -.signal_name.-> syntax for cross-workflow edges</test>
+      </test-class>
+
+      <test-class name="TestUnresolvedSignals">
+        <test name="test_unresolved_signal_appears_in_graph">Verify signal to non-existent handler in unresolved_signals list</test>
+        <test name="test_unresolved_signal_renders_dead_end">Verify [/?/] node rendering for unresolved</test>
+      </test-class>
+
+      <test-class name="TestMultipleHandlers">
+        <test name="test_multiple_handlers_all_discovered">Verify both handlers returned when 2 workflows handle same signal</test>
+        <test name="test_multiple_handlers_warning">Verify validation warning emitted for multiple handlers</test>
+      </test-class>
+
+      <test-class name="TestExampleRunner">
+        <test name="test_example_runner_imports">Verify run.py imports temporalio_graphs and analyze_signal_graph</test>
+        <test name="test_example_runner_workflow_paths">Verify run.py references all 3 workflow files</test>
+      </test-class>
+    </required-tests>
+
+    <test-assertions>
+      <assertion type="subgraph-presence">
+        <![CDATA[
+assert "subgraph OrderWorkflow" in result
+assert "subgraph ShippingWorkflow" in result
+assert "subgraph NotificationWorkflow" in result
+        ]]>
+      </assertion>
+
+      <assertion type="signal-connections">
+        <![CDATA[
+assert "-.ship_order.->" in result  # Order -> Shipping
+assert "-.notify_shipped.->" in result  # Shipping -> Notification
+        ]]>
+      </assertion>
+
+      <assertion type="hexagon-handlers">
+        <![CDATA[
+assert "{{ship_order}}" in result
+assert "{{notify_shipped}}" in result
+        ]]>
+      </assertion>
+
+      <assertion type="mermaid-syntax">
+        <![CDATA[
+assert "flowchart TB" in result
+assert result.count("subgraph") == result.count("end")  # Matching blocks
+assert "```mermaid" in result
+        ]]>
+      </assertion>
+
+      <assertion type="unresolved-signal">
+        <![CDATA[
+assert "[/?/]" in result  # Dead-end node
+assert "unknown_" in result  # Unknown node ID pattern
+        ]]>
+      </assertion>
+    </test-assertions>
+  </testing-context>
+
+  <implementation-notes>
+    <note category="example-workflow-structure">
+      <title>Three-Workflow Signal Chain</title>
+      <description>
+        The signal_flow example demonstrates a chain of three workflows connected by signals:
+        1. OrderWorkflow: process_order activity, sends ship_order signal to Shipping
+        2. ShippingWorkflow: handles ship_order, ship_package activity, sends notify_shipped signal
+        3. NotificationWorkflow: handles notify_shipped, send_notification activity
+      </description>
+      <diagram>
+        <![CDATA[
+OrderWorkflow                 ShippingWorkflow              NotificationWorkflow
++------------------+          +------------------+          +---------------------+
+| process_order    |          | @workflow.signal |          | @workflow.signal    |
+|        |         |  signal  |   ship_order     |  signal  |   notify_shipped    |
+|        v         |--------->|        |         |--------->|         |           |
+| [ship_order]     |          |        v         |          |         v           |
+|        |         |          | ship_package     |          | send_notification   |
+|        v         |          |        |         |          +---------------------+
+| complete_order   |          |        v         |
++------------------+          | [notify_shipped] |
+                              +------------------+
+        ]]>
+      </diagram>
+    </note>
+
+    <note category="expected-mermaid-structure">
+      <title>Expected Mermaid Output Structure</title>
+      <code-example>
+        <![CDATA[
+```mermaid
+flowchart TB
+    subgraph OrderWorkflow
+        s_OrderWorkflow((Start)) --> process_order[Process Order]
+        process_order --> ext_sig_ship_order[/ship_order/]
+        ext_sig_ship_order --> complete_order[Complete Order]
+        complete_order --> e_OrderWorkflow((End))
+    end
+
+    subgraph ShippingWorkflow
+        sig_handler_ship_order{{ship_order}}
+        s_ShippingWorkflow((Start)) --> ship_package[Ship Package]
+        ship_package --> ext_sig_notify_shipped[/notify_shipped/]
+        ext_sig_notify_shipped --> e_ShippingWorkflow((End))
+    end
+
+    subgraph NotificationWorkflow
+        sig_handler_notify_shipped{{notify_shipped}}
+        s_NotificationWorkflow((Start)) --> send_notification[Send Notification]
+        send_notification --> e_NotificationWorkflow((End))
+    end
+
+    %% Cross-workflow signal connections
+    ext_sig_ship_order_42 -.ship_order.-> sig_handler_ship_order_15
+    ext_sig_notify_shipped_67 -.notify_shipped.-> sig_handler_notify_shipped_23
+
+    %% Signal handler styling (hexagons - blue)
+    style sig_handler_ship_order_15 fill:#e6f3ff,stroke:#0066cc
+    style sig_handler_notify_shipped_23 fill:#e6f3ff,stroke:#0066cc
+```
+        ]]>
+      </code-example>
+    </note>
+
+    <note category="fixture-files">
+      <title>Required Test Fixture Files</title>
+      <files>
+        <file path="tests/fixtures/signal_flow_workflows/order_workflow.py">
+          Entry workflow that sends ship_order signal to ShippingWorkflow
+        </file>
+        <file path="tests/fixtures/signal_flow_workflows/shipping_workflow.py">
+          Handles ship_order signal, sends notify_shipped signal
+        </file>
+        <file path="tests/fixtures/signal_flow_workflows/notification_workflow.py">
+          Handles notify_shipped signal, sends notifications
+        </file>
+        <file path="tests/fixtures/signal_flow_workflows/unresolved_sender.py">
+          Sends signal with no handler (for unresolved signal testing)
+        </file>
+        <file path="tests/fixtures/signal_flow_workflows/handler_a.py">
+          Handles "shared_signal" (for multiple handler testing)
+        </file>
+        <file path="tests/fixtures/signal_flow_workflows/handler_b.py">
+          Also handles "shared_signal" (for multiple handler testing)
+        </file>
+      </files>
+    </note>
+
+    <note category="example-files">
+      <title>Required Example Files</title>
+      <files>
+        <file path="examples/signal_flow/order_workflow.py">
+          @workflow.defn OrderWorkflow with process_order, external signal to Shipping, complete_order
+        </file>
+        <file path="examples/signal_flow/shipping_workflow.py">
+          @workflow.defn ShippingWorkflow with @workflow.signal ship_order handler, ship_package, external signal to Notification
+        </file>
+        <file path="examples/signal_flow/notification_workflow.py">
+          @workflow.defn NotificationWorkflow with @workflow.signal notify_shipped handler, send_notification
+        </file>
+        <file path="examples/signal_flow/run.py">
+          Runner demonstrating analyze_signal_graph() usage with all three workflows
+        </file>
+        <file path="examples/signal_flow/expected_output.md">
+          Golden Mermaid diagram with three subgraphs and two signal connections
+        </file>
+      </files>
+    </note>
+
+    <note category="learnings-from-previous-stories">
+      <title>Learnings from Previous Stories</title>
+      <learnings>
+        <learning source="Story 8.9">701 tests passing, 87.92% coverage; analyze_signal_graph() integrates full pipeline; default search_paths to entry_workflow.parent works well</learning>
+        <learning source="Story 7.5">examples/peer_signal_workflow/ structure is clean reference; expected_output.md format with Mermaid blocks and explanations; integration tests use assertions on string content, not byte-exact matching</learning>
+        <learning source="Story 6.5">Test subgraph structure presence; test cross-workflow edge presence; validate Mermaid syntax elements</learning>
+      </learnings>
+    </note>
+  </implementation-notes>
+
+  <edge-cases>
+    <edge-case name="empty-search-paths">
+      <description>When search_paths is empty or None, should default to entry workflow's directory</description>
+      <expected-behavior>Returns single workflow subgraph; all external signals appear as unresolved with [/?/] node</expected-behavior>
+      <test-approach>Call analyze_signal_graph() with explicit empty list; verify unresolved_signals populated</test-approach>
+    </edge-case>
+
+    <edge-case name="workflow-not-in-search-path">
+      <description>When target workflow exists but not in provided search_paths</description>
+      <expected-behavior>Signal appears in unresolved_signals; renders as [/?/] dead-end node</expected-behavior>
+      <test-approach>Create fixture with signal to workflow in different directory; verify unresolved rendering</test-approach>
+    </edge-case>
+
+    <edge-case name="circular-signals">
+      <description>Workflow A signals B, B signals A (circular dependency)</description>
+      <expected-behavior>Both workflows appear in graph; connection recorded; no infinite loop; visited set prevents re-analysis</expected-behavior>
+      <test-approach>Create two workflows that signal each other; verify both in workflows dict; verify connections recorded; verify no exception/timeout</test-approach>
+    </edge-case>
+
+    <edge-case name="same-signal-name-different-workflows">
+      <description>Multiple workflows have handlers for same signal name</description>
+      <expected-behavior>All handlers returned; multiple connections shown; validation warning about multiple handlers</expected-behavior>
+      <test-approach>Create handler_a.py and handler_b.py both with @workflow.signal shared_signal; verify both in signal_handlers index</test-approach>
+    </edge-case>
+
+    <edge-case name="no-signal-handlers-in-target">
+      <description>Signal sent to workflow that exists but has no matching handler</description>
+      <expected-behavior>Signal is unresolved despite workflow file existing in search path</expected-behavior>
+      <test-approach>Create workflow without signal handlers; send signal to it; verify unresolved</test-approach>
+    </edge-case>
+
+    <edge-case name="explicit-signal-name">
+      <description>Signal handler with explicit name: @workflow.signal(name="custom")</description>
+      <expected-behavior>Detected correctly; signal_name is "custom" not method name</expected-behavior>
+      <test-approach>Create handler with explicit name; send signal with that name; verify connection</test-approach>
+    </edge-case>
+  </edge-cases>
+
+  <validation-checklist>
+    <item>All 3 example workflow files created in examples/signal_flow/</item>
+    <item>run.py demonstrates analyze_signal_graph() usage correctly</item>
+    <item>expected_output.md contains valid Mermaid with 3 subgraphs</item>
+    <item>test_signal_flow.py created in tests/integration/</item>
+    <item>Test fixtures created in tests/fixtures/signal_flow_workflows/</item>
+    <item>All required test methods implemented</item>
+    <item>Unresolved signal test passes</item>
+    <item>Multiple handlers test passes</item>
+    <item>Full test suite passes (pytest -v)</item>
+    <item>Coverage >= 80% (pytest --cov)</item>
+    <item>mypy strict passes (mypy src/temporalio_graphs/)</item>
+    <item>ruff passes (ruff check src/temporalio_graphs/)</item>
+  </validation-checklist>
+</story-context>
