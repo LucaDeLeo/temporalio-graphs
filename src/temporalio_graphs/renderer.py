@@ -579,8 +579,26 @@ class MermaidRenderer:
             lines.append("    end")
             lines.append("")
 
-        # Signal connections rendered in Story 8.8
-        # Unresolved signals rendered in Story 8.8
+        # Cross-workflow signal connections (Story 8.8)
+        if graph.connections:
+            lines.append("    %% Cross-workflow signal connections")
+            for conn in graph.connections:
+                lines.append(
+                    f"    {conn.sender_node_id} -.{conn.signal_name}.-> {conn.receiver_node_id}"
+                )
+            lines.append("")
+
+        # Unresolved signals (Story 8.8)
+        unresolved_node_ids: list[str] = []
+        if graph.unresolved_signals:
+            lines.append("    %% Unresolved signals (no handler found)")
+            for unresolved in graph.unresolved_signals:
+                unknown_id = f"unknown_{unresolved.signal_name}_{unresolved.source_line}"
+                lines.append(
+                    f"    {unresolved.node_id} -.{unresolved.signal_name}.-> {unknown_id}[/?/]"
+                )
+                unresolved_node_ids.append(unknown_id)
+            lines.append("")
 
         # Styling section
         if all_handlers:
@@ -588,6 +606,14 @@ class MermaidRenderer:
             for handler in all_handlers:
                 lines.append(
                     f"    style {handler.node_id} fill:#e6f3ff,stroke:#0066cc"
+                )
+
+        # Unresolved signal styling (Story 8.8)
+        if unresolved_node_ids:
+            lines.append("    %% Unresolved signal styling (warning - amber)")
+            for unknown_id in unresolved_node_ids:
+                lines.append(
+                    f"    style {unknown_id} fill:#fff3cd,stroke:#ffc107"
                 )
 
         lines.append("```")

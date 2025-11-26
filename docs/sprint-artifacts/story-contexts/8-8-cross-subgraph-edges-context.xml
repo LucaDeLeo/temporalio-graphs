@@ -1,0 +1,693 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Story Context XML for Story 8-8: Cross-Subgraph Edges
+  Generated: 2025-11-26
+
+  This context file provides all implementation details needed to implement
+  cross-subgraph edge rendering in MermaidRenderer.render_signal_graph().
+-->
+<story-context version="1.0">
+
+  <!-- ============================================================ -->
+  <!-- STORY REFERENCE -->
+  <!-- ============================================================ -->
+  <story-reference>
+    <story-id>8-8</story-id>
+    <story-name>Cross-Subgraph Edges</story-name>
+    <story-file>docs/sprint-artifacts/stories/8-8-cross-subgraph-edges.md</story-file>
+    <status>drafted</status>
+    <epic-id>8</epic-id>
+    <epic-name>Cross-Workflow Signal Visualization</epic-name>
+    <tech-spec>docs/sprint-artifacts/tech-spec-epic-8.md</tech-spec>
+    <depends-on>Story 8-7 (Subgraph Rendering)</depends-on>
+  </story-reference>
+
+  <!-- ============================================================ -->
+  <!-- DOCUMENTATION ARTIFACTS -->
+  <!-- ============================================================ -->
+  <documentation-artifacts>
+
+    <artifact type="tech-spec-section" relevance="critical">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <section>APIs and Interfaces - render_signal_graph</section>
+      <lines>640-711</lines>
+      <description>
+        Complete implementation specification for render_signal_graph() method,
+        including cross-subgraph connection rendering (lines 679-681) and
+        unresolved signal rendering (lines 684-689).
+      </description>
+      <content-summary>
+        - Lines 646-701: Full render_signal_graph implementation template
+        - Lines 679-681: Cross-workflow signal connections section
+        - Lines 684-689: Unresolved signals section
+        - Lines 691-700: Styling sections (handler blue, unresolved amber)
+      </content-summary>
+    </artifact>
+
+    <artifact type="tech-spec-acceptance-criteria" relevance="critical">
+      <path>docs/sprint-artifacts/tech-spec-epic-8.md</path>
+      <section>Acceptance Criteria (Authoritative)</section>
+      <lines>1036-1049</lines>
+      <description>
+        AC19 (FR89) and AC21 (FR88) define the cross-subgraph edge requirements.
+      </description>
+      <content-summary>
+        - AC19: Cross-subgraph dashed edge rendering
+        - AC21: Unresolved signal with "?" dead-end node
+      </content-summary>
+    </artifact>
+
+    <artifact type="architecture-adr" relevance="high">
+      <path>docs/architecture.md</path>
+      <section>ADR-006: mypy Strict Mode</section>
+      <lines>1489-1511</lines>
+      <description>
+        Type safety requirements - complete type hints for mypy strict mode compliance.
+      </description>
+    </artifact>
+
+    <artifact type="architecture-adr" relevance="high">
+      <path>docs/architecture.md</path>
+      <section>ADR-013: Cross-Workflow Signal Visualization Strategy</section>
+      <lines>1831-1933</lines>
+      <description>
+        Design decisions for cross-workflow signal visualization including
+        subgraph mode, dashed edges, and unresolved signal handling.
+      </description>
+      <key-decisions>
+        - Dashed edges (-.signal.->) for async signal communication
+        - Unresolved signals render as dead-end with "?" node
+        - Amber/yellow warning styling for unresolved signals
+      </key-decisions>
+    </artifact>
+
+  </documentation-artifacts>
+
+  <!-- ============================================================ -->
+  <!-- EXISTING CODE INTERFACES -->
+  <!-- ============================================================ -->
+  <existing-code-interfaces>
+
+    <interface type="primary-implementation" relevance="critical">
+      <path>src/temporalio_graphs/renderer.py</path>
+      <description>
+        MermaidRenderer class with render_signal_graph() method from Story 8.7.
+        This story EXTENDS this method to add connection and unresolved rendering.
+      </description>
+      <method name="render_signal_graph" lines="514-594">
+        <signature>def render_signal_graph(self, graph: PeerSignalGraph, context: GraphBuildingContext | None = None) -> str</signature>
+        <current-sections>
+          1. Header (lines 557-558): "```mermaid", "flowchart TB"
+          2. Subgraph loop (lines 563-580): For each workflow, render subgraph with internal nodes and handlers
+          3. Placeholder comment (lines 582-583): "Signal connections rendered in Story 8.8"
+          4. Handler styling section (lines 586-591): Blue styling for hexagons
+          5. Footer (line 593): Close mermaid fence
+        </current-sections>
+        <extension-points>
+          - After line 580 (end of subgraph loop): Add cross-workflow signal connections
+          - Before handler styling: Add unresolved signal rendering
+          - After handler styling: Add unresolved signal styling
+        </extension-points>
+      </method>
+    </interface>
+
+    <interface type="data-model" relevance="critical">
+      <path>src/temporalio_graphs/_internal/graph_models.py</path>
+      <description>Data models used for cross-subgraph edge rendering.</description>
+
+      <class name="SignalConnection" lines="424-458">
+        <description>Represents signal flow between two workflows.</description>
+        <fields>
+          <field name="sender_workflow" type="str">Name of workflow sending the signal</field>
+          <field name="receiver_workflow" type="str">Name of workflow receiving the signal</field>
+          <field name="signal_name" type="str">Name of the signal being sent/received</field>
+          <field name="sender_line" type="int">Line number in sender where signal() is called</field>
+          <field name="receiver_line" type="int">Line number in receiver where @workflow.signal is</field>
+          <field name="sender_node_id" type="str">Node ID of external signal node (e.g., "ext_sig_ship_order_56")</field>
+          <field name="receiver_node_id" type="str">Node ID of signal handler node (e.g., "sig_handler_ship_order_67")</field>
+        </fields>
+        <usage>
+          Each SignalConnection in graph.connections renders as:
+          {sender_node_id} -.{signal_name}.-> {receiver_node_id}
+        </usage>
+      </class>
+
+      <class name="ExternalSignalCall" lines="381-421">
+        <description>Represents peer-to-peer signal sent to external workflow.</description>
+        <fields>
+          <field name="signal_name" type="str">Name of the signal being sent</field>
+          <field name="target_workflow_pattern" type="str">Pattern describing target workflow ID</field>
+          <field name="source_line" type="int">Line number in source code</field>
+          <field name="node_id" type="str">Unique ID format: ext_sig_{signal_name}_{line_number}</field>
+          <field name="source_workflow" type="str">Name of workflow class sending the signal</field>
+        </fields>
+        <usage>
+          Unresolved signals (in graph.unresolved_signals) render as:
+          {node_id} -.{signal_name}.-> unknown_{signal_name}_{source_line}[/?/]
+        </usage>
+      </class>
+
+      <class name="PeerSignalGraph" lines="732-764">
+        <description>Complete graph of workflows connected by signals.</description>
+        <fields>
+          <field name="root_workflow" type="WorkflowMetadata">Entry point workflow</field>
+          <field name="workflows" type="dict[str, WorkflowMetadata]">All discovered workflows</field>
+          <field name="signal_handlers" type="dict[str, list[SignalHandler]]">Handlers by signal name</field>
+          <field name="connections" type="list[SignalConnection]">All signal connections</field>
+          <field name="unresolved_signals" type="list[ExternalSignalCall]">Signals with no handler found</field>
+        </fields>
+        <usage>
+          - Iterate graph.connections for cross-subgraph edges
+          - Iterate graph.unresolved_signals for dead-end rendering
+        </usage>
+      </class>
+    </interface>
+
+    <interface type="test-patterns" relevance="high">
+      <path>tests/test_renderer.py</path>
+      <description>
+        Existing test patterns for render_signal_graph from Story 8.7.
+        New tests should follow these patterns.
+      </description>
+      <test-fixtures>
+        <fixture name="renderer">MermaidRenderer instance</fixture>
+        <fixture name="default_context">GraphBuildingContext with defaults</fixture>
+        <fixture name="simple_workflow_metadata">WorkflowMetadata without handlers</fixture>
+        <fixture name="workflow_with_handler">WorkflowMetadata with SignalHandler</fixture>
+        <fixture name="peer_signal_graph_single">PeerSignalGraph with single workflow</fixture>
+        <fixture name="peer_signal_graph_multiple">PeerSignalGraph with two workflows</fixture>
+      </test-fixtures>
+      <existing-tests lines="1329-1646">
+        - test_render_signal_graph_single_workflow: Validates subgraph structure
+        - test_render_signal_graph_multiple_workflows: Validates multiple subgraphs
+        - test_render_signal_handler_hexagon_shape: Validates {{}} syntax
+        - test_render_signal_handler_styling: Validates blue color styling
+      </existing-tests>
+    </interface>
+
+  </existing-code-interfaces>
+
+  <!-- ============================================================ -->
+  <!-- DEVELOPMENT CONSTRAINTS -->
+  <!-- ============================================================ -->
+  <development-constraints>
+
+    <constraint type="type-safety" source="ADR-006">
+      <description>Complete type hints for mypy strict mode compliance.</description>
+      <requirement>All new code must pass: mypy src/ --strict</requirement>
+    </constraint>
+
+    <constraint type="immutable-data" source="ADR-001">
+      <description>All dataclasses use frozen=True for immutability.</description>
+      <note>SignalConnection, ExternalSignalCall are already frozen.</note>
+    </constraint>
+
+    <constraint type="test-coverage" source="ADR-010">
+      <description>Maintain >=80% test coverage.</description>
+      <requirement>pytest --cov=src/temporalio_graphs --cov-fail-under=80</requirement>
+    </constraint>
+
+    <constraint type="code-quality" source="PRD">
+      <description>Code must pass ruff linting.</description>
+      <requirement>ruff check src/temporalio_graphs/</requirement>
+    </constraint>
+
+    <constraint type="backward-compatibility">
+      <description>All existing Epic 1-8.7 tests must continue passing.</description>
+      <verification>pytest -v (683+ tests passing)</verification>
+    </constraint>
+
+    <constraint type="mermaid-syntax">
+      <description>Cross-subgraph edges must be valid Mermaid syntax.</description>
+      <requirements>
+        - Dashed edge syntax: node1 -.label.-> node2
+        - Cross-subgraph edges placed AFTER all subgraph...end blocks
+        - Trapezoid for unresolved: node[/?/]
+        - Style directive: style nodeId fill:#color,stroke:#color
+      </requirements>
+    </constraint>
+
+  </development-constraints>
+
+  <!-- ============================================================ -->
+  <!-- DEPENDENCIES -->
+  <!-- ============================================================ -->
+  <dependencies>
+
+    <internal-dependency>
+      <module>temporalio_graphs._internal.graph_models</module>
+      <imports>
+        - SignalConnection (for iterating graph.connections)
+        - ExternalSignalCall (for iterating graph.unresolved_signals)
+        - PeerSignalGraph (parameter type)
+      </imports>
+    </internal-dependency>
+
+    <internal-dependency>
+      <module>temporalio_graphs.context</module>
+      <imports>
+        - GraphBuildingContext (optional parameter)
+      </imports>
+    </internal-dependency>
+
+    <story-dependency>
+      <story>8-7</story>
+      <provides>
+        - render_signal_graph() base implementation
+        - Subgraph rendering with internal nodes
+        - Signal handler hexagon rendering
+        - Handler styling (blue)
+      </provides>
+    </story-dependency>
+
+    <story-dependency>
+      <story>8-6</story>
+      <provides>
+        - PeerSignalGraph.connections: list[SignalConnection]
+        - PeerSignalGraph.unresolved_signals: list[ExternalSignalCall]
+      </provides>
+    </story-dependency>
+
+    <story-dependency>
+      <story>8-5</story>
+      <provides>
+        - SignalConnection dataclass with sender_node_id, receiver_node_id fields
+        - ExternalSignalCall dataclass with node_id, signal_name, source_line
+      </provides>
+    </story-dependency>
+
+  </dependencies>
+
+  <!-- ============================================================ -->
+  <!-- TESTING CONTEXT -->
+  <!-- ============================================================ -->
+  <testing-context>
+
+    <test-file>tests/test_renderer.py</test-file>
+
+    <required-tests>
+      <test name="test_render_cross_subgraph_edge">
+        <description>Single SignalConnection renders as dashed edge.</description>
+        <validates>AC19, AC3</validates>
+        <assertions>
+          - Output contains "{sender_node_id} -.{signal_name}.-> {receiver_node_id}"
+          - Edge appears after all subgraph...end blocks
+        </assertions>
+      </test>
+
+      <test name="test_render_multiple_cross_subgraph_edges">
+        <description>Multiple SignalConnections each render as separate dashed edges.</description>
+        <validates>AC1 (AC19), AC5</validates>
+        <assertions>
+          - All connections render (one edge per connection)
+          - Order follows graph.connections list order
+          - No duplicate edges
+        </assertions>
+      </test>
+
+      <test name="test_render_unresolved_signal_node">
+        <description>Unresolved signal renders with [/?/] dead-end and amber styling.</description>
+        <validates>AC21, AC2, AC4</validates>
+        <assertions>
+          - Output contains "{node_id} -.{signal_name}.-> unknown_{signal_name}_{line}[/?/]"
+          - Output contains "style unknown_... fill:#fff3cd,stroke:#ffc107"
+        </assertions>
+      </test>
+
+      <test name="test_render_signal_graph_complete">
+        <description>Full graph with subgraphs, connections, and unresolved signals.</description>
+        <validates>AC7 (integration)</validates>
+        <assertions>
+          - All subgraphs render correctly
+          - All connections render as dashed edges
+          - All unresolved signals render with dead-end nodes
+          - All styling applied (handler blue, unresolved amber)
+        </assertions>
+      </test>
+
+      <test name="test_render_signal_graph_no_connections">
+        <description>Graph with no connections omits connection comment/section.</description>
+        <validates>AC5 (edge case)</validates>
+        <assertions>
+          - No "%% Cross-workflow signal connections" comment when connections empty
+        </assertions>
+      </test>
+
+      <test name="test_render_signal_graph_no_unresolved">
+        <description>Graph with no unresolved signals omits unresolved section.</description>
+        <validates>AC4 (edge case)</validates>
+        <assertions>
+          - No "%% Unresolved signals" comment when unresolved_signals empty
+          - No amber styling section when no unresolved
+        </assertions>
+      </test>
+    </required-tests>
+
+    <test-fixtures-needed>
+      <fixture name="peer_signal_graph_with_connection">
+        <description>PeerSignalGraph with two workflows and one SignalConnection.</description>
+        <structure>
+          - OrderWorkflow: external_signal ext_sig_ship_order_56
+          - ShippingWorkflow: signal_handler sig_handler_ship_order_67
+          - connections: [SignalConnection(sender_node_id="ext_sig_ship_order_56", receiver_node_id="sig_handler_ship_order_67", signal_name="ship_order", ...)]
+        </structure>
+      </fixture>
+
+      <fixture name="peer_signal_graph_with_unresolved">
+        <description>PeerSignalGraph with workflow having unresolved signal.</description>
+        <structure>
+          - OrderWorkflow: external_signal ext_sig_unknown_42
+          - unresolved_signals: [ExternalSignalCall(signal_name="unknown", source_line=42, node_id="ext_sig_unknown_42", ...)]
+        </structure>
+      </fixture>
+
+      <fixture name="peer_signal_graph_complete">
+        <description>Full PeerSignalGraph with connections AND unresolved signals.</description>
+        <structure>
+          - OrderWorkflow, ShippingWorkflow, NotificationWorkflow
+          - connections: 2 SignalConnections
+          - unresolved_signals: 1 ExternalSignalCall
+        </structure>
+      </fixture>
+    </test-fixtures-needed>
+
+    <test-commands>
+      <command purpose="run-all-tests">pytest -v</command>
+      <command purpose="run-renderer-tests">pytest tests/test_renderer.py -v</command>
+      <command purpose="run-with-coverage">pytest --cov=src/temporalio_graphs --cov-fail-under=80</command>
+      <command purpose="type-check">mypy src/temporalio_graphs/</command>
+      <command purpose="lint">ruff check src/temporalio_graphs/</command>
+    </test-commands>
+
+  </testing-context>
+
+  <!-- ============================================================ -->
+  <!-- IMPLEMENTATION NOTES -->
+  <!-- ============================================================ -->
+  <implementation-notes>
+
+    <note type="mermaid-syntax" priority="critical">
+      <title>Cross-Subgraph Dashed Edge Syntax</title>
+      <description>
+        Mermaid cross-subgraph edges are placed OUTSIDE subgraph blocks.
+        Dashed edge with label: node1 -.label.-> node2
+      </description>
+      <example><![CDATA[
+flowchart TB
+    subgraph OrderWorkflow
+        ext_sig_ship_order_56[/ship_order/]
+    end
+    subgraph ShippingWorkflow
+        sig_handler_ship_order_67{{ship_order}}
+    end
+    ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67
+      ]]></example>
+    </note>
+
+    <note type="mermaid-syntax" priority="critical">
+      <title>Unresolved Signal Node Syntax</title>
+      <description>
+        Unresolved signals point to a dead-end node with [/?/] shape (rectangle with ?).
+
+        CRITICAL: Unique node ID format MUST include source_line to prevent collisions
+        when the same signal name appears multiple times:
+          unknown_{signal_name}_{source_line}
+
+        WARNING: The tech-spec template at line 686 shows the WRONG format without
+        source_line. The CORRECT format includes source_line for uniqueness.
+      </description>
+      <example><![CDATA[
+ext_sig_unknown_42 -.unknown_signal.-> unknown_unknown_signal_42[/?/]
+style unknown_unknown_signal_42 fill:#fff3cd,stroke:#ffc107
+      ]]></example>
+    </note>
+
+    <note type="code-structure" priority="high">
+      <title>Updated render_signal_graph Structure</title>
+      <description>
+        The method should have these sections in order:
+        1. Header (```mermaid, flowchart TB)
+        2. Subgraphs (existing from Story 8.7)
+        3. Cross-workflow signal connections (NEW - Story 8.8)
+        4. Unresolved signals (NEW - Story 8.8)
+        5. Signal handler styling (existing from Story 8.7)
+        6. Unresolved signal styling (NEW - Story 8.8)
+        7. Footer (```)
+      </description>
+    </note>
+
+    <note type="implementation-template" priority="high">
+      <title>Connection Rendering Code</title>
+      <code-snippet language="python"><![CDATA[
+# Cross-workflow signal connections (Story 8.8)
+if graph.connections:
+    lines.append("    %% Cross-workflow signal connections")
+    for conn in graph.connections:
+        lines.append(
+            f"    {conn.sender_node_id} -.{conn.signal_name}.-> {conn.receiver_node_id}"
+        )
+    lines.append("")
+      ]]></code-snippet>
+    </note>
+
+    <note type="implementation-template" priority="high">
+      <title>Unresolved Signal Rendering Code</title>
+      <code-snippet language="python"><![CDATA[
+# Unresolved signals (Story 8.8)
+if graph.unresolved_signals:
+    lines.append("    %% Unresolved signals (no handler found)")
+    for unresolved in graph.unresolved_signals:
+        unknown_id = f"unknown_{unresolved.signal_name}_{unresolved.source_line}"
+        lines.append(
+            f"    {unresolved.node_id} -.{unresolved.signal_name}.-> {unknown_id}[/?/]"
+        )
+    lines.append("")
+      ]]></code-snippet>
+    </note>
+
+    <note type="implementation-template" priority="high">
+      <title>Unresolved Signal Styling Code</title>
+      <code-snippet language="python"><![CDATA[
+# Unresolved signal styling (Story 8.8)
+if graph.unresolved_signals:
+    lines.append("    %% Unresolved signal styling (warning - amber)")
+    for unresolved in graph.unresolved_signals:
+        unknown_id = f"unknown_{unresolved.signal_name}_{unresolved.source_line}"
+        lines.append(
+            f"    style {unknown_id} fill:#fff3cd,stroke:#ffc107"
+        )
+      ]]></code-snippet>
+    </note>
+
+    <note type="styling" priority="medium">
+      <title>Color Reference</title>
+      <colors>
+        <color name="handler-blue-fill">#e6f3ff</color>
+        <color name="handler-blue-stroke">#0066cc</color>
+        <color name="unresolved-amber-fill">#fff3cd</color>
+        <color name="unresolved-amber-stroke">#ffc107</color>
+        <color name="external-signal-orange-fill">#fff4e6</color>
+        <color name="external-signal-orange-stroke">#ffa500</color>
+      </colors>
+    </note>
+
+  </implementation-notes>
+
+  <!-- ============================================================ -->
+  <!-- EDGE CASES -->
+  <!-- ============================================================ -->
+  <edge-cases>
+
+    <edge-case id="ec-1">
+      <title>Empty connections list</title>
+      <description>graph.connections is empty</description>
+      <expected-behavior>
+        No "%% Cross-workflow signal connections" comment rendered.
+        No connection edges rendered.
+      </expected-behavior>
+    </edge-case>
+
+    <edge-case id="ec-2">
+      <title>Empty unresolved_signals list</title>
+      <description>graph.unresolved_signals is empty</description>
+      <expected-behavior>
+        No "%% Unresolved signals" comment rendered.
+        No unresolved edges rendered.
+        No amber styling section.
+      </expected-behavior>
+    </edge-case>
+
+    <edge-case id="ec-3">
+      <title>Multiple connections to same handler</title>
+      <description>Two different external signals in different workflows connect to same handler</description>
+      <expected-behavior>
+        Each SignalConnection renders as separate dashed edge.
+        All edges appear in output.
+      </expected-behavior>
+    </edge-case>
+
+    <edge-case id="ec-4">
+      <title>Same signal name multiple times</title>
+      <description>Multiple unresolved signals with same signal_name but different source_line</description>
+      <expected-behavior>
+        unknown_id includes source_line ensuring uniqueness.
+        Example: unknown_notify_42, unknown_notify_85
+      </expected-behavior>
+    </edge-case>
+
+    <edge-case id="ec-5">
+      <title>Long signal names</title>
+      <description>Signal names exceeding typical length</description>
+      <expected-behavior>
+        Mermaid handles long names. No truncation needed.
+        Pass through as-is.
+      </expected-behavior>
+    </edge-case>
+
+    <edge-case id="ec-6">
+      <title>Special characters in signal names</title>
+      <description>Signal names with underscores, numbers, etc.</description>
+      <expected-behavior>
+        Valid Mermaid identifiers (alphanumeric + underscore).
+        Pass through as-is if valid.
+      </expected-behavior>
+    </edge-case>
+
+  </edge-cases>
+
+  <!-- ============================================================ -->
+  <!-- ACCEPTANCE CRITERIA MAPPING -->
+  <!-- ============================================================ -->
+  <acceptance-criteria-mapping>
+
+    <ac id="AC19" fr="FR89">
+      <description>Cross-subgraph dashed edge rendering</description>
+      <tech-spec-section>APIs and Interfaces - render_signal_graph (lines 679-681)</tech-spec-section>
+      <implementation>
+        Iterate graph.connections and render:
+        {conn.sender_node_id} -.{conn.signal_name}.-> {conn.receiver_node_id}
+      </implementation>
+      <tests>
+        test_render_cross_subgraph_edge()
+        test_render_multiple_cross_subgraph_edges()
+      </tests>
+    </ac>
+
+    <ac id="AC21" fr="FR88">
+      <description>Unresolved signal rendering with dead-end</description>
+      <tech-spec-section>APIs and Interfaces - render_signal_graph (lines 684-688)</tech-spec-section>
+      <implementation>
+        Iterate graph.unresolved_signals and render:
+        {node_id} -.{signal_name}.-> unknown_{signal_name}_{source_line}[/?/]
+      </implementation>
+      <tests>
+        test_render_unresolved_signal_node()
+      </tests>
+    </ac>
+
+    <ac id="AC3-Story">
+      <description>Signal Connection Edge Format</description>
+      <implementation>
+        - Dashed edge syntax: sender_node_id -.signal_name.-> receiver_node_id
+        - Edges appear AFTER all subgraph definitions (outside subgraphs)
+        - Edge label shows signal name
+      </implementation>
+      <tests>test_render_cross_subgraph_edge()</tests>
+    </ac>
+
+    <ac id="AC4-Story">
+      <description>Unresolved Signal Node Styling</description>
+      <implementation>
+        - Node shape: [/?/] (rectangle with question mark)
+        - Unique node ID: unknown_{signal_name}_{source_line}
+        - Warning color: style unknown_X fill:#fff3cd,stroke:#ffc107
+      </implementation>
+      <tests>test_render_unresolved_signal_node()</tests>
+    </ac>
+
+    <ac id="AC5-Story">
+      <description>Multiple Connections</description>
+      <implementation>
+        - All connections render as separate dashed edges
+        - Order follows graph.connections list order
+        - No duplicate edges
+      </implementation>
+      <tests>test_render_multiple_cross_subgraph_edges()</tests>
+    </ac>
+
+    <ac id="AC6-Story">
+      <description>Cross-Subgraph Edge Placement</description>
+      <implementation>
+        - After all subgraph...end blocks
+        - Before styling section
+        - With comment: "%% Cross-workflow signal connections"
+      </implementation>
+      <tests>test_render_cross_subgraph_edge()</tests>
+    </ac>
+
+    <ac id="AC7-Story">
+      <description>Integration with render_signal_graph</description>
+      <implementation>
+        - Adds connection rendering after subgraph loop
+        - Adds unresolved signal rendering
+        - Maintains existing subgraph and handler styling logic
+      </implementation>
+      <tests>test_render_signal_graph_complete()</tests>
+    </ac>
+
+    <ac id="AC8-Story">
+      <description>Type Safety</description>
+      <implementation>
+        Complete type hints for mypy strict mode compliance (ADR-006)
+      </implementation>
+      <verification>mypy src/temporalio_graphs/ --strict</verification>
+    </ac>
+
+    <ac id="AC9-Story">
+      <description>Unit Tests</description>
+      <tests>
+        - test_render_cross_subgraph_edge()
+        - test_render_multiple_cross_subgraph_edges()
+        - test_render_unresolved_signal_node()
+        - test_render_signal_graph_complete()
+      </tests>
+    </ac>
+
+    <ac id="AC10-Story">
+      <description>No Regressions</description>
+      <verification>pytest -v (all 683+ existing tests pass)</verification>
+    </ac>
+
+  </acceptance-criteria-mapping>
+
+  <!-- ============================================================ -->
+  <!-- FILE LIST (Implementation Scope) -->
+  <!-- ============================================================ -->
+  <file-list>
+
+    <file action="modify" priority="critical">
+      <path>src/temporalio_graphs/renderer.py</path>
+      <changes>
+        - Extend render_signal_graph() method
+        - Add cross-workflow signal connection rendering
+        - Add unresolved signal rendering
+        - Add unresolved signal styling
+      </changes>
+    </file>
+
+    <file action="modify" priority="critical">
+      <path>tests/test_renderer.py</path>
+      <changes>
+        - Add test_render_cross_subgraph_edge()
+        - Add test_render_multiple_cross_subgraph_edges()
+        - Add test_render_unresolved_signal_node()
+        - Add test_render_signal_graph_complete()
+        - Add test_render_signal_graph_no_connections()
+        - Add test_render_signal_graph_no_unresolved()
+        - Add new test fixtures for graphs with connections/unresolved
+      </changes>
+    </file>
+
+  </file-list>
+
+</story-context>

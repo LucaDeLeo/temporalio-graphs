@@ -1644,3 +1644,491 @@ def test_render_signal_graph_node_id_uniqueness(
     assert "s_ShippingWorkflow" in result
     assert "e_OrderWorkflow" in result
     assert "e_ShippingWorkflow" in result
+
+
+# ============================================================================
+# Epic 8: Cross-Subgraph Edge Tests (Story 8-8)
+# ============================================================================
+
+
+def test_render_cross_subgraph_edge(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test AC19: Single SignalConnection renders as dashed edge.
+
+    Validates that:
+    - Cross-subgraph edge uses dashed syntax: -.signal_name.->
+    - Edge connects sender_node_id to receiver_node_id
+    - Edge appears AFTER all subgraph blocks
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        ExternalSignalCall,
+        PeerSignalGraph,
+        SignalConnection,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+
+    # Create OrderWorkflow with external signal
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+        external_signals=(
+            ExternalSignalCall(
+                signal_name="ship_order",
+                target_workflow_pattern="shipping-{*}",
+                source_line=56,
+                node_id="ext_sig_ship_order_56",
+                source_workflow="OrderWorkflow",
+            ),
+        ),
+    )
+
+    # Create ShippingWorkflow with signal handler
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+    shipping_metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        signal_handlers=(handler,),
+    )
+
+    # Create connection
+    connection = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={
+            "OrderWorkflow": order_metadata,
+            "ShippingWorkflow": shipping_metadata,
+        },
+        signal_handlers={"ship_order": [handler]},
+        connections=[connection],
+        unresolved_signals=[],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Verify cross-subgraph edge with dashed syntax
+    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+        "Cross-subgraph edge should use dashed syntax with signal name as label"
+
+    # Verify edge appears after subgraph blocks
+    subgraph_end_pos = result.rfind("    end")
+    edge_pos = result.find("ext_sig_ship_order_56 -.ship_order.->")
+    assert edge_pos > subgraph_end_pos, \
+        "Cross-subgraph edge should appear AFTER all subgraph blocks"
+
+    # Verify connection comment
+    assert "%% Cross-workflow signal connections" in result, \
+        "Output should include cross-workflow connections comment"
+
+
+def test_render_multiple_cross_subgraph_edges(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test AC5: Multiple SignalConnections each render as separate dashed edges.
+
+    Validates that:
+    - All connections render (one edge per connection)
+    - Order follows graph.connections list order
+    - No duplicate edges
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        PeerSignalGraph,
+        SignalConnection,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+
+    # Create workflow with multiple handlers
+    handler1 = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+    handler2 = SignalHandler(
+        signal_name="notify_customer",
+        method_name="notify_customer",
+        workflow_class="NotificationWorkflow",
+        source_line=42,
+        node_id="sig_handler_notify_customer_42",
+    )
+
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+    )
+
+    shipping_metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        signal_handlers=(handler1,),
+    )
+
+    notification_metadata = WorkflowMetadata(
+        workflow_class="NotificationWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("send_notification", 20)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("notification_workflow.py"),
+        total_paths=1,
+        signal_handlers=(handler2,),
+    )
+
+    # Create multiple connections
+    connection1 = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+    connection2 = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="NotificationWorkflow",
+        signal_name="notify_customer",
+        sender_line=60,
+        receiver_line=42,
+        sender_node_id="ext_sig_notify_customer_60",
+        receiver_node_id="sig_handler_notify_customer_42",
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={
+            "OrderWorkflow": order_metadata,
+            "ShippingWorkflow": shipping_metadata,
+            "NotificationWorkflow": notification_metadata,
+        },
+        signal_handlers={
+            "ship_order": [handler1],
+            "notify_customer": [handler2],
+        },
+        connections=[connection1, connection2],
+        unresolved_signals=[],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Verify both connections render
+    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+        "First connection should render"
+    assert "ext_sig_notify_customer_60 -.notify_customer.-> sig_handler_notify_customer_42" in result, \
+        "Second connection should render"
+
+    # Verify no duplicate edges (count each edge)
+    count1 = result.count("ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67")
+    count2 = result.count("ext_sig_notify_customer_60 -.notify_customer.-> sig_handler_notify_customer_42")
+    assert count1 == 1, "Each connection should appear exactly once"
+    assert count2 == 1, "Each connection should appear exactly once"
+
+
+def test_render_unresolved_signal_node(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test AC21: Unresolved signal renders with [/?/] dead-end and amber styling.
+
+    Validates that:
+    - Unresolved signal creates edge to unknown_{signal_name}_{line}[/?/]
+    - Unknown node has amber warning styling
+    - Style uses fill:#fff3cd,stroke:#ffc107
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        ExternalSignalCall,
+        PeerSignalGraph,
+        WorkflowMetadata,
+    )
+
+    # Create workflow with unresolved signal
+    unresolved_signal = ExternalSignalCall(
+        signal_name="unknown_signal",
+        target_workflow_pattern="missing-{*}",
+        source_line=42,
+        node_id="ext_sig_unknown_signal_42",
+        source_workflow="OrderWorkflow",
+    )
+
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+        external_signals=(unresolved_signal,),
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={"OrderWorkflow": order_metadata},
+        signal_handlers={},
+        connections=[],
+        unresolved_signals=[unresolved_signal],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Verify unresolved signal edge with dead-end node
+    assert "ext_sig_unknown_signal_42 -.unknown_signal.-> unknown_unknown_signal_42[/?/]" in result, \
+        "Unresolved signal should render edge to dead-end node with [/?/]"
+
+    # Verify unresolved comment
+    assert "%% Unresolved signals (no handler found)" in result, \
+        "Output should include unresolved signals comment"
+
+    # Verify amber warning styling
+    assert "style unknown_unknown_signal_42 fill:#fff3cd,stroke:#ffc107" in result, \
+        "Unresolved signal node should have amber warning styling"
+
+    # Verify styling comment
+    assert "%% Unresolved signal styling (warning - amber)" in result, \
+        "Output should include unresolved styling comment"
+
+
+def test_render_signal_graph_complete(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test AC7: Full graph with subgraphs, connections, and unresolved signals.
+
+    Validates complete integration with:
+    - Multiple subgraphs
+    - Cross-subgraph signal connections
+    - Unresolved signals with dead-end nodes
+    - All styling (handler blue, unresolved amber)
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        ExternalSignalCall,
+        PeerSignalGraph,
+        SignalConnection,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+
+    # Signal handler
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+
+    # Workflows
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+    )
+
+    shipping_metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        signal_handlers=(handler,),
+    )
+
+    # Connection (resolved)
+    connection = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+
+    # Unresolved signal
+    unresolved = ExternalSignalCall(
+        signal_name="unknown_signal",
+        target_workflow_pattern="missing-{*}",
+        source_line=85,
+        node_id="ext_sig_unknown_signal_85",
+        source_workflow="OrderWorkflow",
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={
+            "OrderWorkflow": order_metadata,
+            "ShippingWorkflow": shipping_metadata,
+        },
+        signal_handlers={"ship_order": [handler]},
+        connections=[connection],
+        unresolved_signals=[unresolved],
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Verify subgraphs
+    assert "subgraph OrderWorkflow" in result
+    assert "subgraph ShippingWorkflow" in result
+
+    # Verify cross-subgraph connection
+    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result
+
+    # Verify unresolved signal with dead-end
+    assert "ext_sig_unknown_signal_85 -.unknown_signal.-> unknown_unknown_signal_85[/?/]" in result
+
+    # Verify handler styling (blue)
+    assert "style sig_handler_ship_order_67 fill:#e6f3ff,stroke:#0066cc" in result
+
+    # Verify unresolved styling (amber)
+    assert "style unknown_unknown_signal_85 fill:#fff3cd,stroke:#ffc107" in result
+
+    # Verify proper structure - fenced code block
+    assert result.startswith("```mermaid")
+    assert result.endswith("```")
+
+
+def test_render_signal_graph_no_connections(
+    renderer: MermaidRenderer,
+    peer_signal_graph_single: "PeerSignalGraph",
+) -> None:
+    """Test AC5 edge case: Graph with no connections omits connection comment.
+
+    Validates that when graph.connections is empty:
+    - No "%% Cross-workflow signal connections" comment rendered
+    - No connection edges rendered
+    """
+    result = renderer.render_signal_graph(peer_signal_graph_single)
+
+    # Verify no connection comment when connections empty
+    assert "%% Cross-workflow signal connections" not in result, \
+        "No connection comment should appear when connections list is empty"
+
+
+def test_render_signal_graph_no_unresolved(
+    renderer: MermaidRenderer,
+) -> None:
+    """Test AC4 edge case: Graph with no unresolved signals omits unresolved section.
+
+    Validates that when graph.unresolved_signals is empty:
+    - No "%% Unresolved signals" comment rendered
+    - No unresolved edges rendered
+    - No amber styling section
+    """
+    from temporalio_graphs._internal.graph_models import (
+        Activity,
+        PeerSignalGraph,
+        SignalConnection,
+        SignalHandler,
+        WorkflowMetadata,
+    )
+
+    # Create graph with connection but NO unresolved signals
+    handler = SignalHandler(
+        signal_name="ship_order",
+        method_name="ship_order",
+        workflow_class="ShippingWorkflow",
+        source_line=67,
+        node_id="sig_handler_ship_order_67",
+    )
+
+    order_metadata = WorkflowMetadata(
+        workflow_class="OrderWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("process_order", 10)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("order_workflow.py"),
+        total_paths=1,
+    )
+
+    shipping_metadata = WorkflowMetadata(
+        workflow_class="ShippingWorkflow",
+        workflow_run_method="run",
+        activities=[Activity("ship_package", 30)],
+        decision_points=[],
+        signal_points=[],
+        source_file=Path("shipping_workflow.py"),
+        total_paths=1,
+        signal_handlers=(handler,),
+    )
+
+    connection = SignalConnection(
+        sender_workflow="OrderWorkflow",
+        receiver_workflow="ShippingWorkflow",
+        signal_name="ship_order",
+        sender_line=56,
+        receiver_line=67,
+        sender_node_id="ext_sig_ship_order_56",
+        receiver_node_id="sig_handler_ship_order_67",
+    )
+
+    graph = PeerSignalGraph(
+        root_workflow=order_metadata,
+        workflows={
+            "OrderWorkflow": order_metadata,
+            "ShippingWorkflow": shipping_metadata,
+        },
+        signal_handlers={"ship_order": [handler]},
+        connections=[connection],
+        unresolved_signals=[],  # Empty!
+    )
+
+    result = renderer.render_signal_graph(graph)
+
+    # Verify no unresolved comment when unresolved_signals empty
+    assert "%% Unresolved signals (no handler found)" not in result, \
+        "No unresolved comment should appear when unresolved_signals is empty"
+
+    # Verify no amber styling section when no unresolved
+    assert "%% Unresolved signal styling (warning - amber)" not in result, \
+        "No amber styling section should appear when no unresolved signals"
+
+    # Connection should still render
+    assert "ext_sig_ship_order_56 -.ship_order.-> sig_handler_ship_order_67" in result, \
+        "Connection should still render even without unresolved signals"

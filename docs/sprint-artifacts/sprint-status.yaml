@@ -106,7 +106,7 @@ development_status:
   8-5-signal-connection-model: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-6-peer-signal-graph-analyzer: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-7-subgraph-rendering: done  # APPROVED - Senior Developer Review Complete 2025-11-26
-  8-8-cross-subgraph-edges: backlog
+  8-8-cross-subgraph-edges: done  # APPROVED - Senior Developer Review Complete 2025-11-26
   8-9-public-api: backlog
   8-10-integration-tests: backlog
   8-11-documentation: backlog
